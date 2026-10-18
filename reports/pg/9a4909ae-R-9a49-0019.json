@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "id": "R-9a49-0019",
+  "projectId": "pg",
+  "kind": "enhancement",
+  "title": "stale-tasks check does not define what counts as stale",
+  "body": "What happened: the stale-tasks check says to list open tasks (warden status --all) and leftover worktrees (git worktree list) and suggest what to close. It does not say what stale means. warden status --all returned 19 runs, all done or shipped, and git worktree list showed only the main checkout. I had to guess that finished runs are not stale. Expected: the check text states the rule, for example only runs not done or shipped, or worktrees with no matching open run, and says to report nothing to close when none match. Steps: run warden checks run stale-tasks in a project where every run is done or shipped. Evidence: instructions read 'List warden tasks that are still open (warden status --all) and worktrees left behind (git worktree list). Suggest what to close.'",
+  "createdAt": "2026-10-18T18:16:40.741Z",
+  "status": "sent",
+  "fixedIn": null,
+  "note": null,
+  "machineId": "9a4909ae"
+}
