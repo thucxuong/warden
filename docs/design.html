@@ -47,7 +47,7 @@
           <li><b>Traceable at high level</b>, visible in the CP — not in warden.</li>
           <li><b>Warden is hidden from the CPA:</b> no repo link, no issue numbers, no warden code in the CP.</li>
           <li><b>CP adopts warden's structure</b>; the CPA builds its own project tools (snowflakes) to adapt.</li>
-          <li><b>Warden CLI in Node + TypeScript</b> (runs <code class="font-mono text-sm bg-slate-100 dark:bg-slate-800 rounded px-1.5">.ts</code> directly, no build), built-in modules only, no npm dependencies, one file per command. Revisit Rust once stable.</li>
+          <li><b>Warden CLI in Node + TypeScript 7</b>. Node (≥ 24) runs <code class="font-mono text-sm bg-slate-100 dark:bg-slate-800 rounded px-1.5">.ts</code> directly, no build. TypeScript 7 (native compiler) is a dev-only type checker in the warden repo — users never install it. Strict mode, <code class="font-mono text-sm bg-slate-100 dark:bg-slate-800 rounded px-1.5">erasableSyntaxOnly</code> (no enums/namespaces). Built-in modules only, no runtime npm dependencies, one file per command. Revisit Rust once stable.</li>
           <li><b>Every doc has one purpose.</b> No "this or that" — each kind of information has exactly one home.</li>
         </ul>
       </div>
