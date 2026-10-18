@@ -158,6 +158,18 @@ export function replaceStatus(text: string, status: TicketStatus): { text: strin
   return null;
 }
 
+// Formatter-clean ticket text (Prettier's Markdown rules): no trailing spaces in the frontmatter, one blank line after it,
+// no trailing blank lines, one final newline. The body is otherwise left alone. Keeps CRLF files CRLF.
+export function tidy(text: string): string {
+  const eol = text.includes("\r\n") ? "\r\n" : "\n";
+  const lines = text.split("\n").map((l) => l.replace(/\r$/, ""));
+  const close = lines.indexOf("---", 1);
+  if (lines[0] !== "---" || close < 0) return text;
+  const fm = lines.slice(0, close + 1).map((l) => l.trimEnd());
+  const body = lines.slice(close + 1).join("\n").replace(/^\s*\n/, "").trimEnd();
+  return [...fm, ...(body ? ["", ...body.split("\n")] : [])].join(eol) + eol;
+}
+
 function git(cwd: string, args: string[]): string {
   const res = spawnSync("git", args, { cwd, encoding: "utf8" });
   if (res.error || res.status !== 0) {
@@ -212,7 +224,7 @@ export function setStatus(cwd: string, id: string, status: string): { id: string
   const res = replaceStatus(text, status as TicketStatus);
   if (!res) throw new ToolError(`backlog/${id}.md: no status line`, 1);
   if (!res.changed) return { id, status, changed: [] };
-  writeFileSync(path, res.text);
+  writeFileSync(path, tidy(res.text));
   return { id, status, changed: [rel] };
 }
 

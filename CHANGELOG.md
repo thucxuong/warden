@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.2 — 2026-10-18
+
+- Retrying a blocked gate step merges the main branch into the ticket branch first, moves the base, runs setup, then re-runs the gate.
+- A fix result may leave out the fix note and rule when the rule already exists on main or the fix is already merged to main.
+- The fixer gets a complete example fix note and triage rules file.
+- Backlog tool 0.1.2: tickets and `set-status` output stay formatter-clean.
+- The work, orchestrate and tools skills say to use `git -C <dir>` and never `cd <dir> && ...`.
+- `warden report --body <text>` passes the report body without a file or heredoc.
+
 ## 0.3.1 — 2026-10-18
 
 - Orchestrate, the work skill and the fix step now require foreground agents, never `run_in_background`.

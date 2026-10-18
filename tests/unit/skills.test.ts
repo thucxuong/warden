@@ -78,6 +78,12 @@ describe("retro and report skills", () => {
     const text = read(join(skillsDir, "report", "SKILL.md"));
     expect(text).toContain('git commit -m "chore: warden report <id>" -- .warden/reports.md');
   });
+
+  test("report passes the body as one argument, with no heredoc", () => {
+    const text = read(join(skillsDir, "report", "SKILL.md"));
+    expect(text).toContain('--body "<body>"');
+    expect(text).not.toContain("<<");
+  });
 });
 
 describe("fixer agent", () => {
@@ -125,6 +131,17 @@ describe("orchestrate skill", () => {
     expect(text).toContain("in the foreground, all in one message");
     expect(text).toContain("Never use `run_in_background`");
     expect(read(join(skillsDir, "work", "SKILL.md"))).toContain("in the foreground");
+  });
+});
+
+describe("git and path rule", () => {
+  test("work, orchestrate and tools say git -C and never cd && ", () => {
+    for (const name of ["work", "orchestrate", "tools"]) {
+      const text = read(join(skillsDir, name, "SKILL.md"));
+      expect(text).toContain("`git -C <dir> ...`");
+      expect(text).toContain("Never `cd <dir> && ...`");
+      expect(text.replace("Never `cd <dir> && ...`", "")).not.toMatch(/\bcd\b[^\n]*&&/);
+    }
   });
 });
 

@@ -1,6 +1,6 @@
 {
   "name": "backlog",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "needs": ["git"],
   "kind": "tickets",
   "description": "Local Markdown tickets in backlog/*.md: list the ticket graph, show a ticket, set its status."

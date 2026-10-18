@@ -12,6 +12,8 @@ known pattern matched, mayMerge, the ship instructions.
 
 Hard rules
 - Work only in the fix worktree. Change only files inside the scope globs.
+- Run git as `git -C <dir> <args>` and use absolute paths. Never write `cd <dir> && cmd`: permission
+  rules match simple commands only, so a compound command is refused.
 - Never change the gates: .warden/steps.json, .warden/flows/, .warden/warden.json, lockfiles.
   Setup problems are fixed in scripts/warden-setup.sh (the setup hook runs it). If a check
   command itself in steps.json must change, return GAVE_UP and name the change.
@@ -34,10 +36,48 @@ Steps
    Needs a person → GAVE_UP.
 5. Fix at the source with a test or a command that fails before and passes after.
 6. Write .warden/fixes/<YYYY-MM-DD>-<task>.md with headings: Symptom, Root cause, Fix, Test,
-   How triage should classify this next time.
-7. Add a rule to .warden/triage-rules.json: next free TR-NNNN id, a narrow regex for the exact
-   error line (it must not match any line of a passing check log; warden rejects broad rules),
-   verdict OPS (or UNCLEAR), fixNote = the note path, task, addedAt.
+   How triage should classify this next time. Use exactly this shape (warden checks it):
+
+   ```markdown
+   # Fix 2026-10-18 T-1
+   ## Symptom
+   The check fails with `error: PORT is not set`.
+   ## Root cause
+   scripts/warden-setup.sh never copies .env.example to .env.local.
+   ## Fix
+   The setup script now copies it.
+   ## Test
+   Run the setup script in a clean copy, then the failing command; it passes.
+   ## How triage should classify this next time
+   OPS: the log line `error: PORT is not set` means the setup script is broken.
+   ```
+
+7. Add a rule to the `rules` array of .warden/triage-rules.json (the file is
+   `{"schema": 1, "rules": [...]}`). Next free TR-NNNN id; `pattern` is a narrow regex for the exact
+   error line (it must not match any line of a passing check log; warden rejects broad rules);
+   verdict OPS (or UNCLEAR); fixNote = the note path; task; addedAt:
+
+   ```json
+   {
+     "schema": 1,
+     "rules": [
+       {
+         "id": "TR-0001",
+         "pattern": "^error: PORT is not set$",
+         "flags": "",
+         "verdict": "OPS",
+         "fixNote": ".warden/fixes/2026-10-18-T-1.md",
+         "task": "T-1",
+         "addedAt": "2026-10-18"
+       }
+     ]
+   }
+   ```
+
+   Skip steps 6 and 7 only in two cases. (a) The triage report already names a matching rule
+   (its `rule` field): return that id as `ruleId` and leave out `notePath`; the fix branch must
+   have no changes. (b) The fix is already on the main branch: return its sha as `mergeCommit`
+   and leave out `notePath`. Otherwise warden refuses a FIXED output without note and rule.
 8. Commit on the fix branch. Open the PR the way the ship instructions say. Merge only if the
    context says mayMerge: true.
 9. List repairCommands only for local, ignored files the ticket worktree needs (for example copy

@@ -74,6 +74,13 @@ describe("warden report", () => {
     expect(table).toContain("| R-0002 | Add a / pipe | sent | — |");
   });
 
+  test("--body takes the text as one argument and wins over --file", async () => {
+    const r = await call(run, ["--kind", "bug", "--title", "Inline", "--body", "  It broke.\nExpected: it works.\n", "--file", bodyFile("ignored")]);
+    expect(r.out).toEqual({ id: "R-0001", status: "sent" });
+    expect(readRecord("R-0001").body).toBe("It broke.\nExpected: it works.");
+    expect((await call(run, ["--kind", "bug", "--title", "t", "--body", "  "])).code).toBe(2);
+  });
+
   test("a number that is already taken is skipped", async () => {
     mkdirSync(join(data, "reports"), { recursive: true });
     writeFileSync(join(data, "reports", "R-0001.json"), "{}");

@@ -34,7 +34,7 @@ const TEXT: Record<string, string> = {
   ship:
     "Deliver the proven commit without changing it. 1) Commit the run record: `git add .warden/history/<task> && git commit -m 'chore(<task>): run record'`. 2) Open the PR or merge as the project how-to says. 3) If there are leftovers, put the file text in the description under `## Unresolved review findings`. 4) Hand in the ship output with `warden done` BEFORE you remove the worktree or the branch. Any other change sends the run back to the gates.",
   fix:
-    "A check failed and triage says it is not (only) the change. Delegate this step to the warden:fixer subagent (Agent tool, subagent_type 'warden:fixer') in the foreground, never with run_in_background, with the context below. Wait for it to return, then pass its JSON to `warden done`. Do not fix it yourself and do not touch the ticket worktree.",
+    "A check failed and triage says it is not (only) the change. Delegate this step to the warden:fixer subagent (Agent tool, subagent_type 'warden:fixer') in the foreground, never with run_in_background, with the context below. Wait for it to return, then pass its JSON to `warden done`. A FIXED output needs a new fix note and a new narrow triage rule, unless the triage report already named a matching rule (give its id as `ruleId`) or the fix is already on the main branch (give its sha as `mergeCommit`). Do not fix it yourself and do not touch the ticket worktree.",
 };
 
 function textKey(type: CatalogType, variant?: AnalyzeVariant): string {
@@ -162,11 +162,11 @@ interface PlanOutput {
   result: "FIXED" | "CODE" | "GAVE_UP" | "WARDEN_BUG";
   reason: string;                          // one paragraph; for FIXED the root cause in <= 2 sentences
   rootCauseChain: string[];                // >= 2 for FIXED and CODE
-  notePath?: string;                       // FIXED: .warden/fixes/<YYYY-MM-DD>-<task>[-n].md
-  ruleId?: string;                         // FIXED: id of the triage rule added
+  notePath?: string;                       // FIXED: .warden/fixes/<YYYY-MM-DD>-<task>[-n].md; leave out only with ruleId (named by the triage report) or mergeCommit
+  ruleId?: string;                         // FIXED: id of the triage rule added; without notePath, the id of the rule the triage report named
   branch?: string;                         // FIXED: the fix branch
   pr?: string | null;                      // FIXED
-  mergeCommit?: string | null;             // FIXED: set when merged
+  mergeCommit?: string | null;             // FIXED: set when merged; without notePath, the sha of a fix already on the main branch
   repairCommands?: string[];               // FIXED: run in the ticket worktree after the engine merged the main branch in; must leave HEAD unchanged and the tree clean
   codeRef?: string;                        // CODE: "path:line — what in the change causes it"
   report?: { title: string; body: string };// WARDEN_BUG

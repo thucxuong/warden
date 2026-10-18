@@ -62,7 +62,14 @@ function runAt(index: number, extra: Partial<RunJson> = {}): RunJson {
   };
 }
 
-const headings = (text: string) => text.split("\n").filter((l) => l.startsWith("## "));
+// Section headings, not the lines inside fenced examples.
+const headings = (text: string) => {
+  let fenced = false;
+  return text.split("\n").filter((l) => {
+    if (l.startsWith("```")) fenced = !fenced;
+    return !fenced && l.startsWith("## ");
+  });
+};
 
 describe("catalog", () => {
   test("catalog text is verbatim from the spec", () => {
@@ -179,6 +186,12 @@ describe("buildInstructions", () => {
     expect(text).toContain("- mayMerge: false");
     expect(text).toContain("old note");
     expect(text).toContain("warden done --json '<the FixOutput JSON");
+    expect(text).toContain(`# Fix ${new Date().toISOString().slice(0, 10)} ${T}\n## Symptom\n`);
+    expect(text).toContain("## How triage should classify this next time");
+    expect(text).toContain('"fixNote": ".warden/fixes/');
+    expect(text).toContain('"pattern": ');
+    expect(text).toContain("`ruleId`");
+    expect(text).toContain("`mergeCommit`");
   });
 
   test("project rules are capped at 16 KB", () => {

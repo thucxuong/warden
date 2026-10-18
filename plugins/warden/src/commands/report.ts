@@ -118,8 +118,10 @@ export async function run(args: string[], ctx: Ctx): Promise<void> {
   if (kind !== "bug" && kind !== "enhancement") throw new WardenError("--kind must be bug or enhancement", EXIT.USAGE);
   if (!title) throw new WardenError("--title is required", EXIT.USAGE);
 
+  // The body comes from --body, else --file, else stdin.
+  const inline = flagValue(args, "--body");
   const file = flagValue(args, "--file");
-  const body = (file ? readFileSync(file, "utf8") : await Bun.stdin.text()).trim();
+  const body = (inline ?? (file ? readFileSync(file, "utf8") : await Bun.stdin.text())).trim();
   if (!body) throw new WardenError("the report body is empty", EXIT.USAGE);
 
   const root = worktreeRoot(ctx.cwd);

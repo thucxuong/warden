@@ -4,7 +4,7 @@ import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { ConfigError, parseTriageRules } from "../config/config.ts";
-import { catFileExists, diffNames, head, lsTree, ownDiffNames, porcelain, showFile } from "../lib/git.ts";
+import { catFileExists, diffNames, head, isAncestor, lsTree, ownDiffNames, porcelain, showFile } from "../lib/git.ts";
 import { mainRef, taskDir } from "../state/paths.ts";
 import { readEvents } from "../state/store.ts";
 import { checkRuleNarrow, type NamedLog } from "../gates/triage-rules.ts";
@@ -209,8 +209,16 @@ function shapeFix(o: Obj, errors: string[]): void {
   strArray(o.rootCauseChain, "rootCauseChain", errors, needsChain ? 2 : 0);
   str(o.reason, "reason", errors, o.result === "GAVE_UP" ? 20 : 1);
   if (o.result === "FIXED") {
-    str(o.notePath, "notePath", errors);
-    str(o.ruleId, "ruleId", errors);
+    // A new note and rule, or (without a note) the rule the triage report named, or a commit already on the main branch.
+    if (o.notePath !== undefined) {
+      str(o.notePath, "notePath", errors);
+      str(o.ruleId, "ruleId", errors);
+    } else {
+      if (o.ruleId !== undefined) str(o.ruleId, "ruleId", errors);
+      if (o.ruleId === undefined && typeof o.mergeCommit !== "string") {
+        errors.push("notePath and ruleId: required; leave them out only with the ruleId the triage report named, or the mergeCommit of a fix already on the main branch");
+      }
+    }
     str(o.branch, "branch", errors);
     if (o.pr !== undefined) nullableStr(o.pr, "pr", errors);
     if (o.mergeCommit !== undefined) nullableStr(o.mergeCommit, "mergeCommit", errors);
@@ -395,9 +403,13 @@ export function fixNoteProblems(text: string, task: string, notePath: string): s
 
 // "Merged?" content check: the note and the rule are on ref. Ancestry is never used,
 // so squash, rebase and merges made elsewhere all count.
-export function fixOnRef(main: string, ref: string, task: string, notePath: string, ruleId: string): boolean {
-  const note = showFile(main, ref, notePath);
-  if (note === null || fixNoteProblems(note, task, notePath).length > 0) return false;
+// A fix without a new note or rule has nothing to wait for: its evidence was checked when it was handed in.
+export function fixOnRef(main: string, ref: string, task: string, notePath: string | undefined, ruleId: string | undefined): boolean {
+  if (notePath) {
+    const note = showFile(main, ref, notePath);
+    if (note === null || fixNoteProblems(note, task, notePath).length > 0) return false;
+  }
+  if (!ruleId) return true;
   try {
     return parseTriageRules(showFile(main, ref, RULES_FILE)).rules.some((rule) => rule.id === ruleId);
   } catch {
@@ -451,11 +463,12 @@ function evidenceFix(input: OutputCheckInput, o: Obj, errors: string[]): void {
     errors.push("no fix is in progress");
     return;
   }
+  const withNote = typeof o.notePath === "string";
   const notePath = o.notePath as string;
   const ruleId = o.ruleId as string;
   if (o.branch !== fix.branch) errors.push(`branch: must be ${fix.branch}`);
   const notePattern = new RegExp(`^\\.warden/fixes/\\d{4}-\\d{2}-\\d{2}-${escapeRegex(run.task)}(-\\d+)?\\.md$`);
-  if (!notePattern.test(notePath)) errors.push(`notePath: must be .warden/fixes/<YYYY-MM-DD>-${run.task}[-n].md`);
+  if (withNote && !notePattern.test(notePath)) errors.push(`notePath: must be .warden/fixes/<YYYY-MM-DD>-${run.task}[-n].md`);
 
   let changed: string[];
   try {
@@ -464,11 +477,12 @@ function evidenceFix(input: OutputCheckInput, o: Obj, errors: string[]): void {
     errors.push(`fix branch ${fix.branch} not found`);
     return;
   }
-  if (changed.length === 0) errors.push("the fix branch has no changes");
+  if (changed.length === 0 && withNote) errors.push("the fix branch has no changes");
   for (const path of changed) {
     if (isFixForbidden(path)) errors.push(`${path}: the fixer may not change this file`);
     else if (!matchesAny(path, steps.fix.scope)) errors.push(`${path}: outside fix.scope`);
   }
+  if (!withNote) return checkFixWithoutNote(input, o, changed, errors);
   if (!changed.includes(notePath)) errors.push(`${notePath}: not changed on the fix branch`);
   if (!changed.includes(RULES_FILE)) errors.push(`${RULES_FILE}: not changed on the fix branch`);
 
@@ -477,6 +491,22 @@ function evidenceFix(input: OutputCheckInput, o: Obj, errors: string[]): void {
   else errors.push(...fixNoteProblems(note, run.task, notePath));
 
   checkFixRule(input, ruleId, notePath, errors);
+}
+
+// FIXED without a new note and rule: (a) the rule the triage report named, and/or (b) a commit already on mainRef.
+// With neither a commit nor a rule claimed, the branch must change nothing: there is nothing to land.
+function checkFixWithoutNote(input: OutputCheckInput, o: Obj, changed: string[], errors: string[]): void {
+  const { main, run } = input;
+  if (typeof o.ruleId === "string") {
+    const named = readTriageReport(main, run.task, run.fix!.report)?.rule ?? null;
+    if (o.ruleId !== named) errors.push(`ruleId: the triage report named ${named ?? "no rule"}, not ${o.ruleId}; add a fix note and a triage rule`);
+  }
+  if (typeof o.mergeCommit === "string") {
+    const ref = input.fetchMainRef();
+    if (!catFileExists(main, o.mergeCommit) || !isAncestor(main, o.mergeCommit, ref)) errors.push(`mergeCommit: ${o.mergeCommit} is not on ${ref}`);
+  } else if (changed.length > 0) {
+    errors.push("the fix branch has changes: add a fix note and a triage rule, or give the mergeCommit of the fix on the main branch");
+  }
 }
 
 function checkFixRule(input: OutputCheckInput, ruleId: string, notePath: string, errors: string[]): void {

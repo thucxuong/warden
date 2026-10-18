@@ -29,14 +29,23 @@ Exit codes: 0 ok, 1 broken ticket file or tool error, 2 wrong usage or status, 3
 ---
 id: T-005
 title: Task list page 2 repeats the last row of page 1
-type: bug            # optional: chore | feature | bug | spike | migration | epic
-status: todo         # todo | doing | review | done
-blocked_by: []       # ticket ids; or one "  - T-001" line per id
-epic: T-024          # optional
+type: bug
+status: todo
+blocked_by: []
+epic: T-024
 ---
+
 ## Context
+
 ...
 ```
+
+- `type` is optional: `chore`, `feature`, `bug`, `spike`, `migration` or `epic`.
+- `status` is `todo`, `doing`, `review` or `done`.
+- `blocked_by` lists ticket ids, as `[T-001, T-002]` or one `  - T-001` line per id.
+- `epic` is optional.
+- A ` #` comment after a value is allowed and kept.
+- Keep the file formatter-clean: a blank line after the closing `---`, no trailing spaces, one newline at the end. `set-status` keeps it that way when it writes.
 
 `id`, `title` and `status` are required. `README.md` and `INDEX.md` in `backlog/` are not tickets. A broken file is reported as `backlog/<file>: <problem>`.
 

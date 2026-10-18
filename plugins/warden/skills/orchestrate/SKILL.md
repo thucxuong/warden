@@ -42,6 +42,7 @@ Run this only when the user asked for it. You are the orchestrator. Each ticket 
 9. When complete, run `warden orchestrate set-status <epic> done` and commit `changed` as in step 7. Show a final table: id, title, template, result, and the PR or merge commit.
 
 Rules
+- Git and paths: run `git -C <dir> ...` and use absolute paths, one simple command per call. Never `cd <dir> && ...`: a permission rule such as `Bash(git *)` does not match it.
 - Never do a ticket's steps yourself. You only start runs, hand fix steps to the fixer and set statuses.
 - Never start a ticket agent or the fixer with `run_in_background`. Foreground only.
 - Never edit files in a ticket worktree.

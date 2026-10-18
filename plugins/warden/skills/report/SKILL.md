@@ -11,10 +11,9 @@ description: Send a bug report or an enhancement request about warden itself. Re
 4. Do not put repository names or links in the title or body.
 5. Run it:
    ```
-   warden report --kind <kind> --title "<title>" <<'EOF'
-   <body>
-   EOF
+   warden report --kind <kind> --title "<title>" --body "<body>"
    ```
+   The body is one argument. Do not use a heredoc, a pipe or a temp file. For a long body in a file, use `--file <path>`.
 6. Tell the user: Report <id> sent. Use the id it prints, for example `R-0001`.
 7. Commit the new row, only when the main checkout is on the main branch and nothing else is staged (`git diff --cached --quiet`). Otherwise leave it and tell the user. Run `git add .warden/reports.md`, then `git commit -m "chore: warden report <id>" -- .warden/reports.md`. Never switch branches. Do not push unless the user asks.
 

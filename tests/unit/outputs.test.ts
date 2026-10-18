@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { rmSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { validateStepsJson } from "../../plugins/warden/src/config/config.ts";
 import { head, porcelain } from "../../plugins/warden/src/lib/git.ts";
@@ -384,6 +384,44 @@ describe("fix", () => {
       ".warden/fixes/today.md: not found on warden-fix/T-1-1",
       "ruleId: TR-0001 not found in .warden/triage-rules.json on warden-fix/T-1-1",
     ]);
+  });
+
+  describe("FIXED without a new note and rule", () => {
+    const bare = (extra: Record<string, unknown>) => ({ ...fixed(), notePath: undefined, ruleId: undefined, ...extra });
+    const nameRule = (rule: string | null) => {
+      const file = join(taskDir(main, T), "triage", "1.json");
+      const report = JSON.parse(readFileSync(file, "utf8"));
+      writeJsonAtomic(file, { ...report, rule });
+    };
+
+    test("(a) the rule the triage report named, on an unchanged branch", () => {
+      nameRule("TR-0007");
+      expect(errorsFor(fixRun(), bare({ ruleId: "TR-0007" }))).toEqual([]);
+      expect(errorsFor(fixRun(), bare({ ruleId: "TR-0001" }))).toEqual(["ruleId: the triage report named TR-0007, not TR-0001; add a fix note and a triage rule"]);
+      nameRule(null);
+      expect(errorsFor(fixRun(), bare({ ruleId: "TR-0001" }))).toEqual(["ruleId: the triage report named no rule, not TR-0001; add a fix note and a triage rule"]);
+    });
+
+    test("(a) refuses a branch with changes: they would never land", () => {
+      nameRule("TR-0007");
+      commit(fixWt, { "scripts/x.sh": "true\n" });
+      expect(errorsFor(fixRun(), bare({ ruleId: "TR-0007" }))).toEqual([
+        "the fix branch has changes: add a fix note and a triage rule, or give the mergeCommit of the fix on the main branch",
+      ]);
+    });
+
+    test("(b) a commit that is on mainRef", () => {
+      const sha = sh(main, "rev-parse", "main");
+      expect(errorsFor(fixRun(), bare({ mergeCommit: sha }))).toEqual([]);
+      expect(errorsFor(fixRun(), bare({ mergeCommit: "0".repeat(40) }))).toEqual([`mergeCommit: ${"0".repeat(40)} is not on main`]);
+      const onBranch = commit(fixWt, { "scripts/x.sh": "true\n" });
+      expect(errorsFor(fixRun(), bare({ mergeCommit: onBranch }))).toEqual([`mergeCommit: ${onBranch} is not on main`]);
+    });
+
+    test("neither a rule nor a commit: note and rule are required", () => {
+      expect(errorsFor(fixRun(), bare({}))[0]).toStartWith("notePath and ruleId: required");
+      expect(errorsFor(fixRun(), bare({ mergeCommit: null }))[0]).toStartWith("notePath and ruleId: required");
+    });
   });
 
   test("CODE, GAVE_UP and WARDEN_BUG shapes; the ticket worktree must stay untouched", () => {

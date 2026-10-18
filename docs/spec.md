@@ -490,7 +490,7 @@ Step catalog (`src/engine/catalog.ts`):
 | review | engine | none (blocked) | diff `baseSha...HEAD`, `task.md` | findings | No blocking findings, or the round cap reached; same HEAD/tree rule; proof on the gate's start sha |
 | approve | human | none (blocked) | earlier outputs | — | `approve` by a human, or the session's recorded `PROJECT_AGENT=1` (5.5) |
 | ship | agent | none, except committing `.warden/history/<task>/` written by the engine | proofs | `ShipOutput` | Proofs valid for HEAD, current history committed, PR or merge recorded, leftovers in the description |
-| fix (internal, never in flows) | agent (`warden:fixer`) | None in the ticket worktree. In the fix worktree, only inside `fix.scope` | triage report | `FixOutput` | Branch diff ⊆ scope, note + rule present and the rule passes 6.4, merge found on `mainRef` by content |
+| fix (internal, never in flows) | agent (`warden:fixer`) | None in the ticket worktree. In the fix worktree, only inside `fix.scope` | triage report | `FixOutput` | Branch diff ⊆ scope, note + rule present and the rule passes 6.4 (or the exceptions in 6.4), merge found on `mainRef` by content |
 
 "Gate files" are `.warden/steps.json`, `.warden/flows/**`, `.warden/warden.json`, `.warden/triage-rules.json`, `.warden/state/**` and `.warden/history/**`, in the ticket worktree and in the main checkout.
 
@@ -505,7 +505,7 @@ Step catalog (`src/engine/catalog.ts`):
 - **plan:** "Turn the task into a plan that someone else could build without asking you. Follow the warden:plan skill. Write a decision file for each real choice. When the step says brainstorm, first compare 2–3 options with trade-offs and pick one, and put them in the `brainstorm` object of the output (see the example in `output`)."
 - **implement:** "Make the change the task and plan ask for, with tests. Commit all of it in one or more commits and leave nothing uncommitted. When you are back from a gate, fix exactly what it reports, nothing else. Do not change gate files. Do not run the checks to prove the step; the engine runs them. `filesChanged` must be exactly the files that differ from the start of this step; check with `git diff --name-only <step start> HEAD`."
 - **ship:** "Deliver the proven commit without changing it. 1) Commit the run record: `git add .warden/history/<task> && git commit -m 'chore(<task>): run record'`. 2) Open the PR or merge as the project how-to says. 3) If there are leftovers, put the file text in the description under `## Unresolved review findings`. 4) Hand in the ship output with `warden done` BEFORE you remove the worktree or the branch. Any other change sends the run back to the gates."
-- **fix:** "A check failed and triage says it is not (only) the change. Delegate this step to the warden:fixer subagent (Agent tool, subagent_type 'warden:fixer') in the foreground, never with run_in_background, with the context below. Wait for it to return, then pass its JSON to `warden done`. Do not fix it yourself and do not touch the ticket worktree."
+- **fix:** "A check failed and triage says it is not (only) the change. Delegate this step to the warden:fixer subagent (Agent tool, subagent_type 'warden:fixer') in the foreground, never with run_in_background, with the context below. Wait for it to return, then pass its JSON to `warden done`. A FIXED output needs a new fix note and a new narrow triage rule, unless the triage report already named a matching rule (give its id as `ruleId`) or the fix is already on the main branch (give its sha as `mergeCommit`). Do not fix it yourself and do not touch the ticket worktree."
 
 Template files:
 
@@ -729,7 +729,7 @@ export interface StatusLine { task: string; flow: string; status: RunStatus; ste
 8. `## Earlier outputs`: absolute paths of the latest accepted output per earlier step id (`outputs/<seq>-<id>.json`), and `plan.md` when it exists.
 9. `## Hand back`: `Run: warden done --json '<the <OutputType> JSON on one line>' (schema in "output"). One command; no heredoc or temp file.`
 
-For a fix step, section 5 is `## Fix context` instead: every `context.fix` field on its own line, plus the fix note of the matched triage rule when there is one.
+For a fix step, section 5 is `## Fix context` instead: every `context.fix` field on its own line, plus the fix note of the matched triage rule when there is one, then one minimal example of a fix note and of a triage rule, each in a fenced block.
 
 ### 4.10 Triage
 
@@ -942,7 +942,7 @@ Fix `done` (6.4 validation). Every result first writes `step.ended` for `fix-<n>
 **Fix landing** (worker job `fix-landing`):
 1. Fetch `mainRef` and repeat the 6.4 content check. Not found: `status = waiting`, `waiting.kind = "merge-fix"`, reason `the fix is not on <mainBranch> yet; merge <pr>, then type retry`.
 2. In the ticket worktree, require a clean tree, then `git merge --no-edit <mainRef>`. On a conflict: `git merge --abort`, then `block("merging <mainBranch> into <branch> conflicts in <paths>; merge it by hand, commit, then type retry")`.
-3. `baseSha = git merge-base HEAD <mainRef>`. This and `start` are the only places `baseSha` is set. Write `fix.landed {head}`.
+3. `baseSha = git merge-base HEAD <mainRef>`. This, `start` and the `retry` merge are the only places `baseSha` is set. Write `fix.landed {head}`.
 4. Run the snapshot's `setup.commands`, then the fixer's `repairCommands`, in the ticket worktree (env as 6.1). Any failure: `block("repair failed: <cmd>")`. Afterwards HEAD must equal the post-merge HEAD and the tree must be clean; otherwise `block("repair changed the ticket branch: <paths>")`.
 5. Delete the fix branch, clear `fix` and `routeBack`, then `rerunGates("fix landed")` (not counted as a stale proof).
 
@@ -952,7 +952,7 @@ The merge in step 2 is what makes the fix reach the ticket branch: without it th
 
 `retry` (human):
 - If `fix` is set (a FIXED fix not landed yet, from `merge-fix` or from a landing block): clear `waiting` and run the fix landing again.
-- Otherwise, from `blocked`: clear `waiting` and `enter(stepIndex)`. A check or review re-runs; an agent step waits for `done` again.
+- Otherwise, from `blocked`: clear `waiting` and `enter(stepIndex)`. A check or review re-runs; an agent step waits for `done` again. Before a check or review re-runs, the worker fetches `mainRef`; if it has commits the ticket branch lacks (for example a fix committed to the main branch outside a fix step), it runs `git merge --no-edit <mainRef>` in the ticket worktree (a conflict blocks with the conflicting files listed, as in fix landing step 2), sets `baseSha = git merge-base HEAD <mainRef>`, runs `setup.commands`, and writes `retry.merged-main {head, baseSha, ref}`. A dirty tree skips the merge (the gate start routes it back). A retry at `merge-fix` lands the fix, which merges `mainRef` the same way (fix landing step 2).
 
 `reject <text>` (human, approve step only):
 - `routeBack(kind:"rejected", reason:text)` to the latest agent step before the approve step: the latest implement if there is one, otherwise the step just before.
@@ -1223,7 +1223,7 @@ Cost: `total_cost_usd` from stdout is saved to `ReviewRound.costUsd` and the eve
 
 ### 6.4 Fixer handoff (`agents/fixer.md`, fix-step validation)
 
-`next` during a fix step returns the instructions (4.9): the catalog fix text (which says to delegate to `warden:fixer`), `steps.agent.fix.instructions`, and the `## Fix context` block (worktree, branch, verdict, report path, failing log path, mode, scope, the matched rule's fix note, and `mayMerge`). Plugin agents are addressed as `<plugin>:<name>` (docs; U-4 keeps one live check).
+`next` during a fix step returns the instructions (4.9): the catalog fix text (which says to delegate to `warden:fixer`), `steps.agent.fix.instructions`, and the `## Fix context` block (worktree, branch, verdict, report path, failing log path, mode, scope, the matched rule's fix note, and `mayMerge`), followed by one minimal example of a fix note (4.12) and of a triage rule (4.10). Plugin agents are addressed as `<plugin>:<name>` (docs; U-4 keeps one live check).
 
 Validation of `FixOutput`:
 - **FIXED:**
@@ -1231,7 +1231,10 @@ Validation of `FixOutput`:
   - D is non-empty. Every path in D matches `fix.scope` and none matches the always-forbidden list.
   - D contains `notePath` and `.warden/triage-rules.json`. The note at the branch tip has the 4.12 headings.
   - The rules file at the branch tip has a rule with `id == ruleId`, `fixNote == notePath` and a valid regex. The rule must also be **narrow**: it matches at least one line of the failing log (normalised by 6.2 steps 1–2) that is a candidate line under 6.2 step 4, and it matches no line of any log of a command that passed in this run (`checks/*/*.log` with exit 0, and the triage logs of passing attempts). Error: `rule <id> is too broad: matches <log>:<line>`.
-- **Merged?** (content check, used here and by the fix landing): after a fetch, `git show <mainRef>:<notePath>` exists with the 4.12 headings, and `git show <mainRef>:.warden/triage-rules.json` has a rule with `id == ruleId`. Ancestry is never used, because a human may merge on GitHub (local `mainBranch` is stale) or squash and rebase (the branch tip is never an ancestor). `mergeCommit` is recorded but not trusted.
+- **FIXED without a new note and rule** is accepted in two cases, and otherwise the two bullets above stay required:
+  - (a) `ruleId` is the rule the triage report already named (`report.rule`). `notePath` is left out and the fix branch must have no changes.
+  - (b) `mergeCommit` is a commit already on `mainRef` (found, and an ancestor of `mainRef` after a fetch). `notePath` is left out; the branch diff, if any, still has to stay inside the scope rules.
+- **Merged?** (content check, used here and by the fix landing): after a fetch, `git show <mainRef>:<notePath>` exists with the 4.12 headings, and `git show <mainRef>:.warden/triage-rules.json` has a rule with `id == ruleId`. A part the output leaves out (no `notePath`, no `ruleId`) is not checked. Ancestry is never used, because a human may merge on GitHub (local `mainBranch` is stale) or squash and rebase (the branch tip is never an ancestor). `mergeCommit` is recorded but not trusted.
 - **CODE:** `codeRef` matches `/^[^:\s]+:\d+ — .+/`. The chain has ≥2 items.
 - **GAVE_UP:** `reason` is ≥20 chars.
 - **WARDEN_BUG:** `report.title` and `report.body` are non-empty.

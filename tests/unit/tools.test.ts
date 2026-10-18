@@ -258,7 +258,7 @@ describe("shipped registry", () => {
       for (const f of readdirSync(join(dir, "bin")).filter((f) => f.endsWith(".ts"))) {
         expect(readFileSync(join(dir, "bin", f), "utf8")).not.toMatch(/\bconsole\./);
       }
-      expect(JSON.parse(readFileSync(join(dir, "tool.json"), "utf8")).version).toBe("0.1.1");
+      expect(JSON.parse(readFileSync(join(dir, "tool.json"), "utf8")).version).toBe(name === "backlog" ? "0.1.2" : "0.1.1");
       const note = readFileSync(join(dir, "fixes", "v0.1.1.md"), "utf8");
       expect(note.startsWith(`# ${name} v0.1.1\n## What changed\n`)).toBe(true);
       for (const h of ["## Why", "## Apply to your copy", "## Check"]) expect(note).toContain(h);

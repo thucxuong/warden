@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { loadStepsJson, loadWardenJson, parseStepsJson, parseTriageRules } from "../config/config.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
 import {
-  branchExists, deleteBranch, diffNames, fetchMain, head, mergeBase, mergeNoEdit, porcelain, revParse, showFile,
+  branchExists, deleteBranch, diffNames, fetchMain, head, isAncestor, mergeBase, mergeNoEdit, porcelain, revParse, showFile,
   worktreeAdd, worktreeList, worktreeRemove,
 } from "../lib/git.ts";
 import { ring } from "../lib/doorbell.ts";
@@ -41,6 +41,7 @@ export interface StartOptions {
 
 const LIVE: RunJson["status"][] = ["active", "waiting", "blocked"];
 const LOG_TAIL_LINES = 80;
+const RETRY_MERGED_MAIN = "retry.merged-main" as EventType; // belongs in the EventType union in types.ts
 
 // Everything a transition needs. Transitions mutate s.run; the caller writes it under the lock.
 interface S {
@@ -443,10 +444,60 @@ export async function runWorker(ctx: Ctx, task: string, gates: Gates): Promise<v
 }
 
 async function runJob(ctx: Ctx, main: string, task: string, job: GateJob, gates: Gates): Promise<void> {
+  if ((job === "check" || job === "review") && retryMergeDue(main, task) && !(await mergeMainOnRetry(ctx, main, task))) return;
   if (job === "check") return checkJob(ctx, main, task, gates);
   if (job === "review") return reviewJob(ctx, main, task, gates);
   if (job === "ship-prep") return shipPrepJob(ctx, main, task);
   return fixLandingJob(ctx, main, task);
+}
+
+// A human retry of a blocked gate step asks for the main branch to be merged in before the gate re-runs (5.2).
+// The marker is the event log: run.retry (written after the step starts) until the merge, a block, a route back or a new step.
+function retryMergeDue(main: string, task: string): boolean {
+  let due = false;
+  for (const e of readEvents(main, task)) {
+    if (e.type === "run.retry" && !e.data?.landing) due = true;
+    else if (e.type === "step.started" || e.type === "route.back" || e.type === "run.blocked" || e.type === RETRY_MERGED_MAIN) due = false;
+  }
+  return due;
+}
+
+// Merges mainRef into the ticket branch when it has commits the branch lacks, moves baseSha and runs setup.
+// Returns false when it blocked the run.
+async function mergeMainOnRetry(ctx: Ctx, main: string, task: string): Promise<boolean> {
+  const s = load(ctx, main, task);
+  const { run, steps } = s;
+  const { ref } = fetchMain(main, steps.mainBranch);
+  try {
+    if (isAncestor(run.worktree, ref, "HEAD")) return true;
+  } catch {
+    return true; // no such ref: nothing to merge
+  }
+  if (dirty(run).length > 0) return true; // the gate start routes a dirty tree back
+  const merge = mergeNoEdit(run.worktree, ref);
+  if (!merge.ok) {
+    await apply(ctx, main, task, (t) =>
+      block(t, `merging ${steps.mainBranch} into ${run.branch} conflicts in ${merge.conflicts.join(", ")}; merge it by hand, commit, then type retry`));
+    return false;
+  }
+  const merged = head(run.worktree);
+  const baseSha = mergeBase(run.worktree, "HEAD", ref);
+  await apply(ctx, main, task, (t) => {
+    t.run.baseSha = baseSha;
+    t.run.current.startSha = merged;
+    event(t, RETRY_MERGED_MAIN, t.run.current.id, { head: merged, baseSha, ref });
+  });
+  for (const [i, cmd] of steps.setup.commands.entries()) {
+    const result = await proc.run(cmd, {
+      cwd: run.worktree, env: commandEnv(s), timeoutSec: steps.setup.timeoutSec,
+      log: join(taskDir(main, task), `retry-setup-${i + 1}.log`),
+    });
+    if (result.exit !== 0) {
+      await apply(ctx, main, task, (t) => block(t, `setup failed after merging ${steps.mainBranch}: ${cmd}`));
+      return false;
+    }
+  }
+  return true;
 }
 
 // Step 2 of the worker: the gate starts on HEAD with a clean tree, or routes back as "dirty".
@@ -883,8 +934,8 @@ export async function retry(ctx: Ctx, task: string, spawnWorker: SpawnWorker = d
     if (run.status !== "blocked") throw new WardenError(`${task} is not blocked (status ${run.status})`);
     run.waiting = null;
     run.counters.staleProofs = 0; // otherwise a stale-proof block could never be retried
-    event(s, "run.retry", run.current.id);
     enter(s, run.stepIndex);
+    event(s, "run.retry", run.current.id); // after the step starts: the worker merges main (retryMergeDue)
   });
 }
 

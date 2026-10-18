@@ -10,6 +10,7 @@ import {
   parseTicket,
   replaceStatus,
   stripComment,
+  tidy,
 } from "../../plugins/warden/registry/backlog/bin/tickets.ts";
 
 const script = resolve(import.meta.dir, "../../plugins/warden/registry/backlog/bin/tickets.ts");
@@ -102,6 +103,29 @@ Hello
   });
 });
 
+describe("formatter-clean tickets", () => {
+  test("tidy: blank line after the front matter, no trailing spaces, one final newline", () => {
+    expect(tidy("---\nid: T-1  \nstatus: todo\n---\n## Context  \nBody.  \n\n\n")).toBe("---\nid: T-1\nstatus: todo\n---\n\n## Context  \nBody.\n");
+    expect(tidy("---\nid: T-1\n---\n\n\nBody\n")).toBe("---\nid: T-1\n---\n\nBody\n");
+    expect(tidy("---\nid: T-1\n---")).toBe("---\nid: T-1\n---\n");
+    expect(tidy("---\r\nid: T-1 \r\n---\r\nbody\r\n")).toBe("---\r\nid: T-1\r\n---\r\n\r\nbody\r\n");
+    expect(tidy("no frontmatter")).toBe("no frontmatter");
+    const clean = "---\nid: T-1\nstatus: todo   # a | b\n---\n\n## Context\n\nBody.\n";
+    expect(tidy(clean)).toBe(clean);
+  });
+
+  test("the SKILL template is clean and the version has a fix note", () => {
+    const dir = resolve(import.meta.dir, "../../plugins/warden/registry/backlog");
+    const skill = readFileSync(join(dir, "SKILL.md"), "utf8");
+    const template = /```markdown\n([\s\S]*?)```/.exec(skill)![1]!;
+    expect(tidy(template)).toBe(template);
+    expect(template).toContain("\n---\n\n## Context\n\n");
+    expect(parseTicket("T-005.md", template).ticket.id).toBe("T-005");
+    expect(JSON.parse(readFileSync(join(dir, "tool.json"), "utf8")).version).toBe("0.1.2");
+    expect(readFileSync(join(dir, "fixes", "v0.1.2.md"), "utf8").startsWith("# backlog v0.1.2\n## What changed\n")).toBe(true);
+  });
+});
+
 describe("dag", () => {
   const items = [
     { id: "E-1", title: "Epic", status: "todo", blocked_by: [], type: "epic" },
@@ -176,6 +200,12 @@ describe("CLI with a main checkout and a linked worktree", () => {
     // on main it changes main's copy and dag sees it
     expect(cli(main, "set-status", "T-3", "done").out.changed).toEqual(["backlog/T-3.md"]);
     expect(cli(wt, "dag").out.find((t: any) => t.id === "T-3").status).toBe("done");
+  });
+
+  test("set-status writes a formatter-clean file", () => {
+    writeFileSync(join(wt, "backlog", "T-2.md"), "---\nid: T-2\ntitle: x  \nstatus: todo\n---\n## Context\nBody.\n\n");
+    expect(cli(wt, "set-status", "T-2", "review").out.changed).toEqual(["backlog/T-2.md"]);
+    expect(readFileSync(join(wt, "backlog", "T-2.md"), "utf8")).toBe("---\nid: T-2\ntitle: x\nstatus: review\n---\n\n## Context\nBody.\n");
   });
 
   test("set-status errors", () => {

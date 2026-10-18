@@ -63,6 +63,39 @@ function backFrom(input: InstructionsInput): string {
   return section(`Back from ${rb.from}`, parts.join("\n\n"));
 }
 
+// One complete minimal example of what a FIXED output must add: the note (4.12 headings) and the rule (4.10 fields).
+function fixExamples(task: string): string {
+  const date = new Date().toISOString().slice(0, 10);
+  const notePath = `.warden/fixes/${date}-${task}.md`;
+  const rule = JSON.stringify(
+    { schema: 1, rules: [{ id: "TR-0001", pattern: "^error: PORT is not set$", flags: "", verdict: "OPS", fixNote: notePath, task, addedAt: date }] },
+    null, 2,
+  );
+  return [
+    `Example fix note, ${notePath} (these headings are checked exactly):`,
+    "",
+    "```markdown",
+    `# Fix ${date} ${task}`,
+    "## Symptom",
+    "The check fails with `error: PORT is not set`.",
+    "## Root cause",
+    "scripts/warden-setup.sh never copies .env.example to .env.local.",
+    "## Fix",
+    "The setup script now copies it.",
+    "## Test",
+    "Run the setup script in a clean copy, then the failing command; it passes.",
+    "## How triage should classify this next time",
+    "OPS: the log line `error: PORT is not set` means the setup script is broken.",
+    "```",
+    "",
+    "Example .warden/triage-rules.json (add your rule to `rules`, with the next free TR-NNNN id; `pattern` is a regex for the exact error line, it must match no line of a passing check log; `fixNote` is the note path):",
+    "",
+    "```json",
+    rule,
+    "```",
+  ].join("\n");
+}
+
 function fixContext(input: InstructionsInput): string {
   const fix = input.fix;
   if (!fix) return "";
@@ -78,6 +111,7 @@ function fixContext(input: InstructionsInput): string {
     `- mayMerge: ${fix.mayMerge}`,
   ];
   if (input.fixNoteText) lines.push("", `Fix note of the matched triage rule (${fix.fixNote}):`, "", input.fixNoteText.trim());
+  lines.push("", fixExamples(input.run.task));
   return section("Fix context", lines.join("\n"));
 }
 
