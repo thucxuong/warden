@@ -74,6 +74,7 @@ const argv = [
   "Bash(ls *)",
   "Read", "Glob", "Grep",
   "Edit(triage/**)",
+  "Bash(plugins/warden/bin/warden report inbox*)",
   "--add-dir", join(home, ".claude/plugins/data"),
   "--max-budget-usd", String(budget),
   "--output-format", "text",

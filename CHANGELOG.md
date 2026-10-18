@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0 — 2026-10-19
+
+- Reports from other machines: `warden report` now also sends the report to the warden maintainers through a background git transport, and fetches its status back. `warden report sync` runs it now; session start tells you once when reports can only stay on this machine.
+- Reports filed before 0.4 are sent too, the first time this machine syncs.
+- `warden report inbox` and `warden report set <key>` for maintainers: triage reads reports from every machine, keyed by machine id and report id.
+- Built-in check `warden-docs` and `warden docs check`: every `.md` file in the `.warden` doc folders has an INDEX.md line, every INDEX.md line names a file that exists, and no file is over 200 lines.
+- Command checks find `warden` on their PATH.
+- Maintainers: run `bun scripts/wa-register.ts` again after updating.
+
 ## 0.3.3 — 2026-10-18
 
 - Skills agree on cd: a plain `cd <dir>` is fine, never chain it with `&&`.

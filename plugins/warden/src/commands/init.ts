@@ -11,6 +11,7 @@ import { readPluginVersion } from "../lib/version.ts";
 import { worktreeRoot } from "../state/paths.ts";
 import type { CommandDef, Ctx, InitPayload, InitScan, StepsJson, WardenJson } from "../types.ts";
 import { RETRO_CHECK } from "./checks.ts";
+import { DOCS_CHECK } from "./docs.ts";
 import { REPORTS_HEADER } from "./report.ts";
 import { TOOLS_HEADER } from "./tools.ts";
 
@@ -331,6 +332,7 @@ async function write(args: string[], ctx: Ctx): Promise<{ written: string[]; not
     out.file(`.warden/context/${slug}.md`, text.endsWith("\n") ? text : text + "\n");
   }
   out.fileIfMissing(".warden/checks/retro.md", RETRO_CHECK(localDate()));
+  out.fileIfMissing(".warden/checks/warden-docs.md", DOCS_CHECK);
   for (const dir of INDEX_DIRS) out.fileIfMissing(`.warden/${dir}/INDEX.md`, indexBody(root, dir));
   out.file(SETUP_SCRIPT, payload.setupScript.endsWith("\n") ? payload.setupScript : payload.setupScript + "\n");
   if (ensureGitignoreLine(root, ".warden/state/")) out.written.push(".gitignore");

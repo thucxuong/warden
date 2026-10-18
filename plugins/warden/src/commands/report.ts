@@ -5,6 +5,10 @@ import { loadWardenJson } from "../config/config.ts";
 import { ring } from "../lib/doorbell.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
 import { readJson, writeJsonAtomic } from "../lib/json.ts";
+import {
+  FIXED_IN, KEY_PATTERN, keyOfOutboxFile, listInbox, NOTE_FORBIDDEN, queuePendingEdit, setReportStatus, startReportSync, STATUSES, syncReports,
+  transportOn,
+} from "../lib/reports-git.ts";
 import { mainRoot, stateRoot, worktreeRoot } from "../state/paths.ts";
 import type { Ctx, ReportRecord } from "../types.ts";
 
@@ -57,15 +61,20 @@ export function appendRow(path: string, header: string, row: string): void {
   writeFileSync(path, withNewline + row + "\n");
 }
 
-const STATUSES: ReportRecord["status"][] = ["sent", "accepted", "fixed", "wontfix", "needs-info"];
-// The consumer project can read the note, so it must stay plain text. This blocks: "http", "github", "gitlab", "www.",
-// a domain followed by a slash, "#<digits>", "issue(s) <digits>", "/issue(s)", and two words joined by a slash (owner/repo).
-const NOTE_FORBIDDEN = /http|github|gitlab|www\.|\.[a-z]{2,}\/|#\d|\bissues?\W{0,2}\d|\/issues?\b|[\w.-]\/[\w.-]/i;
+const SET_USAGE = "usage: warden report set <key|file> --status <s> [--note <t>] [--fixed-in <v>]";
+
+// After the key or file, only --status, --note and --fixed-in, each with a value.
+function checkSetArgs(args: string[]): void {
+  const known = ["--status", "--note", "--fixed-in"];
+  for (let i = 2; i < args.length; i += 2) {
+    if (!known.includes(args[i]!) || i + 1 >= args.length) throw new WardenError(SET_USAGE, EXIT.USAGE);
+  }
+}
 
 // warden report set <file> --status <s> [--note <t>] [--fixed-in <v>]: the WA writes its verdict into a record (spec 4.13).
-function setStatus(args: string[]): void {
+function setStatus(args: string[], ctx: Ctx): void {
   const file = args[1];
-  if (!file || file.startsWith("--")) throw new WardenError("usage: warden report set <file> --status <s> [--note <t>] [--fixed-in <v>]", EXIT.USAGE);
+  if (!file || file.startsWith("--")) throw new WardenError(SET_USAGE, EXIT.USAGE);
   const status = flagValue(args, "--status") as ReportRecord["status"] | undefined;
   if (!status || !STATUSES.includes(status)) throw new WardenError(`--status must be one of ${STATUSES.join(", ")}`, EXIT.USAGE);
   const note = flagValue(args, "--note");
@@ -86,7 +95,47 @@ function setStatus(args: string[]): void {
   if (note !== undefined) record.note = note;
   if (fixedIn !== undefined) record.fixedIn = fixedIn;
   writeJsonAtomic(file, record);
+  // A record the branch may already hold: queue the verdict, or the next status pull would undo it.
+  const key = transportOn(ctx) ? keyOfOutboxFile(file) : null;
+  if (key) {
+    queuePendingEdit(ctx, key, {
+      status, ...(note !== undefined ? { note } : {}), ...(fixedIn !== undefined ? { fixedIn } : {}),
+    });
+  }
   console.log(JSON.stringify({ id: record.id, status: record.status }));
+}
+
+// warden report set <key> ...: the WA's verdict on a report of any machine, local copy and branch (spec-0.4 3.8).
+function setByKey(args: string[], ctx: Ctx): void {
+  const status = flagValue(args, "--status");
+  const note = flagValue(args, "--note");
+  const fixedIn = flagValue(args, "--fixed-in");
+  if (status === undefined) throw new WardenError(`--status must be one of ${STATUSES.join(", ")}`, EXIT.USAGE);
+  const result = setReportStatus(ctx, args[1]!, {
+    status, ...(note !== undefined ? { note } : {}), ...(fixedIn !== undefined ? { fixedIn } : {}),
+  });
+  console.log(JSON.stringify({ key: result.key, status: result.status, local: result.local, shared: result.shared }));
+}
+
+// warden report sync [--background]: send this machine's reports and fetch their status. Exit 0 whatever happened.
+function syncCommand(args: string[], ctx: Ctx): void {
+  if (args.length === 2 && args[1] === "--background") {
+    console.log(JSON.stringify({ started: startReportSync(ctx) }));
+    return;
+  }
+  if (args.length !== 1) throw new WardenError("usage: warden report sync [--background]", EXIT.USAGE);
+  const r = syncReports(ctx);
+  console.log(JSON.stringify({
+    enabled: r.enabled, fetched: r.fetched, pushed: r.pushed, updated: r.updated, edits: r.edits, pushAccess: r.pushAccess,
+    ...(r.skipped ? { skipped: r.skipped } : {}),
+  }));
+}
+
+function inboxCommand(args: string[], ctx: Ctx): void {
+  const all = args.includes("--all");
+  if (args.length !== (all ? 2 : 1)) throw new WardenError("usage: warden report inbox [--all]", EXIT.USAGE);
+  const { fetched, reports } = listInbox(ctx, all);
+  console.log(JSON.stringify({ fetched, reports }));
 }
 
 // warden report --status [--write]: this project's reports with the maintainers' verdicts. Read-only, except that
@@ -111,7 +160,14 @@ function printStatus(args: string[], ctx: Ctx): void {
 }
 
 export async function run(args: string[], ctx: Ctx): Promise<void> {
-  if (args[0] === "set") return setStatus(args);
+  if (args[0] === "sync") return syncCommand(args, ctx);
+  if (args[0] === "inbox") return inboxCommand(args, ctx);
+  if (args[0] === "set") {
+    checkSetArgs(args);
+    const fixedIn = flagValue(args, "--fixed-in");
+    if (fixedIn !== undefined && !FIXED_IN.test(fixedIn)) throw new WardenError("--fixed-in must look like 1.2.3", EXIT.USAGE);
+    return KEY_PATTERN.test(args[1] ?? "") ? setByKey(args, ctx) : setStatus(args, ctx);
+  }
   if (args.includes("--status")) return printStatus(args, ctx);
   const kind = flagValue(args, "--kind");
   const title = flagValue(args, "--title")?.trim();
@@ -133,6 +189,7 @@ export async function run(args: string[], ctx: Ctx): Promise<void> {
   }));
   appendRow(reportsTablePath(root), REPORTS_HEADER, `| ${record.id} | ${cell(title)} | sent | ${NO_VERSION} |`);
   ring(ctx);
+  startReportSync(ctx);
   console.log(JSON.stringify({ id: record.id, status: "sent" }));
 }
 

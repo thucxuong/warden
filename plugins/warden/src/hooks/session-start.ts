@@ -6,6 +6,7 @@ import { type CheckRow, checksDueLine, checksFailedLine, listChecks, mainCheckou
 import { pendingToolFixes, toolFixesLine } from "../commands/tools.ts";
 import { newerVersionNotice, upgradeNotice } from "../commands/upgrade.ts";
 import { ensureGate } from "../engine/machine.ts";
+import { reportSyncLine } from "../lib/reports-git.ts";
 import { orchestrateLines } from "../engine/tickets.ts";
 import type { Ctx, RunJson } from "../types.ts";
 import {
@@ -108,6 +109,8 @@ export async function sessionStart(call: HookCall): Promise<string | null> {
     lines.push(`warden: report ${change.id} "${change.title}" is now ${change.status}${version}.`);
   }
   if (changes.length > 0) lines.push(REPORTS_REFRESH);
+  const sync = guarded(call, "report sync", () => reportSyncLine(machineCtx(call)));
+  if (sync) lines.push(sync);
 
   const run = runForSession(call);
   if (run) await linkSession(call, run.task);

@@ -113,6 +113,8 @@ Then:
 - `warden orchestrate status <epic>` — show the current phase of each ticket in the epic.
 - `warden tools fixes [<tool>]` — show pending fix notes for copied tools.
 - `warden site` — open the task dashboard at http://127.0.0.1:4400.
+- `warden docs check` — check that every file in `.warden/context`, `rules`, `decisions`, `knowledge`, `checks` and `retros` has an INDEX line, and no file exceeds 200 lines.
+- `warden report sync` — send reports to the warden repo and fetch status updates from other machines now (runs by itself in the background).
 
 ## Branch protection
 
@@ -142,5 +144,9 @@ bun scripts/wa-register.ts
 ```
 
 A report then starts a headless `/wa-triage` here. Run `bun scripts/wa-register.ts --off` to stop. The log is `triage/doorbell/doorbell.log`.
+
+After updating to 0.4, re-run `bun scripts/wa-register.ts` to allow the new triage command.
+
+Reports from other machines arrive through the `reports` branch of the warden repo when their users can push to it. List all reports with `plugins/warden/bin/warden report inbox`.
 
 See [docs/design.html](docs/design.html) and [docs/spec.md](docs/spec.md) for architecture and implementation details.

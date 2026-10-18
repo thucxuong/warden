@@ -83,6 +83,7 @@ describe("wa-register", () => {
       "Bash(ls *)",
       "Read", "Glob", "Grep",
       "Edit(triage/**)",
+      "Bash(plugins/warden/bin/warden report inbox*)",
       "--add-dir", join(home, ".claude/plugins/data"),
       "--max-budget-usd", "2",
       "--output-format", "text",

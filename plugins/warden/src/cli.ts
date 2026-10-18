@@ -7,7 +7,7 @@ import { EXIT, WardenError } from "./lib/exit.ts";
 // Only these names are ever imported (spec 3.1). `gate` is internal.
 export const COMMANDS = [
   "version", "init", "start", "next", "done", "wait", "status", "approve", "retry", "reset",
-  "flow", "report", "retro", "upgrade", "tools", "site", "hook", "gate", "checks", "orchestrate",
+  "flow", "report", "retro", "upgrade", "tools", "site", "hook", "gate", "checks", "orchestrate", "docs",
 ] as const;
 
 // One line per command for --help. hook and gate are internal and not listed.
@@ -23,13 +23,14 @@ export const HELP: Record<string, string> = {
   retry: "warden retry <task>   (a person, in a terminal)",
   reset: "warden reset <task> [--yes]   (a person, in a terminal)",
   flow: "warden flow check <file|name>... | warden flow save <path> --name <name> [--force]",
-  report: "warden report --kind bug|enhancement --title <t> --file <body> | warden report --status [--write] | warden report set <file> --status <s> [--note <t>] [--fixed-in <v>]",
+  report: "warden report --kind bug|enhancement --title <t> --file <body> | warden report --status [--write] | warden report sync [--background] | warden report inbox [--all] | warden report set <key|file> --status <s> [--note <t>] [--fixed-in <v>]",
   retro: "warden retro --done [--date YYYY-MM-DD]",
   upgrade: "warden upgrade --notes | --done",
   tools: "warden tools list | add <name> | fixes [<tool>] | applied <tool> <version>",
   site: "warden site [--port <n>]",
   orchestrate: "warden orchestrate plan <epic> | status <epic> | set-status <id> <status>",
   checks: "warden checks | warden checks run <name> [--background] | warden checks done <name> [--date YYYY-MM-DD] [--note <t>]",
+  docs: "warden docs check",
 };
 
 const USAGE = `usage: warden <command> [args]   (warden <command> --help for details)\n${Object.values(HELP).map((l) => `  ${l}`).join("\n")}`;

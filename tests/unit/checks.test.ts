@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import {
   RETRO_CHECK,
   checksDueLine,
@@ -12,6 +12,7 @@ import {
   startCheckInBackground,
   type CheckRow,
 } from "../../plugins/warden/src/commands/checks.ts";
+import { DOCS_CHECK } from "../../plugins/warden/src/commands/docs.ts";
 import { run as retroRun } from "../../plugins/warden/src/commands/retro.ts";
 import { WardenError } from "../../plugins/warden/src/lib/exit.ts";
 import { startTime } from "../../plugins/warden/src/lib/proc.ts";
@@ -316,6 +317,32 @@ describe("checks run (command)", () => {
     expect((await call(["run", "inv"])).code).toBe(1);
     expect((await call(["run"])).code).toBe(2);
     expect((await call(["bogus"])).code).toBe(2);
+  });
+});
+
+describe("warden-docs check and PATH", () => {
+  test("the built-in warden-docs file is an auto command check and due", () => {
+    put(".warden/checks/warden-docs.md", DOCS_CHECK);
+    expect(row("warden-docs")).toEqual({
+      name: "warden-docs", kind: "command", every: "1d", last: null, due: true, auto: true, running: false, lastResult: null,
+    });
+    expect(checksDueLine(listChecks(main))).not.toContain("warden-docs"); // auto checks are not offered
+  });
+
+  test("a command check runs warden with a PATH that lacks it", async () => {
+    put(".warden/checks/ver.md", check({ ...CMD, run: "warden version" }));
+    const lines: string[] = [];
+    const realLog = console.log;
+    console.log = (...a: unknown[]) => void lines.push(a.join(" "));
+    try {
+      const ctx = { ...ctxFor(main), env: { PATH: `${dirname(process.execPath)}:/usr/bin:/bin`, HOME: main } };
+      await run(["run", "ver"], ctx);
+    } finally {
+      console.log = realLog;
+    }
+    const out = JSON.parse(lines.join("\n"));
+    expect(out).toMatchObject({ passed: true, exit: 0 });
+    expect(readFileSync(out.log, "utf8")).toContain('"version"');
   });
 });
 

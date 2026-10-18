@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { newerVersionNotice, run, upgradeNotice } from "../../plugins/warden/src/commands/upgrade.ts";
 import { WardenError } from "../../plugins/warden/src/lib/exit.ts";
+import { marketplaceClone } from "../../plugins/warden/src/lib/marketplace.ts";
 import type { Ctx } from "../../plugins/warden/src/types.ts";
 
 const temps: string[] = [];
@@ -209,5 +210,17 @@ describe("newerVersionNotice", () => {
     expect(newerVersionNotice(installed)).toBeNull();
     writeJson(join(base, "plugins/known_marketplaces.json"), "nope");
     expect(newerVersionNotice(installed)).toBeNull();
+  });
+
+  test("marketplaceClone gives the clone dir and the marketplace name, or null", () => {
+    expect(marketplaceClone(installed)).toEqual({ clone: join(base, "plugins/marketplaces/wm"), marketplace: "wm" });
+    const elsewhere = tempDir("warden-clone-");
+    writeJson(join(base, "plugins/known_marketplaces.json"), { wm: { installLocation: elsewhere } });
+    expect(marketplaceClone(installed)).toEqual({ clone: elsewhere, marketplace: "wm" });
+    expect(marketplaceClone(pluginRoot)).toBeNull();
+    expect(marketplaceClone(join(base, "missing"))).toBeNull();
+    const other = join(base, "plugins/cache/wm/other/0.2.0");
+    mkdirSync(other, { recursive: true });
+    expect(marketplaceClone(other)).toBeNull();
   });
 });

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { run } from "../../plugins/warden/src/commands/init.ts";
 import { RETRO_CHECK } from "../../plugins/warden/src/commands/checks.ts";
+import { DOCS_CHECK } from "../../plugins/warden/src/commands/docs.ts";
 import { WardenError } from "../../plugins/warden/src/lib/exit.ts";
 import type { Ctx, InitScan } from "../../plugins/warden/src/types.ts";
 
@@ -137,7 +138,7 @@ describe("init --write", () => {
     const { out } = await call(["--write", "--file", payloadFile()]);
     expect(out.written).toEqual(expect.arrayContaining([
       ".warden/warden.json", ".warden/steps.json", ".warden/triage-rules.json", ".warden/reports.md", ".warden/tools.md",
-      ".warden/context/overview.md", ".warden/context/stack.md", ".warden/checks/retro.md", "scripts/warden-setup.sh", ".gitignore",
+      ".warden/context/overview.md", ".warden/context/stack.md", ".warden/checks/retro.md", ".warden/checks/warden-docs.md", "scripts/warden-setup.sh", ".gitignore",
       ...["context", "rules", "decisions", "knowledge", "checks", "retros", "fixes", "flows"].map((d) => `.warden/${d}/INDEX.md`),
     ]));
 
@@ -148,6 +149,8 @@ describe("init --write", () => {
     expect(warden).not.toHaveProperty("lastRetro");
     expect(readFileSync(join(repo, ".warden/checks/retro.md"), "utf8")).toBe(RETRO_CHECK(today)); // a fresh project is not due
     expect(readFileSync(join(repo, ".warden/checks/INDEX.md"), "utf8")).toContain("- retro.md: Retro of recent work");
+    expect(readFileSync(join(repo, ".warden/checks/warden-docs.md"), "utf8")).toBe(DOCS_CHECK);
+    expect(readFileSync(join(repo, ".warden/checks/INDEX.md"), "utf8")).toContain("- warden-docs.md: Warden docs check");
     const steps = JSON.parse(readFileSync(join(repo, ".warden/steps.json"), "utf8"));
     expect(steps.review.model).toBe("sonnet"); // defaults filled
     expect(JSON.parse(readFileSync(join(repo, ".warden/triage-rules.json"), "utf8"))).toEqual({ schema: 1, rules: [] });

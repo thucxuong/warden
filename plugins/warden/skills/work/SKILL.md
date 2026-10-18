@@ -31,7 +31,7 @@ Warden chooses the task's worktree and branch (`warden start` prints them). Use 
 
 Rules
 - Git and paths: run `git -C <dir> ...` and use absolute paths, one simple command per call. A plain `cd <dir>` on its own is fine; never chain it as `cd <dir> && ...`, because a permission rule such as `Bash(git *)` does not match that.
-- Index files: when a step adds a file under `.warden/decisions/`, `.warden/knowledge/` or `.warden/rules/`, add its one-line entry to that folder's `INDEX.md` in the same commit.
+- Index files: when a step adds a file under `.warden/decisions/`, `.warden/knowledge/` or `.warden/rules/`, add its one-line entry to that folder's `INDEX.md` in the same commit. When session start says warden-docs failed, run warden docs check and fix what it lists once the user agrees.
 - Never run the checks yourself to prove a step.
 - Never write files under `.warden/state` or `.warden/history`.
 - Never push, open a pull request or merge outside the ship step.

@@ -11,6 +11,7 @@ import {
   worktreeAdd, worktreeList, worktreeRemove,
 } from "../lib/git.ts";
 import { ring } from "../lib/doorbell.ts";
+import { startReportSync } from "../lib/reports-git.ts";
 import { readJson, writeJsonAtomic } from "../lib/json.ts";
 import * as proc from "../lib/proc.ts";
 import { mainRef, mainRoot, sessionsDir, taskDir, worktreesDir } from "../state/paths.ts";
@@ -875,6 +876,7 @@ function fileReport(s: S, title: string, body: string): string {
     const cell = title.replace(/\|/g, "/").replace(/\s+/g, " ").trim();
     writeFileSync(table, (current.endsWith("\n") ? current : current + "\n") + `| ${id} | ${cell} | sent | — |\n`);
     ring(s.ctx);
+    startReportSync(s.ctx);
     return id;
   }
 }

@@ -411,13 +411,18 @@ function releaseLock(main: string, name: string): void {
 // Background start
 // ---------------------------------------------------------------------------
 
+// PATH for command checks: this plugin's bin first, so `run: warden ...` works whatever PATH the caller had.
+function pathWithBin(ctx: Ctx): string {
+  return `${join(ctx.root, "bin")}:${ctx.env.PATH ?? process.env.PATH ?? ""}`;
+}
+
 // Starts `checks run <name>` detached. False when the check is already running or could not be started.
 export function startCheckInBackground(ctx: Ctx, main: string, name: string): boolean {
   if (lockHeld(main, name)) return false;
   try {
     const child = spawn(process.execPath, [join(ctx.root, "src", "cli.ts"), "checks", "run", name], {
       cwd: main,
-      env: { ...ctx.env, WARDEN_ROOT: ctx.root, WARDEN_DATA: ctx.data },
+      env: { ...ctx.env, PATH: pathWithBin(ctx), WARDEN_ROOT: ctx.root, WARDEN_DATA: ctx.data },
       detached: true,
       stdio: "ignore",
     });
@@ -487,7 +492,7 @@ async function runCheck(args: string[], ctx: Ctx): Promise<void> {
   try {
     const result = await proc.run(check.run, {
       cwd: main,
-      env: { PROJECT_AGENT: undefined, WARDEN_MAIN_ROOT: main },
+      env: { PROJECT_AGENT: undefined, WARDEN_MAIN_ROOT: main, PATH: pathWithBin(ctx) },
       timeoutSec: check.timeoutSec,
       log,
     });

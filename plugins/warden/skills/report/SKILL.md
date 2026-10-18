@@ -8,7 +8,7 @@ description: Send a bug report or an enhancement request about warden itself. Re
 1. Pick the kind: `bug` or `enhancement`.
 2. Write a short title.
 3. Write a body with these parts: what happened, what you expected, the steps to repeat it, and the evidence. Evidence is the exact message or the command output.
-4. Do not put repository names or links in the title or body.
+4. Do not put repository names, links, secrets, credentials or customer data in the title or body.
 5. Run it:
    ```
    warden report --kind <kind> --title "<title>" --body "<body>"

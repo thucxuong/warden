@@ -1,9 +1,10 @@
 // warden upgrade --notes | --done: apply upgrade notes to .warden/ (spec 3.2, 10.5).
-import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadWardenJson } from "../config/config.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
 import { readJson, writeJsonAtomic } from "../lib/json.ts";
+import { marketplaceClone } from "../lib/marketplace.ts";
 import { compareSemver, readPluginVersion } from "../lib/version.ts";
 import { worktreeRoot } from "../state/paths.ts";
 import type { Ctx } from "../types.ts";
@@ -55,18 +56,9 @@ export function upgradeNotice(ctx: Ctx): string | null {
 // No network. Never throws: null on any problem, and for any plugin not loaded from the cache.
 export function newerVersionNotice(pluginRoot: string): string | null {
   try {
-    const layout = /^(.+\/plugins)\/cache\/([^/]+)\/([^/]+)\/[^/]+$/.exec(realpathSync(pluginRoot));
-    if (!layout || layout[3] !== "warden") return null;
-    const pluginsDir = layout[1]!;
-    const marketplace = layout[2]!;
-
-    let installLocation: unknown;
-    try {
-      installLocation = readJson<Record<string, { installLocation?: unknown } | undefined>>(join(pluginsDir, "known_marketplaces.json"))[marketplace]?.installLocation;
-    } catch {
-      // No usable registry file: use the default clone dir.
-    }
-    const clone = typeof installLocation === "string" ? installLocation : join(pluginsDir, "marketplaces", marketplace);
+    const found = marketplaceClone(pluginRoot);
+    if (!found) return null;
+    const { clone, marketplace } = found;
 
     const catalog = readJson<{ plugins?: { name?: unknown; source?: unknown }[] }>(join(clone, ".claude-plugin", "marketplace.json"));
     const source = catalog.plugins?.find((entry) => entry.name === "warden")?.source;

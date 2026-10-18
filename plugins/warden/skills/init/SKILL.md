@@ -49,6 +49,7 @@ Do these steps in order. Ask one question per message. Prefer multiple choice.
 What `warden init --write` creates:
 - `.warden/warden.json`, `.warden/steps.json` and `.warden/triage-rules.json`
 - `.warden/checks/retro.md`, the built-in retro check, with `last` set to today so no retro is due right after setup
+- `.warden/checks/warden-docs.md`, the built-in docs check (runs by itself once a day)
 - `.warden/reports.md` and `.warden/tools.md`
 - `.warden/context/<topic>.md` for each topic
 - an `INDEX.md` in each of `context/`, `rules/`, `decisions/`, `knowledge/`, `checks/`, `retros/`, `fixes/` and `flows/`
