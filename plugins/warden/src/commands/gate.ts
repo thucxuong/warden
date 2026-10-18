@@ -7,6 +7,7 @@ import { runCheck } from "../gates/check.ts";
 import { makeReview } from "../gates/review.ts";
 import { triage } from "../gates/triage.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
+import { stopGroupsOnTerm } from "../lib/proc.ts";
 import { mainRoot, taskDir } from "../state/paths.ts";
 import { runExists } from "../state/store.ts";
 import type { CheckStep, Ctx, Gates, RunJson } from "../types.ts";
@@ -34,6 +35,7 @@ export function realGates(ctx: Ctx): Gates {
 export async function run(args: string[], ctx: Ctx): Promise<void> {
   const task = requiredTask(parseArgs(args, []), "warden gate <task>");
   if (!runExists(mainRoot(ctx.cwd), task)) throw new WardenError(`no such run: ${task}`, EXIT.NOT_FOUND);
+  stopGroupsOnTerm(); // reset stops the worker; its checks and reviewer must stop with it
   console.log(`${new Date().toISOString()} worker ${process.pid} started for ${task}`);
   await runWorker(ctx, task, realGates(ctx));
   console.log(`${new Date().toISOString()} worker ${process.pid} finished for ${task}`);

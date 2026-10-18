@@ -8,11 +8,13 @@ import { taskDir } from "../state/paths.ts";
 import { runExists, readRun } from "../state/store.ts";
 import type { RunJson } from "../types.ts";
 import {
-  type HookCall, isFixer, linkSession, liveRuns, pathForms, recordSession, relInside, runEvent, runFlow, runForCwd, runForPath, runForSession,
-  runSteps, wardenJson,
+  type HookCall, isFixer, linkSession, liveRuns, logHookError, pathForms, recordSession, relInside, runEvent, runFlow, runForCwd, runForPath,
+  runForSession, runSteps, wardenJson,
 } from "./resolve.ts";
 
 const EDIT_TOOLS = ["Edit", "Write", "MultiEdit", "NotebookEdit"];
+// The hook.denied event is best effort: a busy task lock must never turn a deny into an allow.
+const DENY_LOCK_WAIT_MS = 1000;
 
 // The gate files a live run's checks depend on (E3). State and history are E1.
 const CONFIG_GATE_GLOBS = [".warden/steps.json", ".warden/flows/**", ".warden/warden.json", ".warden/triage-rules.json"];
@@ -32,7 +34,13 @@ function denyJson(reason: string): string {
 }
 
 async function deny(call: HookCall, tool: string, reason: string, run: RunJson | null): Promise<string> {
-  if (run) await runEvent(call.main, run, "hook.denied", { tool, reason });
+  if (run) {
+    try {
+      await runEvent(call.main, run, "hook.denied", { tool, reason }, DENY_LOCK_WAIT_MS);
+    } catch (err) {
+      logHookError(call.ctx.data, "hook pre-tool-use: hook.denied", err);
+    }
+  }
   return denyJson(reason);
 }
 
@@ -120,11 +128,22 @@ const WARDEN_ENV_NAMES = [
   "CLAUDE_PLUGIN_ROOT", "CLAUDE_PLUGIN_DATA",
 ];
 const CLAUDE_PRINT = /(^|[;&|(\s])claude\b[^;&|\n]*\s(-p|--print)(?=\s|$)/;
-const SCRIPT_CMD = /(^|[;&|(\s])script(\s|$)/;
+// `script` as the command word of a simple command, not the word in prose or JSON.
+const SCRIPT_CMD = /^[\s(]*(?:(?:exec|env|sudo|command|nohup|time)\s+)*(?:\w+=\S*\s+)*(?:\S*\/)?script(?:\s|$)/;
 const ENGINE_PATHS = [".warden/state", ".warden/history"];
 const CONFIG_PATHS = [".warden/steps.json", ".warden/warden.json", ".warden/triage-rules.json", ".warden/flows"];
-const WRITE_TOKEN =
-  /(>|\btee\b|\brm\b|\bmv\b|\bcp\b|\bsed\s+-i|\bperl\s+-i|\btruncate\b|\btouch\b|\bdd\b|\bln\b|\bchmod\b|\brsync\b|\bpython3?\b|\bnode\b|\bbun\b|\bgit\s+(rm|checkout|restore)\b)/;
+const CONFIG_PATH_ARG = /[^\s'"<>|;&()]*\.warden\/(?:steps\.json|warden\.json|triage-rules\.json|flows)[^\s'"<>|;&()]*/g;
+// Redirects that write no file: fd duplication (2>&1, >&2) and /dev/null.
+const HARMLESS_REDIRECT = /(?:\d*|&)>>?\s*\/dev\/null(?![\w./-])|\d*>&\s*(?:\d+|-)/g;
+// A command word only when it is not part of a path or a longer name (".../cp/...", "bunx").
+const WRITE_TOKEN = new RegExp([
+  ">",
+  String.raw`(?<![\w./-])(?:tee|rm|mv|cp|truncate|touch|dd|ln|chmod|rsync|python3?|node|bun|sponge|install)(?![\w./-])`,
+  String.raw`\bsed\b[^;&|\n]*\s(?:-[a-zA-Z]*i|--in-place)`,
+  String.raw`\b(?:perl|ruby)\b[^;&|\n]*\s-[a-zA-Z]*i`,
+  String.raw`\b[gm]?awk\b[^;&|\n]*\s-i\s*inplace`,
+  String.raw`\bgit\s+(?:rm|checkout|restore)\b`,
+].join("|"));
 
 // `git`, then any global options (`-C dir`, `-c k=v`, `--no-pager`), then the subcommand.
 const GIT_PREFIX = String.raw`\bgit\b(?:\s+(?:-[Cc]\s+\S+|--?[\w-]+(?:=\S+)?))*\s+`;
@@ -160,8 +179,42 @@ export function stripHeredocs(cmd: string): string {
   return kept.join("\n");
 }
 
-function isWardenCall(cmd: string): boolean {
-  return /^\s*(?:\S*\/)?warden\s/.test(cmd) || /^\s*(?:bun\s+)?\S*cli\.ts\s/.test(cmd);
+// Splits a command line into simple commands at ;, &&, ||, |, & and newlines outside quotes.
+// With pipes false, a pipeline stays one part.
+export function splitCommands(cmd: string, pipes = true): string[] {
+  const parts: string[] = [];
+  let current = "";
+  let quote: string | null = null;
+  for (let i = 0; i < cmd.length; i++) {
+    const c = cmd[i]!;
+    if (quote !== null) {
+      current += c;
+      if (c === "\\" && quote === '"') current += cmd[++i] ?? "";
+      else if (c === quote) quote = null;
+      continue;
+    }
+    if (c === "'" || c === '"') {
+      quote = c;
+      current += c;
+    } else if (c === "\\") {
+      current += c + (cmd[++i] ?? "");
+    } else if (cmd.startsWith("&&", i) || cmd.startsWith("||", i)) {
+      parts.push(current);
+      current = "";
+      i++;
+    } else if (c === ";" || c === "\n" || (c === "|" && pipes) || (c === "&" && cmd[i - 1] !== ">" && cmd[i + 1] !== ">")) {
+      parts.push(current);
+      current = "";
+    } else {
+      current += c;
+    }
+  }
+  parts.push(current);
+  return parts.map((part) => part.trim()).filter((part) => part !== "");
+}
+
+function isWardenCall(part: string): boolean {
+  return /^(?:\S*\/)?warden(?:\s|$)/.test(part) || /^(?:bun\s+)?\S*cli\.ts(?:\s|$)/.test(part);
 }
 
 function escapeRegex(text: string): string {
@@ -180,14 +233,62 @@ function branchAt(dir: string): string {
   }
 }
 
+// The directory after a `cd <dir>` simple command, else null.
+function cdTarget(part: string, here: string): string | null {
+  const cd = /^cd\s+(?:--\s+)?(\S+)/.exec(part);
+  return cd ? resolve(here, unquote(cd[1]!)) : null;
+}
+
+// Directories a command works in besides the hook cwd: each `cd <dir>` and `git -C <dir>`, in order.
+// The hook cwd does not follow a `cd` inside the same Bash call.
+function commandDirs(cmd: string, cwd: string): string[] {
+  const dirs: string[] = [];
+  let here = cwd;
+  for (const part of splitCommands(cmd)) {
+    const cd = cdTarget(part, here);
+    if (cd !== null) {
+      here = cd;
+      dirs.push(cd);
+    }
+    for (const m of part.matchAll(/\bgit\s+(?:\S+\s+)*?-C\s+(\S+)/g)) dirs.push(resolve(here, unquote(m[1]!)));
+  }
+  return dirs;
+}
+
+// The run whose worktree (or fix worktree) one of those directories is in.
+function runForDirs(main: string, dirs: string[]): RunJson | null {
+  for (const dir of dirs) {
+    const found = runForCwd(main, dir);
+    if (found) return found;
+  }
+  return null;
+}
+
 // `git merge` into mainBranch: the command switches to it, or the merge runs in a checkout that is on it.
 function mergesIntoMain(cmd: string, mainBranch: string, cwd: string): boolean {
   const switches = new RegExp(GIT_PREFIX + String.raw`(?:checkout|switch)\s+(?:-\S+\s+)*` + escapeRegex(mainBranch) + String.raw`(?![\w./-])`);
-  for (const merge of cmd.matchAll(GIT_MERGE)) {
-    if (switches.test(cmd)) return true;
-    const dashC = /\s-C\s+(\S+)/.exec(merge[0]);
-    const dir = dashC ? resolve(cwd, unquote(dashC[1]!)) : cwd;
-    if (branchAt(dir) === mainBranch) return true;
+  let here = cwd;
+  for (const part of splitCommands(cmd)) {
+    here = cdTarget(part, here) ?? here;
+    for (const merge of part.matchAll(GIT_MERGE)) {
+      if (switches.test(cmd)) return true;
+      const dashC = /\s-C\s+(\S+)/.exec(merge[0]);
+      const dir = dashC ? resolve(here, unquote(dashC[1]!)) : here;
+      if (branchAt(dir) === mainBranch) return true;
+    }
+  }
+  return false;
+}
+
+// A `git push` whose refspec lands on mainBranch: `<src>:main`, `HEAD:refs/heads/main`, or `main` itself.
+function pushesToMain(cmd: string, mainBranch: string): boolean {
+  const push = new RegExp(GIT_PREFIX + String.raw`push\b(.*)$`);
+  for (const part of splitCommands(cmd)) {
+    const args = push.exec(part)?.[1]?.trim().split(/\s+/) ?? [];
+    for (const arg of args.filter((a) => a !== "" && !a.startsWith("-")).map(unquote)) {
+      const dst = arg.replace(/^\+/, "").split(":").pop();
+      if (dst === mainBranch || dst === `refs/heads/${mainBranch}`) return true;
+    }
   }
   return false;
 }
@@ -200,18 +301,39 @@ function isMerge(cmd: string, mainBranch: string, cwd: string): boolean {
   return MERGE_COMMANDS.some((re) => re.test(cmd)) || mergesIntoMain(cmd, mainBranch, cwd);
 }
 
-// B3: writes to state, history or (while a run is live) gate config, outside a warden call.
+// B3: a pipeline that writes and names state, history or (while a run is live) gate config.
+// A `warden …` call counts only for its redirects. A `cd` earlier in the command counts as part of
+// the paths. The fixer may write config files only inside its own fix worktree.
 function writesEngineFiles(cmd: string, live: RunJson[], fixer: boolean, cwd: string): boolean {
-  if (!WRITE_TOKEN.test(cmd) || isWardenCall(cmd)) return false;
-  if (ENGINE_PATHS.some((p) => cmd.includes(p))) return true;
-  if (live.length === 0 || !CONFIG_PATHS.some((p) => cmd.includes(p))) return false;
-  const fixerInFix = fixer && live.some((run) => run.fix && (relInside(run.fix.worktree, cwd) !== null || cmd.includes(run.fix.worktree)));
-  return !fixerInFix;
+  const fixWorktrees = live.flatMap((run) => (run.fix ? [run.fix.worktree] : []));
+  let here = cwd;
+  let cdPaths = "";
+  for (const pipeline of splitCommands(cmd, false)) {
+    const cd = cdTarget(pipeline, here);
+    if (cd !== null) {
+      here = cd;
+      cdPaths += ` ${pipeline}`;
+      continue;
+    }
+    const part = splitCommands(pipeline)
+      .map((raw) => (isWardenCall(raw) ? (raw.match(/\d*>>?\s*\S+/g) ?? []).join(" ") : raw))
+      .join(" | ")
+      .replace(HARMLESS_REDIRECT, " ");
+    if (!WRITE_TOKEN.test(part)) continue;
+    const named = `${cdPaths} ${part}`;
+    if (ENGINE_PATHS.some((p) => named.includes(p))) return true;
+    if (live.length === 0 || !CONFIG_PATHS.some((p) => named.includes(p))) continue;
+    if (!fixer) return true;
+    const targets = [...part.matchAll(CONFIG_PATH_ARG)].map((m) => resolve(here, unquote(m[0].replace(/^.*=/, ""))));
+    const inFix = (target: string) => fixWorktrees.some((dir) => relInside(dir, target) !== null);
+    if (targets.length === 0 ? !inFix(here) : !targets.every(inFix)) return true;
+  }
+  return false;
 }
 
-// The task a `warden start|next|done|wait` command is about: an id in its args, else the run for cwd,
-// else the task the session is already linked to.
-function linkedTask(call: HookCall, cmd: string): string | null {
+// The task a `warden start|next|done|wait` command is about: an id in its args, else the run of a
+// directory the command `cd`s into, else the run for cwd, else the task the session is already linked to.
+function linkedTask(call: HookCall, cmd: string, dirRun: RunJson | null): string | null {
   const found = RUN_COMMAND.exec(cmd);
   if (!found) return null;
   let pattern: RegExp | null = null;
@@ -222,18 +344,25 @@ function linkedTask(call: HookCall, cmd: string): string | null {
   }
   const args = (found[2] ?? "").trim().split(/\s+/).map(unquote);
   const named = pattern ? args.find((arg) => !arg.startsWith("-") && pattern.test(arg)) : undefined;
-  return named ?? runForCwd(call.main, call.ctx.cwd)?.task ?? runForSession(call)?.task ?? null;
+  return named ?? dirRun?.task ?? runForCwd(call.main, call.ctx.cwd)?.task ?? runForSession(call)?.task ?? null;
 }
 
 async function bash(call: HookCall): Promise<string | null> {
   const command = call.input.tool_input?.command;
   const cmd = stripHeredocs(typeof command === "string" ? command : "");
+  const dirRun = runForDirs(call.main, commandDirs(cmd, call.ctx.cwd));
 
-  const task = linkedTask(call, cmd);
+  const task = linkedTask(call, cmd, dirRun);
   recordSession(call, task ?? undefined);
-  if (task !== null) await linkSession(call, task);
+  if (task !== null) {
+    try {
+      await linkSession(call, task);
+    } catch (err) {
+      logHookError(call.ctx.data, "hook pre-tool-use: link", err); // the decision below still applies
+    }
+  }
 
-  const run = runForSession(call);
+  const run = dirRun ?? runForSession(call);
   const reason = bashDecision(call, cmd, run);
   return reason === null ? null : deny(call, "Bash", reason, run);
 }
@@ -246,8 +375,8 @@ function bashDecision(call: HookCall, cmd: string, run: RunJson | null): string 
   if (HUMAN_ONLY.some((re) => re.test(cmd))) {
     return 'approve, retry and reset are for a person. Ask the user to type "approve" / "retry".';
   }
-  const changesWarden =
-    WARDEN_ENV_NAMES.some((name) => cmd.includes(name)) || CLAUDE_PRINT.test(cmd) || (SCRIPT_CMD.test(cmd) && /warden|cli\.ts/.test(cmd));
+  const runsScript = splitCommands(cmd).some((part) => SCRIPT_CMD.test(part));
+  const changesWarden = WARDEN_ENV_NAMES.some((name) => cmd.includes(name)) || CLAUDE_PRINT.test(cmd) || (runsScript && /warden|cli\.ts/.test(cmd));
   if (changesWarden) return "this command changes how warden itself runs; ask the user to do it";
   if (writesEngineFiles(cmd, liveRuns(main), fixer, ctx.cwd)) {
     return "state, history and gate files are written by the engine only";
@@ -259,7 +388,7 @@ function bashDecision(call: HookCall, cmd: string, run: RunJson | null): string 
 
   if (run.current.type === "fix") {
     const branch = run.fix?.branch;
-    const merging = isMerge(cmd, mainBranch, ctx.cwd);
+    const merging = isMerge(cmd, mainBranch, ctx.cwd) || pushesToMain(cmd, mainBranch);
     const allowed = fixer && branch !== undefined && cmd.includes(branch) && (!merging || ctx.env.PROJECT_AGENT === "1");
     return allowed ? null : "only the warden:fixer subagent pushes the fix branch";
   }

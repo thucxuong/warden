@@ -21,6 +21,7 @@ export interface HookInput {
   tool_input?: Record<string, unknown>;
   prompt?: string;
   stop_hook_active?: boolean;
+  last_assistant_message?: string;
   agent_id?: string;
   agent_type?: string;
   agent_transcript_path?: string;
@@ -259,9 +260,9 @@ export async function linkSubagent(call: HookCall, task: string): Promise<void> 
 }
 
 // Writes an event for a run that exists, under the task lock.
-export async function runEvent(main: string, run: RunJson, type: EventType, data?: Record<string, unknown>): Promise<void> {
+export async function runEvent(main: string, run: RunJson, type: EventType, data?: Record<string, unknown>, waitMs?: number): Promise<void> {
   if (!runExists(main, run.task)) return;
   await withLock(main, run.task, () => {
     appendEvent(main, run.task, type, { step: run.current.id, ...(data !== undefined && { data }) });
-  });
+  }, waitMs);
 }

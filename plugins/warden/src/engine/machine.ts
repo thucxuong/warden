@@ -486,7 +486,7 @@ async function checkJob(ctx: Ctx, main: string, task: string, gates: Gates): Pro
   if (head(s.run.worktree) !== startSha) return discard(ctx, main, task);
   if (result.leftFiles.length > 0) {
     await apply(ctx, main, task, (t) =>
-      block(t, `check left files: ${result.leftFiles.join(", ")}. Add them to .gitignore on ${t.steps.mainBranch}, then type retry`));
+      block(t, `check left files: ${result.leftFiles.join(", ")}. Add them to .gitignore on ${t.steps.mainBranch}, merge ${t.steps.mainBranch} into ${t.run.branch}, then type retry`));
     return;
   }
   if (dirty(s.run).length > 0) return discard(ctx, main, task);
@@ -718,7 +718,13 @@ export async function done(
     }
     return { accepted, errors: check.errors };
   });
-  await ensureGate(ctx, task, spawnWorker);
+  try {
+    await ensureGate(ctx, task, spawnWorker);
+  } catch (err) {
+    // An accepted output is already recorded and the run has moved on; saying "not accepted" would be wrong.
+    // The next `warden wait` or `warden next` starts the worker again.
+    if (!result.accepted) throw err;
+  }
   return { ...result, next: nextResponse(ctx, main, task) };
 }
 
@@ -883,7 +889,18 @@ function fixBranches(main: string, task: string): string[] {
   return res.status === 0 ? res.stdout.split("\n").map((b) => b.trim()).filter((b) => b !== "") : [];
 }
 
-// Kills a running worker, removes fix worktrees and branches, then deletes the live state. The ticket worktree stays.
+// Triage clean copies (6.2) of this task; a killed worker cannot remove its own.
+function cleanCopyPrefix(main: string, task: string): string[] {
+  try {
+    const projectId = loadWardenJson(join(main, ".warden", "warden.json")).projectId;
+    return [join(realpathSync(tmpdir()), `warden-clean-${projectId}-${task}-`)];
+  } catch {
+    return [];
+  }
+}
+
+// Kills a running worker (which stops its checks and reviewer), removes fix worktrees, clean copies
+// and fix branches, then deletes the live state. The ticket worktree stays.
 export async function reset(ctx: Ctx, task: string): Promise<{ reset: string }> {
   const main = mainRoot(ctx.cwd);
   const dir = taskDir(main, task);
@@ -901,8 +918,9 @@ export async function reset(ctx: Ctx, task: string): Promise<{ reset: string }> 
         }
       }
     }
-    const prefix = join(worktreesDir(main), `${task}-fix-`);
-    for (const wt of worktreeList(main)) if (wt.path.startsWith(prefix)) worktreeRemove(main, wt.path);
+    const prefixes = [join(worktreesDir(main), `${task}-fix-`), ...cleanCopyPrefix(main, task)];
+    const ours = (path: string) => prefixes.some((p) => path.startsWith(p) && /^\d+$/.test(path.slice(p.length)));
+    for (const wt of worktreeList(main)) if (ours(wt.path)) worktreeRemove(main, wt.path);
     for (const branch of fixBranches(main, task)) deleteBranch(main, branch);
     rmSync(dir, { recursive: true, force: true });
   });

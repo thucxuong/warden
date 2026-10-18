@@ -3,9 +3,10 @@ import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadStepsJson } from "../config/config.ts";
-import { diffText, head, hunkRanges } from "../lib/git.ts";
+import { branchBase, diffText, head, hunkRanges } from "../lib/git.ts";
 import { writeJsonAtomic } from "../lib/json.ts";
-import { mainRoot, taskDir } from "../state/paths.ts";
+import { trackGroup, untrackGroup } from "../lib/proc.ts";
+import { mainRef, mainRoot, taskDir } from "../state/paths.ts";
 import { appendEvent, withLock } from "../state/store.ts";
 import type { Ctx, Finding, Gates, ReviewRound, RunJson, StepsJson } from "../types.ts";
 import { parseReviewerStdout, scopeFindings } from "./findings.ts";
@@ -29,10 +30,12 @@ export function makeReview(ctx: Ctx): Gates["review"] {
 export async function runReview(ctx: Ctx, run: RunJson): Promise<ReviewRound> {
   const main = mainRoot(run.worktree);
   const steps = loadStepsJson(join(taskDir(main, run.task), "steps.json"));
-  const diff = diffText(run.worktree, `${run.baseSha}...HEAD`, diffExcludes());
+  // After a merge of (or rebase onto) the main branch, the newer main commit is the base, so main's commits are not reviewed.
+  const base = branchBase(run.worktree, run.baseSha, mainRef(main, steps.mainBranch));
+  const diff = diffText(run.worktree, `${base}...HEAD`, diffExcludes());
   const hunks = hunkRanges(diff);
   const prompt = buildPrompt({
-    base: run.baseSha,
+    base,
     task: readTaskText(main, run.task),
     steps,
     worktree: run.worktree,
@@ -52,7 +55,7 @@ export async function runReview(ctx: Ctx, run: RunJson): Promise<ReviewRound> {
       schema: 1,
       round,
       sha: head(run.worktree),
-      base: run.baseSha,
+      base,
       model: steps.review.model,
       costUsd: parsed.costUsd,
       kept: scoped.kept,
@@ -206,6 +209,7 @@ function spawnReviewer(ctx: Ctx, run: RunJson, steps: StepsJson, prompt: string,
       detached: true,
       stdio: ["pipe", "pipe", "pipe"],
     });
+    trackGroup(child.pid);
     let stdout = "";
     let stderr = "";
     let timedOut = false;
@@ -227,6 +231,7 @@ function spawnReviewer(ctx: Ctx, run: RunJson, steps: StepsJson, prompt: string,
     });
     child.on("close", (code) => {
       clearTimeout(timer);
+      untrackGroup(child.pid);
       const exit = timedOut ? TIMEOUT_EXIT : startFailed ? NOT_STARTED_EXIT : (code ?? 1);
       resolve({ exit, stdout, stderr });
     });

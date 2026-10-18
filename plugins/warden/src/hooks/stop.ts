@@ -1,9 +1,58 @@
 // Stop (spec 7.5): keep the turn going while the run needs the agent, with a loop guard.
-import { ensureGate } from "../engine/machine.ts";
+import { closeSync, fstatSync, openSync, readSync } from "node:fs";
+import { isAgentStep } from "../engine/catalog.ts";
+import { ensureGate, pendingJob } from "../engine/machine.ts";
 import { readEvents, readRun } from "../state/store.ts";
-import { type HookCall, linkSession, logHookError, machineCtx, runEvent, runForSession } from "./resolve.ts";
+import type { RunJson } from "../types.ts";
+import { type HookCall, type HookInput, linkSession, logHookError, machineCtx, runEvent, runForSession } from "./resolve.ts";
 
 const LOOP_GUARD = 3;
+const TRANSCRIPT_TAIL_BYTES = 256 * 1024;
+
+function readTail(path: string): string {
+  const fd = openSync(path, "r");
+  try {
+    const size = fstatSync(fd).size;
+    const length = Math.min(size, TRANSCRIPT_TAIL_BYTES);
+    const buffer = Buffer.alloc(length);
+    readSync(fd, buffer, 0, length, size - length);
+    return buffer.toString("utf8");
+  } finally {
+    closeSync(fd);
+  }
+}
+
+// The text of the agent's last message: the hook's last_assistant_message, else the last assistant line of the transcript.
+export function lastAssistantText(input: HookInput): string {
+  if (typeof input.last_assistant_message === "string") return input.last_assistant_message;
+  if (typeof input.transcript_path !== "string" || input.transcript_path === "") return "";
+  let lines: string[];
+  try {
+    lines = readTail(input.transcript_path).split("\n");
+  } catch {
+    return "";
+  }
+  for (let i = lines.length - 1; i >= 0; i--) {
+    let entry: { type?: unknown; message?: { content?: unknown } };
+    try {
+      entry = JSON.parse(lines[i]!);
+    } catch {
+      continue; // a partial first line, or not JSON
+    }
+    if (entry?.type !== "assistant") continue;
+    const content = entry.message?.content;
+    if (typeof content === "string") return content;
+    if (!Array.isArray(content)) return "";
+    return content.filter((b) => b?.type === "text" && typeof b.text === "string").map((b) => b.text as string).join("\n");
+  }
+  return "";
+}
+
+// At an agent step the agent may stop to ask the user something (the plan skill and missing task text say to).
+function asksUser(call: HookCall, run: RunJson): boolean {
+  if (!isAgentStep(run.current.type) || run.gate || pendingJob(call.main, run)) return false;
+  return /\?[\s*_`"')\]]*$/.test(lastAssistantText(call.input).trim());
+}
 
 // stop.blocked events in a row at the end of the log.
 function stopBlocksInARow(main: string, task: string): number {
@@ -20,6 +69,7 @@ export async function stop(call: HookCall): Promise<string | null> {
 
   const run = readRun(call.main, resolved.task);
   if (run.status !== "active") return null;
+  if (asksUser(call, run)) return null;
 
   if (call.input.stop_hook_active === true && stopBlocksInARow(call.main, run.task) >= LOOP_GUARD) {
     return JSON.stringify({ systemMessage: `warden: stopping although ${run.task} is active; type "continue" to resume.` });

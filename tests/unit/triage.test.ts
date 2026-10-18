@@ -225,6 +225,17 @@ describe("clean copy first", () => {
     const report = await failAndTriage(fixture);
     expect(report.verdict).toBe("CODE");
   });
+
+  test("after the branch merged main, the clean copy is that newer main commit", async () => {
+    const fixture = makeFixture({ branchFiles: ["OWN"] });
+    write(fixture.main, "FAIL", "x\n");
+    const mainTip = commitAll(fixture.main, "main moves on and breaks");
+    git(fixture.ctx.run.worktree, "merge", "-q", "--no-edit", "main");
+    const report = await failAndTriage(fixture);
+    expect(report.verdict).toBe("OPS");
+    expect(report.baseSha).toBe(mainTip);
+    expect(report.reason).toBe(`also fails on clean ${mainTip.slice(0, 7)}`);
+  });
 });
 
 describe("branch re-runs after a clean pass", () => {

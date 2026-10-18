@@ -8,7 +8,7 @@ import { startTime } from "../../plugins/warden/src/lib/proc.ts";
 import { taskDir, worktreesDir } from "../../plugins/warden/src/state/paths.ts";
 import { readEvents, readRun } from "../../plugins/warden/src/state/store.ts";
 import { done, next, runWorker, start, type SpawnWorker } from "../../plugins/warden/src/engine/machine.ts";
-import type { Ctx, EventLine, FlowStep, Gates, HistorySummary, ReviewRound, TriageReport, Verdict } from "../../plugins/warden/src/types.ts";
+import type { Ctx, EventLine, Finding, FlowStep, Gates, HistorySummary, ReviewRound, TriageReport, Verdict } from "../../plugins/warden/src/types.ts";
 
 setDefaultTimeout(60_000);
 
@@ -25,6 +25,7 @@ let ctx: Ctx;
 let fileN: number;
 let checks: boolean[];
 let triages: Verdict[];
+let reviewKept: Finding[][];
 
 function sh(cwd: string, ...args: string[]): string {
   return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
@@ -62,7 +63,7 @@ const gates: Gates = {
   async review(run) {
     const round = run.counters.reviewRound + 1;
     const record: ReviewRound = {
-      schema: 1, round, sha: "s", base: run.baseSha, model: "sonnet", costUsd: 0.25, kept: [], dropped: [], status: "ok",
+      schema: 1, round, sha: "s", base: run.baseSha, model: "sonnet", costUsd: 0.25, kept: reviewKept.shift() ?? [], dropped: [], status: "ok",
       raw: `review/${round}-1.raw.txt`,
     };
     const dir = taskDir(main, run.task);
@@ -93,6 +94,7 @@ beforeEach(() => {
   fileN = 0;
   checks = [];
   triages = [];
+  reviewKept = [];
 });
 
 afterAll(() => {
@@ -149,6 +151,23 @@ describe("history at ship entry", () => {
     expect(existsSync(join(historyDir(), "review", "2-1.json"))).toBe(true);
     expect(readEvents(main, T).filter((e) => e.type === "history.written")).toHaveLength(2);
     expect(readHistory<HistorySummary>("summary.json").steps.find((s) => s.id === "review")?.costUsd).toBe(0.5);
+  });
+
+  test("leftovers cleared by a later clean review are not copied into the record", async () => {
+    const flow = { schema: 1 as const, name: "test", description: "d", steps: [IMPL, CHECK, REVIEW, SHIP], limits: { reviewRounds: 1 } };
+    await start(ctx, T, flow, { worktree: wt, branch: "t-1", mainRef: "main", taskText: "The task text\n", spawnWorker: spawn });
+    reviewKept.push([{ file: "src/f1.ts", line: 1, severity: "blocking", summary: "wrong" }]);
+    await implementAndRun();
+    expect(readRun(main, T).leftovers).toBe("review/leftover.md");
+    expect(existsSync(join(historyDir(), "review", "leftover.md"))).toBe(true);
+
+    commit(wt, { "src/late.ts": "late\n" });
+    await next(ctx, T, spawn);
+    await runWorker(ctx, T, gates);
+    expect(readRun(main, T).current.id).toBe("ship");
+    expect(readRun(main, T).leftovers).toBeNull();
+    expect(existsSync(join(historyDir(), "review", "leftover.md"))).toBe(false);
+    expect(readHistory<HistorySummary>("summary.json").findings.leftovers).toBe(0);
   });
 
   test("a flow without ship writes no history", async () => {

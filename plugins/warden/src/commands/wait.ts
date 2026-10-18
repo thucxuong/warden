@@ -27,8 +27,13 @@ export async function run(args: string[], ctx: Ctx): Promise<void> {
   const spawnWorker = defaultSpawnWorker(ctx);
 
   for (;;) {
-    // Every poll, so a worker that dies while we wait is restarted too.
-    await ensureGate(ctx, task, spawnWorker);
+    // Every poll, so a worker that dies while we wait is restarted too. The worker can hold the task
+    // lock for longer than the lock wait (a fetch, history); a busy lock just means try again next poll.
+    try {
+      await ensureGate(ctx, task, spawnWorker);
+    } catch (err) {
+      if (!(err instanceof WardenError && err.code === EXIT.BUSY)) throw err;
+    }
     if (!runExists(main, task)) throw new WardenError(`no such run: ${task}`, EXIT.NOT_FOUND);
     if (readRun(main, task).gate === null) break;
     const left = deadline - Date.now();

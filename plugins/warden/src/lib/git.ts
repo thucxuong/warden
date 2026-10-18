@@ -85,6 +85,28 @@ export function diffNames(cwd: string, a: string, b?: string): string[] {
   return splitNul(gitOk(cwd, args));
 }
 
+// The files the branch itself changed between `from` and `to`. A plain two-way diff also lists what a
+// merge of the main branch (or a rebase onto it) brought in; those files are dropped here. Only commits
+// on the first-parent line that are not on `upstream` count, and a merge commit counts only for the
+// files it resolved (combined diff).
+export function ownDiffNames(cwd: string, from: string, to: string, upstream: string | null): string[] {
+  const diff = diffNames(cwd, from, to);
+  if (diff.length === 0) return diff;
+  const args = ["log", "--first-parent", "--cc", "--no-renames", "--name-only", "-z", "--format=", `${from}..${to}`];
+  if (upstream !== null && git(cwd, ["rev-parse", "--verify", "--quiet", `${upstream}^{commit}`]).code === 0) args.push(`^${upstream}`);
+  const touched = new Set(splitNul(gitOk(cwd, args)).map((path) => path.replace(/^\n+/, "")));
+  return diff.filter((path) => touched.has(path));
+}
+
+// merge-base(HEAD, upstream) when the branch has taken in newer upstream commits than `base`
+// (a merge or rebase of the main branch), else `base`. A branch that upstream already contains keeps `base`.
+export function branchBase(cwd: string, base: string, upstream: string): string {
+  const result = git(cwd, ["merge-base", "HEAD", upstream]);
+  const newer = result.code === 0 ? result.stdout.trim() : "";
+  if (newer === "" || newer === base || newer === head(cwd)) return base;
+  return git(cwd, ["merge-base", "--is-ancestor", base, newer]).code === 0 ? newer : base;
+}
+
 export function mergeBase(cwd: string, a: string, b: string): string {
   return gitOk(cwd, ["merge-base", a, b]).trim();
 }

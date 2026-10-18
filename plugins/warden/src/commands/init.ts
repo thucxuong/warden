@@ -21,6 +21,13 @@ const PLUGIN_ID = `warden@${MARKETPLACE}`;
 const SETUP_SCRIPT = "scripts/warden-setup.sh";
 const INDEX_DIRS = ["context", "rules", "decisions", "knowledge", "checks", "retros", "fixes", "flows"];
 const MAX_DOCS = 50;
+// The default fix.scope (spec 4.2), used when the payload's steps has no fix.
+export const DEFAULT_FIX_SCOPE = [
+  "scripts/**", ".claude/skills/**", ".warden/triage-rules.json", ".warden/fixes/**", ".warden/knowledge/**", "docs/**", ".env.example",
+  "docker-compose*.yml",
+];
+// Marketplace source kinds a teammate's machine can resolve. A local directory or file path cannot.
+const SHAREABLE_SOURCES = ["github", "git"];
 
 // Script names to suggest, in order. The first existing, non-watch name of a group is used.
 const CHECK_GROUPS = [["lint"], ["typecheck", "type-check", "tsc"], ["test", "test:unit"], ["build"], ["test:e2e", "e2e"]];
@@ -170,7 +177,7 @@ function validatePayload(value: unknown, pluginVersion: string): ValidPayload {
 
   return {
     warden: validateWardenJson({ ...payload.warden, schema: 1, wardenVersion: pluginVersion, lastRetro: null }, ".warden/warden.json"),
-    steps: validateStepsJson({ ...payload.steps, schema: 1 }, ".warden/steps.json"),
+    steps: validateStepsJson({ fix: { scope: DEFAULT_FIX_SCOPE }, ...payload.steps, schema: 1 }, ".warden/steps.json"),
     context,
     setupScript: payload.setupScript,
     teamInstall: payload.teamInstall === true,
@@ -248,6 +255,10 @@ function installedMarketplaceSource(ctx: Ctx): Obj | null {
   }
 }
 
+function shareable(source: Obj): boolean {
+  return typeof source.source === "string" && SHAREABLE_SOURCES.includes(source.source);
+}
+
 function readSettings(path: string): Obj {
   if (!existsSync(path)) return {};
   try {
@@ -291,10 +302,13 @@ async function write(args: string[], ctx: Ctx): Promise<{ written: string[]; not
 
   const notes: string[] = [];
   const settingsPath = join(root, ".claude", "settings.json");
-  const source = payload.teamInstall ? installedMarketplaceSource(ctx) : null;
+  const installed = payload.teamInstall ? installedMarketplaceSource(ctx) : null;
+  const source = installed && shareable(installed) ? installed : null;
   const settings = payload.teamInstall && source ? readSettings(settingsPath) : null;
-  if (payload.teamInstall && !source) {
+  if (payload.teamInstall && !installed) {
     notes.push("team install skipped: no warden-marketplace entry in known_marketplaces.json; paste the install block from the README into .claude/settings.json");
+  } else if (payload.teamInstall && !source) {
+    notes.push(`team install skipped: warden was added from a local ${String(installed!.source)} source that teammates cannot reach; paste the install block from the README into .claude/settings.json`);
   }
 
   const out = new Writer(root);

@@ -3,7 +3,7 @@ import { approve, reject, retry } from "../engine/machine.ts";
 import { WardenError } from "../lib/exit.ts";
 import { readRun, runExists } from "../state/store.ts";
 import type { RunJson } from "../types.ts";
-import { type HookCall, linkSession, machineCtx, recordSession, runForSession, wardenJson } from "./resolve.ts";
+import { type HookCall, linkSession, liveRuns, machineCtx, recordSession, runForSession, wardenJson } from "./resolve.ts";
 
 export interface PromptAction {
   word: "approve" | "reject" | "retry";
@@ -43,8 +43,16 @@ export async function userPrompt(call: HookCall): Promise<string | null> {
   if (typeof prompt !== "string") return null;
   const action = parsePrompt(prompt, wardenJson(call.main).taskIdPattern);
   if (!action) return null;
-  const task = action.task ?? resolved?.task ?? null;
+  // A new session in the main checkout has no link and no worktree cwd. With exactly one live run,
+  // that run is the one SessionStart told the user about.
+  const live = liveRuns(call.main);
+  const only = !action.task && !resolved && live.length === 1 ? live[0]!.task : null;
+  const task = action.task ?? resolved?.task ?? only;
   if (task === null || !runExists(call.main, task)) return null;
+  if (only !== null) {
+    recordSession(call, only);
+    await linkSession(call, only);
+  }
 
   try {
     return contextJson(await act(call, action, readRun(call.main, task)));

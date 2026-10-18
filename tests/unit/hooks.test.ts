@@ -398,6 +398,108 @@ describe("PreToolUse: Bash", () => {
   });
 });
 
+describe("PreToolUse: Bash, chained and compound commands", () => {
+  const B3 = "warden: state, history and gate files are written by the engine only";
+  const atPlan = `warden: push/PR/merge is allowed only in the ship step after all gates pass for HEAD (${T} at plan)`;
+
+  test("B4/B6: a `cd <worktree> &&` or `git -C <worktree>` finds the run, and links the session on warden next", async () => {
+    await startFlow(FEATURE);
+    expect(await bash(`cd ${wt} && warden next`, { session_id: "S9", cwd: main })).toBeNull();
+    expect(readSessionRecord(main, "S9")?.task).toBe(T);
+    const fresh = { session_id: "S10", cwd: main };
+    expect(reason(await bash(`cd ${wt} && git push -u origin t-1`, fresh))).toBe(atPlan);
+    expect(reason(await bash(`git -C ${wt} push -u origin t-1`, fresh))).toBe(atPlan);
+    expect(reason(await bash(`cd ${wt} && gh pr create --fill`, fresh))).toBe(atPlan);
+    expect(reason(await bash(`cd ${main} && git merge t-1 && git push origin main`, { session_id: "S9", cwd: main }))).toBe(atPlan);
+    expect(await bash("git push origin main", { session_id: "S11", cwd: main })).toBeNull();
+  });
+
+  test("B3: a leading warden call does not exempt the rest of the command", async () => {
+    await startFlow(FEATURE);
+    const state = join(main, ".warden/state", T, "run.json");
+    for (const cmd of [
+      `warden status; echo '{}' > ${state}`,
+      `warden next && sed -i '' 's/x/y/' ${state}`,
+      `warden status && cp /tmp/x ${join(main, ".warden/steps.json")}`,
+      `warden status\nrm -rf ${join(main, ".warden/state", T)}`,
+      `warden next > ${state}`,
+      `cd ${join(main, ".warden/state")} && rm -rf ${T}`,
+      `ls .warden/state | xargs rm -rf`,
+    ]) {
+      expect(reason(await bash(cmd, { cwd: main }))).toBe(B3);
+    }
+    expect(await bash(`warden next ${T} > /tmp/next.json && cat .warden/state/${T}/run.json`, { cwd: main })).toBeNull();
+  });
+
+  test("B3: in-place edits are writes", async () => {
+    await startFlow(FEATURE);
+    const file = `.warden/state/${T}/run.json`;
+    for (const cmd of [
+      `perl -pi -e 's/a/b/' ${file}`, `sed -E -i '' 's/a/b/' ${file}`, `sed --in-place 's/a/b/' ${file}`,
+      `jq '.status="shipped"' ${file} | sponge ${file}`, `ruby -pi -e x ${file}`, `install -m644 /tmp/x ${file}`,
+      `awk -i inplace '{print}' ${file}`,
+    ]) {
+      expect(reason(await bash(cmd, { cwd: main }))).toBe(B3);
+    }
+  });
+
+  test("B3: reads with harmless redirects, and a path segment named like a command, are allowed", async () => {
+    await startFlow(FEATURE);
+    expect(await bash("ls .warden/history 2>/dev/null", { cwd: main })).toBeNull();
+    expect(await bash(`cat .warden/state/${T}/run.json 2>&1 | head -3`, { cwd: main })).toBeNull();
+    expect(await bash(`cat .warden/history/cp/run.json &>/dev/null`, { cwd: main })).toBeNull();
+    expect(await bash(`sed -n 1,5p .warden/state/${T}/run.json`, { cwd: main })).toBeNull();
+    expect(reason(await bash(`echo x > .warden/state/${T}/x 2>&1`, { cwd: main }))).toBe(B3);
+  });
+
+  test("B3: the fixer writes config files only inside its fix worktree", async () => {
+    await startFlow(FEATURE);
+    const fixWt = atFix();
+    const fixer = { cwd: fixWt, agent_type: "warden:fixer" };
+    expect(await bash("printf '{}' > .warden/triage-rules.json", fixer)).toBeNull();
+    expect(await bash(`printf '{}' > ${join(fixWt, ".warden/triage-rules.json")}`, { ...fixer, cwd: main })).toBeNull();
+    expect(reason(await bash(`echo '{}' > ${join(main, ".warden/steps.json")}`, fixer))).toBe(B3);
+    expect(reason(await bash(`echo '{}' > ${join(wt, ".warden/steps.json")}`, fixer))).toBe(B3);
+    expect(reason(await bash(`cp ${fixWt}/x ${join(main, ".warden/steps.json")}`, { ...fixer, cwd: main }))).toBe(B3);
+  });
+
+  test("B2: the word script in prose or JSON is not running script", async () => {
+    await startFlow(FEATURE);
+    expect(await bash(`echo '{"a":"the setup script is warden"}' | warden done`)).toBeNull();
+    expect(await bash(`warden done '{"reason":"The setup script scripts/warden-setup.sh never ran; warden saw it"}'`)).toBeNull();
+    expect(reason(await bash("script -q /dev/null warden next"))).toBe("warden: this command changes how warden itself runs; ask the user to do it");
+  });
+
+  test("B5: the fixer may not push its branch onto the main branch", async () => {
+    await startFlow(FEATURE);
+    const fixWt = atFix();
+    const branch = `warden-fix/${T}-1`;
+    const fixer = { cwd: fixWt, agent_type: "warden:fixer" };
+    const msg = "warden: only the warden:fixer subagent pushes the fix branch";
+    for (const cmd of [`git push origin ${branch}:main`, `git push origin +${branch}:refs/heads/main`, `git push origin ${branch} main`]) {
+      expect(reason(await bash(cmd, fixer))).toBe(msg);
+    }
+    expect(await bash(`git push origin ${branch}:main`, fixer, { PROJECT_AGENT: "1" })).toBeNull();
+    expect(await bash(`git push -u origin ${branch}:${branch}`, fixer)).toBeNull();
+  });
+
+  test("a deny stays a deny when the task lock is busy", async () => {
+    await startFlow(FEATURE);
+    const lock = join(taskDir(main, T), ".lock");
+    writeFileSync(lock, JSON.stringify({ pid: process.pid, at: new Date().toISOString() }));
+    try {
+      const t0 = Date.now();
+      expect(reason(await bash("git push -u origin t-1"))).toBe(atPlan);
+      expect(Date.now() - t0).toBeLessThan(4000);
+      expect(reason(await bash(`PROJECT_AGENT=1 warden done --file out.json`))).toBe(
+        "warden: this command changes how warden itself runs; ask the user to do it",
+      );
+    } finally {
+      rmSync(lock, { force: true });
+    }
+  });
+});
+
 describe("session links and records", () => {
   test("PreToolUse on warden start links the session without creating state; later calls link it once", async () => {
     expect(await bash(`warden start ${T} --template feature --worktree --text-file task.txt`, { session_id: "S2", cwd: main })).toBeNull();
@@ -464,6 +566,29 @@ describe("Stop", () => {
       JSON.stringify({ systemMessage: `warden: stopping although ${T} is active; type "continue" to resume.` }),
     );
     expect(await hook("stop", { cwd: wt, stop_hook_active: false })).toBe(block);
+  });
+
+  test("at an agent step, a last message that asks the user a question allows the stop", async () => {
+    await startFlow(FEATURE);
+    expect(await hook("stop", { cwd: wt, last_assistant_message: "Should the plan target Postgres or SQLite?" })).toBeNull();
+    const transcript = join(base, "S1.jsonl");
+    const line = (content: unknown) => JSON.stringify({ type: "assistant", message: { role: "assistant", content } });
+    writeFileSync(transcript, [
+      line([{ type: "text", text: "Working on it." }]),
+      JSON.stringify({ type: "user", message: { role: "user", content: "ok" } }),
+      line([{ type: "text", text: "What is the task? I need **the ticket text?**" }]),
+    ].join("\n") + "\n");
+    expect(await hook("stop", { cwd: wt, transcript_path: transcript })).toBeNull();
+    expect(eventTypes()).not.toContain("stop.blocked");
+
+    expect(await hook("stop", { cwd: wt, last_assistant_message: "The plan is written. Done?\nNext I will hand it in." })).not.toBeNull();
+    writeFileSync(transcript, line([{ type: "text", text: "Is this fine?" }, { type: "tool_use", id: "t", name: "Bash", input: {} }]) + "\n" + line([{ type: "tool_use", id: "u", name: "Bash", input: {} }]) + "\n");
+    expect(await hook("stop", { cwd: wt, transcript_path: transcript })).not.toBeNull();
+
+    await donePlan();
+    await implement();
+    expect(run().gate).not.toBeNull();
+    expect(await hook("stop", { cwd: wt, last_assistant_message: "Shall I wait for the check?" })).not.toBeNull();
   });
 
   test("the session record finds the run from any cwd; waiting, blocked and done runs allow the stop", async () => {
@@ -616,6 +741,20 @@ describe("UserPromptSubmit", () => {
     expect(context(await prompt("retry"))).toBe(`warden: the user retried ${ID} at approve. Run: warden next`);
     expect(run(ID).status).toBe("waiting"); // the approve step was entered again
     expect(readEvents(main, ID).map((e) => e.type)).toContain("run.retry");
+  });
+
+  test("a new session in the main checkout resolves the only live run and links to it", async () => {
+    const fresh = { session_id: "S7", cwd: main };
+    expect(context(await prompt("approve", fresh))).toBe(`warden: the user approved ${ID} at approve. Run: warden next`);
+    expect(readSessionRecord(main, "S7")?.task).toBe(ID);
+    expect(readSessionLinks(main, ID).map((l) => l.sessionId)).toContain("S7");
+  });
+
+  test("with two live runs, a bare approve from the main checkout picks neither", async () => {
+    const wt2 = addWorktree("23456");
+    await startFlow([PLAN, APPROVE, IMPL, CHECK], "23456", wt2);
+    expect(await prompt("approve", { session_id: "S8", cwd: main })).toBeNull();
+    expect(run(ID).status).toBe("waiting");
   });
 
   test("other prompts pass through untouched, and the session is linked", async () => {

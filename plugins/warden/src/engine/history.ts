@@ -61,7 +61,8 @@ export function writeHistory(main: string, run: RunJson, flow: FlowJson): string
     copyIfExists(join(state, "review", file), join(out, "review", file));
     reviewRounds.push(readJson<ReviewRound>(join(state, "review", file)));
   }
-  copyIfExists(join(state, "review", "leftover.md"), join(out, "review", "leftover.md"));
+  // Only while leftovers are set: a later clean review clears them, and the old file must not come back.
+  if (run.leftovers) copyIfExists(join(state, run.leftovers), join(out, "review", "leftover.md"));
 
   const summary = buildSummary({
     run, flow, events,

@@ -4,8 +4,8 @@ import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { ConfigError, parseTriageRules } from "../config/config.ts";
-import { catFileExists, diffNames, head, lsTree, porcelain, showFile } from "../lib/git.ts";
-import { taskDir } from "../state/paths.ts";
+import { catFileExists, diffNames, head, lsTree, ownDiffNames, porcelain, showFile } from "../lib/git.ts";
+import { mainRef, taskDir } from "../state/paths.ts";
 import { readEvents } from "../state/store.ts";
 import { checkRuleNarrow, type NamedLog } from "../gates/triage-rules.ts";
 import type { AnalyzeStep, FlowJson, FlowStep, PlanStep, RunJson, StepsJson, TriageReport } from "../types.ts";
@@ -229,9 +229,15 @@ function shapeFix(o: Obj, errors: string[]): void {
 // Evidence (5.3)
 // ---------------------------------------------------------------------------
 
+// Files the step's own commits changed since startSha. What a merge of (or rebase onto) the main
+// branch brought in is not the step's change.
+function committedSince(run: RunJson, upstream: string): string[] {
+  return ownDiffNames(run.worktree, run.current.startSha, "HEAD", upstream).filter((p) => !isIgnoredPath(p, run.task));
+}
+
 // Files changed since the step started: committed since startSha plus uncommitted, minus what was dirty at the start.
-export function actualChanged(run: RunJson): string[] {
-  const paths = new Set([...diffNames(run.worktree, run.current.startSha, "HEAD"), ...porcelain(run.worktree)]);
+export function actualChanged(run: RunJson, upstream: string): string[] {
+  const paths = new Set([...committedSince(run, upstream), ...porcelain(run.worktree)]);
   for (const path of run.current.startDirty) paths.delete(path);
   return [...paths].filter((path) => !isIgnoredPath(path, run.task)).sort();
 }
@@ -250,8 +256,12 @@ function compareSets(listed: string[], actual: string[], field: string, errors: 
 function checkEvidence(input: OutputCheckInput, type: CatalogType, step: FlowStep | null, o: Obj, errors: string[]): void {
   const { run } = input;
   const variant = step?.type === "analyze" ? step.variant : undefined;
-  const changed = actualChanged(run);
-  for (const path of changed) {
+  const upstream = mainRef(input.main, input.steps.mainBranch);
+  const changed = actualChanged(run, upstream);
+  const committed = committedSince(run, upstream);
+  // Implement commits what was dirty at its start too (after a dirty route-back), so its commits are policed as well.
+  const policed = type === "implement" ? [...new Set([...changed, ...committed])].sort() : changed;
+  for (const path of policed) {
     if (!editAllowed(type, variant, path, run.task)) errors.push(`${path}: not allowed in ${type} step`);
   }
   switch (type) {
@@ -260,7 +270,7 @@ function checkEvidence(input: OutputCheckInput, type: CatalogType, step: FlowSte
     case "plan":
       return evidencePlan(run, o, errors);
     case "implement":
-      return evidenceImplement(run, o, errors);
+      return evidenceImplement(run, o, committed, errors);
     case "ship":
       return evidenceShip(input, o, errors);
     case "fix":
@@ -319,14 +329,13 @@ function evidencePlan(run: RunJson, o: Obj, errors: string[]): void {
   }
 }
 
-function evidenceImplement(run: RunJson, o: Obj, errors: string[]): void {
+function evidenceImplement(run: RunJson, o: Obj, committed: string[], errors: string[]): void {
   const dirty = uncommitted(run);
   if (dirty.length > 0) errors.push(`uncommitted changes: ${dirty.join(", ")}`);
   if (head(run.worktree) === run.current.startSha && run.routeBack?.kind !== "dirty") errors.push("no new commit");
 
   const filesChanged = o.filesChanged as string[];
   const testsAdded = o.testsAdded as string[];
-  const committed = diffNames(run.worktree, run.current.startSha, "HEAD").filter((p) => !isIgnoredPath(p, run.task));
   compareSets(filesChanged, committed, "filesChanged", errors);
   for (const test of testsAdded) {
     if (!filesChanged.includes(test)) errors.push(`testsAdded: ${test} is not in filesChanged`);

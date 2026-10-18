@@ -1,4 +1,4 @@
-// Triage of a failed check (spec 6.2): a clean copy of main at baseSha first, then branch
+// Triage of a failed check (spec 6.2): a clean copy of main at the branch base first, then branch
 // re-runs only when the clean copy passed. Triage rules are labels; they never decide the verdict.
 //
 // Log files (state-relative): attempt 1 keeps its original checks/<r>/<name>.log. The clean
@@ -9,10 +9,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_COMMAND_TIMEOUT_SEC, loadStepsJson, loadWardenJson, parseTriageRules } from "../config/config.ts";
 import { WardenError } from "../lib/exit.ts";
-import { fetchMain, head, showFile, worktreeAdd, worktreeRemove } from "../lib/git.ts";
+import { branchBase, fetchMain, head, showFile, worktreeAdd, worktreeRemove } from "../lib/git.ts";
 import { writeJsonAtomic } from "../lib/json.ts";
 import * as proc from "../lib/proc.ts";
-import { taskDir } from "../state/paths.ts";
+import { mainRef, taskDir } from "../state/paths.ts";
 import { readEvents } from "../state/store.ts";
 import type { Attempt, CheckStep, CommandDef, Signature, StepsJson, TriageReport, TriageRule, Verdict } from "../types.ts";
 import { bumpCounter, commandEnv, commandTimeout, recordEvent, type Env, type GateContext } from "./check.ts";
@@ -45,6 +45,7 @@ interface Job {
   commands: CommandDef[];
   failing: CommandDef;
   failedIndex: number;
+  base: string;      // the clean copy's commit: baseSha, or the newer main commit the branch merged or rebased onto
   cleanPath: string;
   roots: SignatureRoots;
 }
@@ -69,7 +70,7 @@ export async function triage(step: CheckStep, failure: CheckFailure, ctx: GateCo
     check: step.check,
     command: job.failing.name,
     headSha: head(run.worktree),
-    baseSha: run.baseSha,
+    baseSha: job.base,
     attempts,
     rule: rule?.id ?? null,
     verdict: outcome.verdict,
@@ -100,12 +101,13 @@ async function prepare(step: CheckStep, failure: CheckFailure, ctx: GateContext)
   const projectId = loadWardenJson(join(main, ".warden", "warden.json")).projectId;
   const cleanPath = join(realpathSync(tmpdir()), `warden-clean-${projectId}-${run.task}-${n}`);
   const roots = { worktree: run.worktree, clean: cleanPath, main, tmp: tmpdir() };
-  return { ctx, dir, n, steps, commands, failing, failedIndex: failure.failedIndex, cleanPath, roots };
+  const base = branchBase(run.worktree, run.baseSha, mainRef(main, steps.mainBranch));
+  return { ctx, dir, n, steps, commands, failing, failedIndex: failure.failedIndex, base, cleanPath, roots };
 }
 
 // The verdict table of 6.2, first matching row.
 async function decide(job: Job, first: Attempt, attempts: Attempt[]): Promise<Outcome> {
-  const base7 = job.ctx.run.baseSha.slice(0, 7);
+  const base7 = job.base.slice(0, 7);
   const clean = await runCleanCopy(job);
   if (clean.kind === "not-created") return unclear(`clean copy could not be created: ${clean.detail}`);
   attempts.push(clean.attempt);
@@ -132,13 +134,13 @@ async function branchReruns(job: Job, first: Attempt, attempts: Attempt[], base7
   return { verdict: "CODE", flaky: false, reason: `passes on clean ${base7}; fails on branch ${branchFailures}×` };
 }
 
-// A fresh detached worktree at baseSha, never reused, always removed afterwards.
+// A fresh detached worktree at the branch base, never reused, always removed afterwards.
 async function runCleanCopy(job: Job): Promise<CleanResult> {
   const { main, run } = job.ctx;
   removeCleanCopy(main, job.cleanPath); // a copy left by a crashed worker
   try {
     try {
-      worktreeAdd(main, job.cleanPath, run.baseSha);
+      worktreeAdd(main, job.cleanPath, job.base);
     } catch (error) {
       return { kind: "not-created", detail: firstLine((error as Error).message) };
     }

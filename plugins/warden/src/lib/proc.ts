@@ -23,6 +23,26 @@ function killGroup(pid: number, signal: NodeJS.Signals): void {
   }
 }
 
+// Process groups this process started that are still running. Each child is detached into its own
+// group, so a signal to this process's group does not reach them; stopGroupsOnTerm forwards it.
+const liveGroups = new Set<number>();
+
+export function trackGroup(pid: number | undefined): void {
+  if (pid !== undefined) liveGroups.add(pid);
+}
+
+export function untrackGroup(pid: number | undefined): void {
+  if (pid !== undefined) liveGroups.delete(pid);
+}
+
+// For the engine worker: on SIGTERM (warden reset) stop every command and reviewer it started, then exit.
+export function stopGroupsOnTerm(): void {
+  process.on("SIGTERM", () => {
+    for (const pid of liveGroups) killGroup(pid, "SIGTERM");
+    process.exit(128 + constants.signals.SIGTERM);
+  });
+}
+
 // The child is its own process group leader (detached), so a timeout can kill everything it started.
 export async function run(cmd: string, options: RunOptions): Promise<{ exit: number; durationMs: number }> {
   mkdirSync(dirname(options.log), { recursive: true });
@@ -38,6 +58,7 @@ export async function run(cmd: string, options: RunOptions): Promise<{ exit: num
       detached: true,
       stdio: ["ignore", logFd, logFd],
     });
+    trackGroup(child.pid);
 
     let timer: ReturnType<typeof setTimeout> | undefined;
     if (options.timeoutSec) {
@@ -62,6 +83,7 @@ export async function run(cmd: string, options: RunOptions): Promise<{ exit: num
       });
     });
     if (timer) clearTimeout(timer);
+    untrackGroup(child.pid);
 
     if (timedOut) {
       appendFileSync(logFd, `warden: command timed out after ${options.timeoutSec}s\n`);

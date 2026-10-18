@@ -16,19 +16,34 @@ Do these steps in order. Ask one question per message. Prefer multiple choice.
 3. Draft `steps.json`.
    - `check.default` is the scan's `suggestedChecks`. The scan picks package scripts in this order, when they exist: `lint`, `typecheck` (or `type-check`, `tsc`), `test` (or `test:unit`), `build`, `test:e2e` (or `e2e`). It skips `dev`, `start`, `watch`, `*:watch` and any script that contains `--watch`.
    - Each command runs as `<package manager> run <script>`.
+   - If `suggestedChecks` is empty (no `package.json`, for example a Makefile, Python or .NET project), propose commands from the scan's `makeTargets` (as `make <target>`) and from the steps in `ciFiles`. Ask the user to confirm them. `check.default` needs at least one command.
    - If the project has an aggregate script such as `test:all` or `ci`, ask the user about it. Do not add it on your own.
    - `setup.commands` is always `["sh scripts/warden-setup.sh"]`.
    - Draft the script body as `setupScript`. Start with `set -e`. Then add the install command, for example `<package manager> install --frozen-lockfile`. Add any step the docs say a fresh checkout needs, for example copying `.env.example`. Ask the user to confirm it.
-   - Take `mainBranch` from the scan. Use the default `review` settings and the default `fix.scope`.
+   - Take `mainBranch` from the scan. Leave out `review` and `fix`: `warden init --write` fills in the defaults. The default `fix.scope` is `scripts/**`, `.claude/skills/**`, `.warden/triage-rules.json`, `.warden/fixes/**`, `.warden/knowledge/**`, `docs/**`, `.env.example` and `docker-compose*.yml`.
 4. Ask the user for:
    - the task id format (show the regex, for example `^PG-\d{3}$`)
    - the project id
    - a yes or no on the check commands and the setup script
    - whether to add the team install block to `.claude/settings.json`, so teammates get warden when they trust the folder. Recommend yes. This is `teamInstall`.
-5. Write the `InitPayload` JSON to a scratch file. It has the fields `warden`, `steps`, `context`, `setupScript` and `teamInstall`. Run `warden init --write --file <path>`.
+5. Write the `InitPayload` JSON to a scratch file and run `warden init --write --file <path>`. Its shape:
+   ```json
+   {
+     "warden": { "projectId": "pg", "taskIdPattern": "^PG-\\d{3}$" },
+     "steps": {
+       "mainBranch": "main",
+       "setup": { "commands": ["sh scripts/warden-setup.sh"] },
+       "check": { "default": { "commands": [{ "name": "test", "run": "pnpm run test" }] } }
+     },
+     "context": { "overview": "# Overview\n...", "architecture": "...", "stack": "...", "glossary": "..." },
+     "setupScript": "set -e\npnpm install --frozen-lockfile\n",
+     "teamInstall": true
+   }
+   ```
+   Each check command has a `name` (lowercase, unique in its set) and a `run`.
 6. Optional: run each check command once and report the results. If one fails, report it. Do not fix it.
 7. Tell the user to commit and push to the main branch. `warden start` reads `.warden/` from there.
-   Give this command: `git add .warden .gitignore scripts/warden-setup.sh .claude/settings.json && git commit -m "chore: set up warden" && git push`
+   Build the `git add` list from the `written` array that `warden init --write` printed, so it names only files that exist. For example: `git add .warden .gitignore scripts/warden-setup.sh && git commit -m "chore: set up warden" && git push`. Add `.claude/settings.json` only when it is in `written`. If `.claude/` is gitignored, tell the user; `git add` refuses ignored files.
    Also suggest branch protection on the main branch: a pull request is required and direct pushes are off.
 
 What `warden init --write` creates:

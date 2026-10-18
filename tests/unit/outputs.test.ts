@@ -244,6 +244,59 @@ describe("implement", () => {
     expect(errorsFor(run, { summary: "s", filesChanged: ["src/old.ts", "src/renamed.ts"], testsAdded: [], testsReason: "a pure rename" })).toEqual([]);
   });
 
+  test("a gate file that was dirty when the step started may not be committed", () => {
+    write(wt, ".warden/steps.json", "{\"stray\":1}\n");
+    const run = runAt("i", { routeBack: { from: "c", kind: "dirty", reason: "working tree is dirty at c: .warden/steps.json" } });
+    expect(run.current.startDirty).toEqual([".warden/steps.json"]);
+    commit(wt, { "src/a.ts": "a\n" });
+    expect(errorsFor(run, { summary: "s", filesChanged: [".warden/steps.json", "src/a.ts"], testsAdded: [], testsReason: "only a constant changed" })).toEqual([
+      ".warden/steps.json: not allowed in implement step",
+    ]);
+  });
+
+  test("files a merge of main brought in are not the step's change", () => {
+    const run = runAt("i");
+    commit(main, { ".warden/history/T-9/summary.json": "{}\n", "other/team.ts": "team\n" });
+    commit(wt, { "src/early.ts": "e\n" });
+    sh(wt, "merge", "-q", "--no-edit", "main");
+    commit(wt, { "src/feat.ts": "f\n" });
+    const out = { summary: "s", filesChanged: ["src/early.ts", "src/feat.ts"], testsAdded: [], testsReason: "only a constant changed" };
+    expect(errorsFor(run, out)).toEqual([]);
+    expect(errorsFor(run, { ...out, filesChanged: [...out.filesChanged, "other/team.ts"] })).toEqual([
+      "filesChanged lists other/team.ts, which did not change",
+    ]);
+  });
+
+  test("a merge conflict resolution counts as the step's change", () => {
+    const run = runAt("i");
+    commit(main, { "src/old.ts": "main\n" });
+    commit(wt, { "src/old.ts": "branch\n" });
+    try {
+      sh(wt, "merge", "-q", "--no-edit", "main");
+    } catch {
+      // the conflict is resolved by hand below
+    }
+    commit(wt, { "src/old.ts": "resolved\n" });
+    expect(errorsFor(run, { summary: "s", filesChanged: ["src/old.ts"], testsAdded: [], testsReason: "a merge resolution only" })).toEqual([]);
+  });
+
+  test("files a rebase onto main brought in are not the step's change", () => {
+    commit(wt, { "src/before.ts": "b\n" });
+    const run = runAt("i");
+    commit(wt, { "src/feat.ts": "f\n" });
+    commit(main, { ".warden/history/T-9/summary.json": "{}\n", "other/team.ts": "team\n" });
+    sh(wt, "rebase", "-q", "main");
+    expect(errorsFor(run, { summary: "s", filesChanged: ["src/feat.ts"], testsAdded: [], testsReason: "only a constant changed" })).toEqual([]);
+  });
+
+  test("analyze: a merge of main is not listed or policed", () => {
+    const run = runAt("a");
+    commit(main, { ".warden/history/T-9/summary.json": "{}\n", "other/team.ts": "team\n" });
+    sh(wt, "merge", "-q", "--no-edit", "main");
+    write(wt, ".warden/knowledge/area.md", "fact\n");
+    expect(errorsFor(run, { ...analyzeBase, filesChanged: [".warden/knowledge/area.md"] })).toEqual([]);
+  });
+
   test("after a dirty route-back no new commit is needed", () => {
     const run = runAt("i", { routeBack: { from: "c", kind: "dirty", reason: "working tree is dirty at c: x" } });
     expect(errorsFor(run, { summary: "cleaned up", filesChanged: [], testsAdded: [] })).toEqual([]);

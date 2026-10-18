@@ -133,6 +133,29 @@ describe("argv and stdin", () => {
     expect(stdin).not.toContain(".warden/history");
   });
 
+  test("after the branch merged main, main's commits are not reviewed", async () => {
+    sh(repo, "git checkout -q -b ticket");
+    sh(repo, "git checkout -q main");
+    mkdirSync(join(repo, "other"), { recursive: true });
+    writeFileSync(join(repo, "other/team.ts"), "export const team = 1;\n");
+    sh(repo, "git add -A && git commit -q -m team");
+    const mainTip = sh(repo, "git rev-parse HEAD");
+    sh(repo, "git checkout -q ticket && git merge -q --no-edit main");
+    mkdirSync(join(repo, "src"), { recursive: true });
+    writeFileSync(join(repo, "src/mine.ts"), "export const mine = 1;\n");
+    sh(repo, "git add -A && git commit -q -m mine");
+    const onTeam: Finding = { file: "other/team.ts", line: 1, severity: "blocking", summary: "not this change" };
+    respond(null, reply([onTeam]));
+    const round = await runReview(ctxFor(), run);
+    const stdin = readFileSync(join(calls, "call-1.stdin"), "utf8");
+    expect(stdin).toContain("+export const mine = 1;");
+    expect(stdin).not.toContain("other/team.ts");
+    expect(argvOf(1)[1]!).toContain(`git diff ${mainTip}...HEAD`);
+    expect(round.base).toBe(mainTip);
+    expect(round.kept).toEqual([]);
+    expect(round.dropped).toEqual([onTeam]);
+  });
+
   test("a diff over 400 KB is cut and marked", async () => {
     writeFileSync(join(repo, "big.txt"), "x".repeat(100) + "\n".repeat(1) + ("y".repeat(99) + "\n").repeat(5000));
     sh(repo, "git add -A && git commit -q -m big");

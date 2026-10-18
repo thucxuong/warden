@@ -23,6 +23,26 @@ async function waitUntilDead(pid: number): Promise<void> {
   for (let i = 0; i < 50 && alive(pid); i++) await Bun.sleep(100);
 }
 
+describe("stopGroupsOnTerm", () => {
+  test("SIGTERM to a worker also stops the commands it started in their own process groups", async () => {
+    const marker = join(dir, "marker");
+    const script = join(dir, "worker.ts");
+    const proc = join(import.meta.dir, "../../plugins/warden/src/lib/proc.ts");
+    await Bun.write(script, [
+      `import { run, stopGroupsOnTerm } from ${JSON.stringify(proc)};`,
+      "stopGroupsOnTerm();",
+      `await run(${JSON.stringify(`sleep 2; touch ${marker}`)}, { cwd: ${JSON.stringify(dir)}, log: ${JSON.stringify(join(dir, "worker.log"))} });`,
+    ].join("\n"));
+    const worker = Bun.spawn([process.execPath, script], { stdio: ["ignore", "ignore", "ignore"], detached: true });
+    for (let i = 0; i < 50 && !existsSync(join(dir, "worker.log")); i++) await Bun.sleep(50);
+    await Bun.sleep(300);
+    process.kill(-worker.pid, "SIGTERM"); // what reset does
+    await worker.exited;
+    await Bun.sleep(2500);
+    expect(existsSync(marker)).toBe(false);
+  });
+});
+
 describe("run", () => {
   test("returns the exit code and runs in cwd", async () => {
     const log = join(dir, "exit.log");

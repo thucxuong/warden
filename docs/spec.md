@@ -809,7 +809,7 @@ Written only for flows with a ship step, on every ship entry (5.6). A flow witho
 
 Files:
 - `run.json`, `flow.json`, `task.md`, `events.jsonl`, `plan.md` (if any)
-- `triage/*.json`, `review/*.json`, `review/leftover.md` (if any)
+- `triage/*.json`, `review/*.json`, `review/leftover.md` (only while `run.leftovers` is set; a later clean review clears it)
 - `summary.json`
 
 Logs, raw reviewer output and the steps.json snapshot are not copied. The committed record is a snapshot taken at ship entry: it has `status: "shipping"` and ends before the ship step's own events. Live `run.json` holds the final status.
@@ -889,7 +889,7 @@ Gate results (run in the worker):
 |---|---|
 | check passed | Add proof `{kind:"check", sha: <gate start sha>}`, then `advance()`. |
 | check failed | Run triage (6.2), then route by verdict (below). |
-| check left files (5.4) | `block("check left files: <paths>. Add them to .gitignore on <mainBranch>, then type retry")`. |
+| check left files (5.4) | `block("check left files: <paths>. Add them to .gitignore on <mainBranch>, merge <mainBranch> into <branch>, then type retry")`. `retry` does not merge: the ticket worktree only ignores the files once its own `.gitignore` has the lines. |
 | review ok, no blocking finding kept | `reviewRound += 1`. Add proof `{kind:"review", sha: <gate start sha>}`, then `advance()`. |
 | review ok, blocking kept, `reviewRound + 1 < limits.reviewRounds` | `reviewRound += 1`, then `routeBack(kind:"review", findings)`. |
 | review ok, blocking kept, `reviewRound + 1 >= limits.reviewRounds` | `reviewRound += 1`. Write `review/leftover.md`, set `leftovers`, add the review proof, then `advance()`. Every later review entry in this run (after a stale proof or a fix landing) lands in this row too: it still runs, so the proof and leftovers match the new HEAD, but it never routes back. |
@@ -956,7 +956,8 @@ Order: JSON parse → shape check against the type in 4.4 → evidence. Every fa
 
 Shared evidence:
 - **porcelain** = `git status --porcelain=v1 -z --untracked-files=all`, parsed per NUL-separated entry. A rename or copy contributes both its old and new path.
-- **actualChanged** = `git diff --name-only --no-renames <startSha> HEAD` ∪ porcelain paths, minus `startDirty`.
+- **committed** = `git diff --name-only --no-renames <startSha> HEAD`, limited to files the step's own commits touched: `git log --first-parent --cc --name-only <startSha>..HEAD ^<mainRef>`. So files that a merge of (or rebase onto) the main branch brought in do not count; a merge commit counts for the files it resolved.
+- **actualChanged** = committed ∪ porcelain paths, minus `startDirty`.
 - Paths under `.warden/state/` are always ignored (gitignored).
 
 Per type:
@@ -972,9 +973,9 @@ Per type:
 - **implement:**
   - Porcelain is empty, apart from ignored paths. Error: `uncommitted changes: <paths>`.
   - `HEAD != startSha`. Error: `no new commit`. Skipped when `routeBack.kind == "dirty"`: then cleaning the tree is the whole job.
-  - Sets are equal: `filesChanged` = `git diff --name-only --no-renames <startSha> HEAD`.
+  - Sets are equal: `filesChanged` = committed.
   - `testsAdded` ⊆ `filesChanged`, and `testsReason` is required when `testsAdded` is empty (and `filesChanged` is not).
-  - No gate files are changed.
+  - No gate files are changed: the edit policy also applies to committed, so a gate file that was dirty when the step started (in `startDirty`) cannot be committed either.
 - **ship:** see 5.6.
 - **fix:** see 6.4.
 
@@ -995,7 +996,11 @@ The worker:
 4. At the end, HEAD must still equal `startSha` and porcelain must still be empty. Otherwise the result is thrown away: write `gate.discarded`, `reruns += 1`, and run the gate again. After 2 reruns: `block("HEAD or the tree changed while <step> ran; do not edit or commit during gates, then type retry")`.
 5. Applies the transitions in 5.2 (the proof sha is `startSha`). If the next step is engine work, the same worker continues with it. Otherwise it sets `gate = null` and exits. A worker never runs an agent step.
 
-`wait` polls `run.json` until `gate == null` or `--max-seconds` passes. On timeout it returns `status:"running_gate"` with the message `gate still running; run: warden wait`.
+`wait` polls `run.json` until `gate == null` or `--max-seconds` passes. On timeout it returns `status:"running_gate"` with the message `gate still running; run: warden wait`. A busy task lock during its `ensureGate` (the worker can hold it longer than 5 s during a fetch or history) is not an error: `wait` polls again.
+
+`done` calls `ensureGate` after the output is accepted and written. If that call fails (lock busy, spawn error), `done` still answers `accepted: true`; the next `wait` or `next` starts the worker.
+
+The worker forwards `SIGTERM` (from `reset`) to the process groups of the check commands and the reviewer it started, then exits. `reset` also removes the task's triage clean copies (`warden-clean-<projectId>-<task>-<n>`).
 
 ### 5.5 Approval
 
@@ -1105,12 +1110,12 @@ Only the exit code decides pass or fail. Output text never does.
 
 **Triage rules** are labels, never verdicts. `matchRule(log, rules)` returns the first rule whose regex matches any line of the normalised log (steps 1–2 only). The rules come from `git show <mainRef>:.warden/triage-rules.json`.
 
-**Clean copy base.** The clean copy is the main branch at the ticket's recorded `baseSha` (5.2), not the main tip: that way the only difference between the two runs is the change itself. When a fix lands, the engine merges `mainRef` into the ticket branch and moves `baseSha` (5.2 fix landing), so the next clean copy includes the fix.
+**Clean copy base.** The clean copy is the main branch at the ticket's **branch base**, not the main tip: that way the only difference between the two runs is the change itself. The branch base is `git merge-base HEAD <mainRef>` when that commit descends from `baseSha` and is not HEAD itself (the agent merged or rebased the main branch in), else the recorded `baseSha` (5.2). When a fix lands, the engine merges `mainRef` into the ticket branch and moves `baseSha` (5.2 fix landing), so the next clean copy includes the fix. `TriageReport.baseSha` and `<base7>` are the branch base.
 
 **Procedure** (`triage(failure)`, `n = ++triageCount`). Attempt 1 is the original branch failure.
 1. **Rule label.** Record the matching rule, if any, in `rule`. It does not stop anything.
 2. **Clean copy first.**
-   1. Create a fresh worktree: `git -C <mainRoot> worktree add --detach <realpath(tmpdir)>/warden-clean-<projectId>-<task>-<n> <baseSha>`. A new copy every time, never reused, no untracked files copied.
+   1. Create a fresh worktree: `git -C <mainRoot> worktree add --detach <realpath(tmpdir)>/warden-clean-<projectId>-<task>-<n> <branch base>`. A new copy every time, never reused, no untracked files copied.
    2. Run each snapshot `setup.commands` entry there, with env `WARDEN_MAIN_ROOT` and `WARDEN_CLEAN_COPY=1`.
    3. Run the check set's commands from index 0 up to and including the failing index, with the same env as the branch.
    4. Always `git worktree remove --force` it afterwards, in a finally block.
@@ -1134,7 +1139,7 @@ These rules match the playground expectations (assumption A): same failure on br
 ### 6.3 Review runner (`gates/review.ts`, `findings.ts`)
 
 Per round (the round number is `reviewRound + 1`; 5.2 counts it only when the round ends `ok`):
-1. `base = run.baseSha` (recorded at start, moved only by a fix landing). `diff = git diff --no-renames <base>...HEAD`, excluding lockfiles and `.warden/history/**`, capped at 400 KB (on the cap, append the line `[diff truncated]`).
+1. `base` = the branch base (6.2): `run.baseSha`, or the newer main commit the agent merged or rebased onto, so main's commits are not reviewed. `diff = git diff --no-renames <base>...HEAD`, excluding lockfiles and `.warden/history/**`, capped at 400 KB (on the cap, append the line `[diff truncated]`).
 2. Build the prompt below.
 3. Spawn with cwd = worktree, env (5.4) + `WARDEN_ROLE=reviewer`, stdin = the diff, and timeout `review.timeoutSec`. The binary is `claude`. Tests pass a fake through the `Gates` factory, or through `WARDEN_CLAUDE_BIN`, which is honored only when `WARDEN_TEST_MODE=1`:
 
@@ -1318,7 +1323,7 @@ Final answer: only the FixOutput JSON (result FIXED | CODE | GAVE_UP | WARDEN_BU
 ```
 
 Common handler rules (`src/commands/hook.ts`):
-- Read stdin JSON. Fields used: `session_id`, `transcript_path`, `cwd`, `hook_event_name`, `tool_name`, `tool_input`, `prompt`, `stop_hook_active`, `agent_id`, `agent_type`, `agent_transcript_path`.
+- Read stdin JSON. Fields used: `session_id`, `transcript_path`, `cwd`, `hook_event_name`, `tool_name`, `tool_input`, `prompt`, `stop_hook_active`, `last_assistant_message`, `agent_id`, `agent_type`, `agent_transcript_path`.
 - If `WARDEN_ROLE` is set (the reviewer child), exit 0 with no output.
 - If cwd is not in a git repo or `<mainRoot>/.warden/warden.json` is missing: exit 0 with no output. Exception: session start prints `warden: not set up here. Run /warden:init.` when cwd is a git repo.
 - Any internal error exits 0 (fail open) and appends the stack to `${WARDEN_DATA}/hook-errors.log`. Hooks never break a session.
@@ -1328,7 +1333,8 @@ Common handler rules (`src/commands/hook.ts`):
 **Finding the run** (`hooks/resolve.ts`). "Live" means status `active`, `waiting` or `blocked`.
 - **Edit, Write, MultiEdit, NotebookEdit:** by target path. Among live runs, take the one whose `worktree` or `fix.worktree` contains the target, longest match first. The session's cwd does not matter, so a session that stays in the main checkout and edits `<worktreesDir>/<task>/…` is still caught.
 - **Bash, Stop, UserPromptSubmit:** first the run named by the session record's `task` (if that run is live, or `done`/`shipped` with its worktree still present); otherwise the run whose `worktree` equals the toplevel of `cwd`. **[U-11]** covers whether hook `cwd` follows the Bash tool's `cd`; the session link makes it matter less.
-- **Linking a session to a task:** when PreToolUse sees a Bash command that runs `warden start|next|done|wait`, it sets the session record's `task`: the task id in the command if there is one (`start <task>`, `next <task>`), else the run resolved from cwd. It also appends the session to that task's `sessions.jsonl` (7.6).
+- **Bash, chained directories:** the hook `cwd` does not follow a `cd` inside the same call (U-11). So a Bash command that `cd`s into, or runs `git -C` on, a run's worktree (or fix worktree) resolves that run first, before the session record and cwd.
+- **Linking a session to a task:** when PreToolUse sees a Bash command that runs `warden start|next|done|wait`, it sets the session record's `task`: the task id in the command if there is one (`start <task>`, `next <task>`), else the run of a directory the command `cd`s into, else the run resolved from cwd. It also appends the session to that task's `sessions.jsonl` (7.6).
 
 ### 7.2 SessionStart (`session-start.ts`)
 
@@ -1351,7 +1357,7 @@ Also links the session (7.6).
 ### 7.3 UserPromptSubmit (`user-prompt.ts`)
 
 - Builds `T` = `warden.json.taskIdPattern` without a leading `^` and a trailing `$`, then matches `prompt` against `new RegExp("^\\s*(approve|reject|retry)\\b(?:\\s+(" + T + "))?\\s*(?::\\s*(.+))?$", "is")`. So `approve 12345` works for numeric ids. **[U-5]** covers whether `prompt` holds the raw typed text.
-- It acts when the task (given, or the run resolved per 7.1) is in the matching state:
+- It acts when the task (given, or the run resolved per 7.1, or else the only live run in this main checkout, which then also links the session) is in the matching state:
   - `approve` → waiting/approve
   - `reject` → waiting/approve; text is required
   - `retry` → blocked or merge-fix
@@ -1374,7 +1380,7 @@ Deny output (exit 0):
 {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"warden: <reason>"}}
 ```
 
-Allow: exit 0 with no output, so normal permissions apply. Every deny writes `hook.denied {tool, reason}` when a run exists. `isFixer` means hook input `agent_type == "warden:fixer"`.
+Allow: exit 0 with no output, so normal permissions apply. Every deny writes `hook.denied {tool, reason}` when a run exists, best effort: it waits at most 1 s for the task lock and is skipped (logged) when busy, and the deny is still printed. `isFixer` means hook input `agent_type == "warden:fixer"`.
 
 **Edit, Write, MultiEdit, NotebookEdit.** Target = `tool_input.file_path ?? tool_input.notebook_path`, resolved to an absolute path (and its realpath). Rules, first match wins:
 
@@ -1388,15 +1394,15 @@ Allow: exit 0 with no output, so normal permissions apply. Every deny writes `ho
 | E6 | Target not allowed by the current step's edit policy (catalog) | deny: `<step> step does not change code (<task> at <step>)` |
 | E7 | Otherwise | allow |
 
-**Bash.** `cmd = tool_input.command`. Before matching, the body of a heredoc that feeds `warden done` or `warden report` is removed (it is JSON or prose, not a command). Rules, first match wins:
+**Bash.** `cmd = tool_input.command`. Before matching, the body of a heredoc that feeds `warden done` or `warden report` is removed (it is JSON or prose, not a command). A *simple command* is a part of `cmd` split at `;`, `&&`, `||`, `|`, `&` and newlines outside quotes; a *pipeline* is split the same way except at `|`. Rules, first match wins:
 
 | # | Condition | Decision |
 |---|---|---|
 | B1 | `/(^|[;&|(\s])(warden|[\w./-]*cli\.ts)\s+(approve|retry|reset)\b/`, or `/bin\/warden\s+(approve|retry|reset)\b/` | deny: `approve, retry and reset are for a person. Ask the user to type "approve" / "retry".` |
-| B2 | cmd mentions `PROJECT_AGENT`, `WARDEN_ROLE`, `WARDEN_CLAUDE_BIN`, `WARDEN_DATA`, `WARDEN_ROOT`, `WARDEN_TEST_MODE`, `CLAUDE_PLUGIN_ROOT` or `CLAUDE_PLUGIN_DATA`; or runs `claude -p` / `claude --print`; or runs `script` together with `warden` or `cli.ts` | deny: `this command changes how warden itself runs; ask the user to do it` |
-| B3 | cmd contains `.warden/state`, `.warden/history`, `.warden/steps.json`, `.warden/warden.json`, `.warden/triage-rules.json` or `.warden/flows`, matches a write token `/(>|\btee\b|\brm\b|\bmv\b|\bcp\b|\bsed\s+-i|\bperl\s+-i|\btruncate\b|\btouch\b|\bdd\b|\bln\b|\bchmod\b|\brsync\b|\bpython3?\b|\bnode\b|\bbun\b|\bgit\s+(rm|checkout|restore)\b)/`, and is not a `warden …` call. For the four config paths this applies only while a run in this main checkout is live, and never to `isFixer` inside `fix.worktree` | deny: `state, history and gate files are written by the engine only` |
+| B2 | cmd mentions `PROJECT_AGENT`, `WARDEN_ROLE`, `WARDEN_CLAUDE_BIN`, `WARDEN_DATA`, `WARDEN_ROOT`, `WARDEN_TEST_MODE`, `CLAUDE_PLUGIN_ROOT` or `CLAUDE_PLUGIN_DATA`; or runs `claude -p` / `claude --print`; or has a simple command whose command word is `script`, together with `warden` or `cli.ts` | deny: `this command changes how warden itself runs; ask the user to do it` |
+| B3 | Some pipeline names `.warden/state`, `.warden/history`, `.warden/steps.json`, `.warden/warden.json`, `.warden/triage-rules.json` or `.warden/flows` (in itself or in an earlier `cd` of the command) and matches a write token: `>`, the words `tee rm mv cp truncate touch dd ln chmod rsync python python3 node bun sponge install` (not as part of a path or a longer name), an in-place `sed -i`/`sed --in-place`, `perl -i`/`ruby -i` (also `-pi`), `awk -i inplace`, or `git rm|checkout|restore`. Redirects that write no file (`2>&1`, `>&2`, `>/dev/null`, `&>/dev/null`) are not write tokens. A `warden …` simple command counts only for its redirects. For the four config paths this applies only while a run in this main checkout is live; for `isFixer` it applies only to config paths outside every live run's `fix.worktree` (relative paths resolve from the hook cwd, or the command's `cd`) | deny: `state, history and gate files are written by the engine only` |
 | B4 | No run resolved (7.1). For this rule a run also counts when it is `done` or `shipped` and its worktree still exists | allow |
-| B5 | Push, PR or merge (list below) and the run's current step is fix | allow if `isFixer` and cmd mentions `fix.branch`; a merge (`gh pr merge`, `pr.ts merge`, `git merge`) also needs `PROJECT_AGENT=1` in the hook's env. Otherwise deny: `only the warden:fixer subagent pushes the fix branch` |
+| B5 | Push, PR or merge (list below) and the run's current step is fix | allow if `isFixer` and cmd mentions `fix.branch`; a merge (`gh pr merge`, `pr.ts merge`, `git merge`, or a `git push` whose refspec lands on `mainBranch`: `<src>:<mainBranch>`, `<src>:refs/heads/<mainBranch>`, or `<mainBranch>` itself) also needs `PROJECT_AGENT=1` in the hook's env. Otherwise deny: `only the warden:fixer subagent pushes the fix branch` |
 | B6 | Push, PR or merge, any other case | allow when current is ship and all gates are proven (5.6), or when the run is `done`/`shipped` and its proofs are still valid for HEAD. Otherwise deny: `push/PR/merge is allowed only in the ship step after all gates pass for HEAD (<task> at <step>)` |
 | B7 | Otherwise | allow |
 
@@ -1419,6 +1425,7 @@ Writes via Bash during edit-blocked steps are not blocked here. They are caught 
 ```
 
 - Allows (no output) when there is no run, or the run is `waiting`, `blocked`, `shipped` or `done`.
+- Also allows (no output, no `stop.blocked`) at an agent step with no engine work pending when the agent's last message ends with a question mark: it is asking the user (the plan skill and a missing task text say to). The message is the hook input's `last_assistant_message`, else the text of the last `assistant` line in the tail of `transcript_path`.
 - Loop guard: count consecutive `stop.blocked` events since the last other event in `events.jsonl`. If `stop_hook_active` is true and that count is ≥3, allow and print `{"systemMessage":"warden: stopping although <task> is active; type \"continue\" to resume."}`. **[U-6]**
 
 ### 7.6 Session-to-task links (tokens)
@@ -1475,13 +1482,14 @@ There is no site skill: the lead runs `warden site` in a terminal (README, 10.4)
 3. Draft `steps.json`:
    - `check.default` = `suggestedChecks`. The scan picks package scripts in this order when they exist: `lint`, `typecheck`/`type-check`/`tsc`, `test`/`test:unit`, `build`, `test:e2e`/`e2e`. It skips `dev`, `start`, `watch`, `*:watch` and any script containing `--watch`.
    - Commands are run as `<pm> run <script>`.
+   - If `suggestedChecks` is empty (no `package.json`), propose commands from `makeTargets` (`make <target>`) and `ciFiles`, and ask the user to confirm them; `check.default` needs ≥1 command.
    - Ask about aggregate scripts (such as `test:all`, `ci`) rather than adding them.
    - `setup.commands` is always `["sh scripts/warden-setup.sh"]`. Draft the script body (`setupScript`): `set -e`, then `<pm> install --frozen-lockfile` (or the equivalent), plus any step the docs say a fresh checkout needs (for example copying `.env.example`). Ask the user to confirm it.
-   - `mainBranch` from the scan. `review` defaults. `fix.scope` default (4.2).
+   - `mainBranch` from the scan. `review` defaults. `fix.scope` default (4.2): the skill leaves `review` and `fix` out, and `init --write` fills in both defaults. The skill shows the default scope and an `InitPayload` skeleton with the key names.
 4. Ask the user for: the task id format (show the regex), the project id, confirmation of the check commands and the setup script, and whether to add the team install block to `.claude/settings.json` (10.3) so teammates get warden on trust (`teamInstall`, recommended yes). Use one question per message, multiple choice where possible.
 5. Write the `InitPayload` JSON to a scratch file and run `warden init --write --file <path>`.
 6. Optional: run each check command once and report the results. A failure is reported, not fixed.
-7. Tell the user to commit and push to the main branch, because `warden start` reads `.warden/` from there: `git add .warden .gitignore scripts/warden-setup.sh .claude/settings.json && git commit -m "chore: set up warden" && git push`. Also suggest branch protection on the main branch (1.3).
+7. Tell the user to commit and push to the main branch, because `warden start` reads `.warden/` from there: `git add .warden .gitignore scripts/warden-setup.sh && git commit -m "chore: set up warden" && git push`, with `.claude/settings.json` added only when it is in the `written` array that `init --write` printed. Also suggest branch protection on the main branch (1.3).
 
 `init --write` creates:
 - `.warden/warden.json` (`wardenVersion` = plugin version, `lastRetro: null`) and `.warden/steps.json`
@@ -1491,7 +1499,7 @@ There is no site skill: the lead runs `warden site` in a terminal (README, 10.4)
 - `INDEX.md` in each of `context/`, `rules/`, `decisions/`, `knowledge/`, `checks/`, `retros/`, `fixes/` and `flows/`, with one line per file (empty list initially)
 - `scripts/warden-setup.sh` from `setupScript` (refuses to overwrite an existing file unless `--force`)
 - the `.gitignore` line `.warden/state/`, appended if missing (worktrees live outside the repo, 3.1)
-- with `teamInstall: true`: `.claude/settings.json` gets `extraKnownMarketplaces["warden-marketplace"]` and `enabledPlugins["warden@warden-marketplace"]: true`, merged into existing keys (existing values for these two keys are left alone). The marketplace `source` is copied from the `warden-marketplace` entry of `~/.claude/plugins/known_marketplaces.json`, so warden's code holds no repo literal **[U-13]**. If that entry is missing, init skips this file and tells the user to paste the README block.
+- with `teamInstall: true`: `.claude/settings.json` gets `extraKnownMarketplaces["warden-marketplace"]` and `enabledPlugins["warden@warden-marketplace"]: true`, merged into existing keys (existing values for these two keys are left alone). The marketplace `source` is copied from the `warden-marketplace` entry of `~/.claude/plugins/known_marketplaces.json`, so warden's code holds no repo literal **[U-13]**. Only `github` and `git` sources are copied: a `directory` or `file` source (warden added from a local path, 10.7) is a path on this machine that teammates cannot resolve. If the entry is missing or local, init skips this file and tells the user to paste the README block.
 
 ### 8.2 compose (key instructions, including the task-type table)
 
@@ -1695,6 +1703,7 @@ CPs track the `stable` branch, never `main`. A commit on `main` reaches nobody u
 3. Run `bun run check && bun run validate`.
 4. Tag `v<v>` and push the tag.
 5. Fast-forward `stable` to the tag: `git fetch origin && git merge-base --is-ancestor origin/stable v<v> && git push origin v<v>^{commit}:refs/heads/stable`. A non-fast-forward is an error; do not force it.
+   First release only (`git ls-remote --heads origin stable` prints nothing, so `origin/stable` does not exist yet): create the branch at the tag with `git push origin v<v>^{commit}:refs/heads/stable`. Until then the `#stable` install in 10.2 and the README fails.
 
 ### 10.7 Develop warden locally
 
@@ -1951,21 +1960,21 @@ File-conflict check: `src/cli.ts`, `src/types.ts` and `hooks/hooks.json` are wri
 
 ## 13. Unverified platform assumptions
 
-| ID | Assumption | Risk if wrong | Checked in |
-|---|---|---|---|
-| U-1 | A git-hosted marketplace whose entry is `"source": "./plugins/warden"` installs from a private repo at a pinned ref (`#<ref>`), over SSH and over HTTPS, and the install keeps the exec bit on `bin/warden` | Install fails | WD-0001 install check (pass/fail) |
-| U-2 | The data dir is `~/.claude/plugins/data/warden-warden-marketplace/` for an installed plugin, and `CLAUDE_PLUGIN_DATA` points there in hooks. The plugin root is not assumed: the alias reads the `root` pointer (3.1) | The wrapper default and wa-triage look in the wrong dir; the pointer file still fixes Bash calls | WD-0001 install check, step 4 |
-| U-3 | A `node:child_process` `detached: true` child in Bun survives the Bash tool killing `warden wait` | A gate dies with its caller. `ensureGate` restarts it on the next `next`/`wait` | WD-0015 |
-| U-4 | Docs: plugin agents are addressed as `<plugin>:<name>`, so `warden:fixer`. Verified from the docs; one live check remains | The CPA cannot delegate. Fallback: the instructions include the fixer body text for the main agent to follow | WD-0017 live session |
-| U-5 | UserPromptSubmit `prompt` contains the raw typed text, and hook `additionalContext` reaches the model | Approve via prompt fails. Fallback: a human runs `warden approve` in a terminal | WD-0017 live session |
-| U-6 | Stop-hook `stop_hook_active` semantics, and that `systemMessage` shows to the user | Loop guard misbehaves | WD-0017 live session |
-| U-7 | Prices in `prices.json` | Wrong cost estimate only | WD-0008 |
-| U-8 | `--scope project` on `marketplace add` and `install` writes `.claude/settings.json`; option B with `"ref"` in a github source auto-installs after trust, and needs one `/reload-plugins` in the first session | Team install needs the 2 manual commands | WD-0001 step 6, WD-0018 |
-| U-9 | `claude -p … --json-schema` fills `structured_output` and `total_cost_usd` in JSON output; `Bash(git diff *)` rule syntax; `--setting-sources user` and `--strict-mcp-config --mcp-config '{"mcpServers":{}}'` are accepted; a nested `claude -p` started from inside a Claude Code session works | Review falls back to the fenced JSON block, or fails as `error` | WD-0012 |
-| U-10 | Docs: PreToolUse fires for tool calls inside subagents, with `agent_id` and `agent_type` in the input. Verified from the docs; one live check remains | Fixer scope is enforced only at `done` (5.3 / 6.4 evidence checks still apply) | WD-0017 live session |
-| U-11 | Hook input `cwd` follows the Bash tool's `cd` | Bash and Stop fall back to the session link (7.1); a session that never ran `warden start|next|done|wait` is not linked | WD-0017 live session |
-| U-12 | Adding `worktreesDir` to `permissions.additionalDirectories` in `.claude/settings.local.json` during a session lets the session edit files there without prompts | Edits in the worktree prompt for permission. Fallback: `start` prints `Run /add-dir <worktreesDir>` | WD-0017 live session |
-| U-13 | `~/.claude/plugins/known_marketplaces.json` holds the `warden-marketplace` entry with a `source` object that can be copied into `extraKnownMarketplaces` (repo and ref) | init skips the settings merge and tells the user to paste the README block | WD-0014 test with a fixture; WD-0018 live |
+| ID | Assumption | Risk if wrong | Checked in | Result |
+|---|---|---|---|---|
+| U-1 | A git-hosted marketplace whose entry is `"source": "./plugins/warden"` installs from a private repo at a pinned ref (`#<ref>`), over SSH and over HTTPS, and the install keeps the exec bit on `bin/warden` | Install fails | WD-0001 install check (pass/fail) | not checked in WD-0017 |
+| U-2 | The data dir is `~/.claude/plugins/data/warden-warden-marketplace/` for an installed plugin, and `CLAUDE_PLUGIN_DATA` points there in hooks. The plugin root is not assumed: the alias reads the `root` pointer (3.1) | The wrapper default and wa-triage look in the wrong dir; the pointer file still fixes Bash calls | WD-0001 install check, step 4 | not checked in WD-0017 |
+| U-3 | A `node:child_process` `detached: true` child in Bun survives the Bash tool killing `warden wait` | A gate dies with its caller. `ensureGate` restarts it on the next `next`/`wait` | WD-0015 | not checked in WD-0017 |
+| U-4 | Docs: plugin agents are addressed as `<plugin>:<name>`, so `warden:fixer`. Verified from the docs; one live check remains | The CPA cannot delegate. Fallback: the instructions include the fixer body text for the main agent to follow | WD-0017 live session | PASS (2026-10-18, Claude Code 2.1.302, `--plugin-dir`). The init message lists `warden:fixer`. An Agent call with `subagent_type: "warden:fixer"` ran. A haiku CPA that ran `warden next` on a fix step delegated to `warden:fixer` by itself (the fixer ran on opus). |
+| U-5 | UserPromptSubmit `prompt` contains the raw typed text, and hook `additionalContext` reaches the model | Approve via prompt fails. Fallback: a human runs `warden approve` in a terminal | WD-0017 live session | PASS. `claude -p "approve"`: hook `prompt` was exactly `approve`. With cwd = the ticket worktree, or a resumed session that ran `warden start`, the run left `waiting` (`approve.granted`, then `implement`). The transcript holds a `hook_additional_context` attachment with the text, and the model's first call was `warden next`. Limit: a fresh session with cwd = main checkout does not resolve the run: the hook does nothing and the run stays `waiting`, although SessionStart told the user to type `approve`. |
+| U-6 | Stop-hook `stop_hook_active` semantics, and that `systemMessage` shows to the user | Loop guard misbehaves | WD-0017 live session | PASS. Stop gave `stop_hook_active` false on the first stop and true on every re-prompt. Three `stop.blocked` events re-prompted the model ("Stop hook feedback: warden: ..."); the 4th stop was allowed. The `systemMessage` shows in `-p` stream-json as a `system/informational` event: `Stop says: warden: stopping although DM-002 is active; ...`. Not checked in the interactive UI. |
+| U-7 | Prices in `prices.json` | Wrong cost estimate only | WD-0008 | not checked in WD-0017 |
+| U-8 | `--scope project` on `marketplace add` and `install` writes `.claude/settings.json`; option B with `"ref"` in a github source auto-installs after trust, and needs one `/reload-plugins` in the first session | Team install needs the 2 manual commands | WD-0001 step 6, WD-0018 | not checked in WD-0017 |
+| U-9 | `claude -p … --json-schema` fills `structured_output` and `total_cost_usd` in JSON output; `Bash(git diff *)` rule syntax; `--setting-sources user` and `--strict-mcp-config --mcp-config '{"mcpServers":{}}'` are accepted; a nested `claude -p` started from inside a Claude Code session works | Review falls back to the fenced JSON block, or fails as `error` | WD-0012 | not checked in WD-0017 |
+| U-10 | Docs: PreToolUse fires for tool calls inside subagents, with `agent_id` and `agent_type` in the input. Verified from the docs; one live check remains | Fixer scope is enforced only at `done` (5.3 / 6.4 evidence checks still apply) | WD-0017 live session | PASS. `PreToolUse` inside the subagent carries `agent_id` and `agent_type: "warden:fixer"` (Read, Write, Bash); the main agent's calls carry neither. Live fix step: fixer Write in `scripts/` allowed; fixer Write to `README` in the fix worktree denied `outside the fixer scope`; fixer Write to the ticket worktree denied (E5); the main agent's Write to the fix worktree denied (E2). |
+| U-11 | Hook input `cwd` follows the Bash tool's `cd` | Bash and Stop fall back to the session link (7.1); a session that never ran `warden start|next|done|wait` is not linked | WD-0017 live session | PASS. After a Bash `cd sub/deep` (own call) the next `PreToolUse` and the `Stop` hook had `cwd` = `.../sub/deep`. In one `cd X && cmd` call the hook still sees the cwd from before the `cd`. |
+| U-12 | Adding `worktreesDir` to `permissions.additionalDirectories` in `.claude/settings.local.json` during a session lets the session edit files there without prompts | Edits in the worktree prompt for permission. Fallback: `start` prints `Run /add-dir <worktreesDir>` | WD-0017 live session | PASS. In one session `warden start DM-001 --template do --worktree` wrote `permissions.additionalDirectories` to `.claude/settings.local.json`, and the next Write tool call into `<worktreesDir>/DM-001/` succeeded with no prompt. Control without `start`: the same Write to a sibling dir was denied (`permission_denials`). |
+| U-13 | `~/.claude/plugins/known_marketplaces.json` holds the `warden-marketplace` entry with a `source` object that can be copied into `extraKnownMarketplaces` (repo and ref) | init skips the settings merge and tells the user to paste the README block | WD-0014 test with a fixture; WD-0018 live | not checked in WD-0017 |
 
 ---
 

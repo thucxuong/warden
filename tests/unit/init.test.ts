@@ -181,6 +181,21 @@ describe("init --write", () => {
     expect(readFileSync(join(repo, "scripts/warden-setup.sh"), "utf8")).toBe("echo mine\n");
   });
 
+  test("steps without fix get the default fix.scope", async () => {
+    const path = payloadFile();
+    const payload = JSON.parse(readFileSync(path, "utf8"));
+    delete payload.steps.fix;
+    writeFileSync(path, JSON.stringify(payload));
+    const { out, code } = await call(["--write", "--file", path]);
+    expect(code).toBeNull();
+    expect(out.written).toContain(".warden/steps.json");
+    const steps = JSON.parse(readFileSync(join(repo, ".warden/steps.json"), "utf8"));
+    expect(steps.fix.scope).toEqual([
+      "scripts/**", ".claude/skills/**", ".warden/triage-rules.json", ".warden/fixes/**", ".warden/knowledge/**", "docs/**", ".env.example",
+      "docker-compose*.yml",
+    ]);
+  });
+
   test("an invalid payload is rejected with exit 1 and writes nothing", async () => {
     const badSteps = payloadFile({ steps: { mainBranch: "main", setup: { commands: [] }, check: {}, fix: { scope: [] } } });
     expect((await call(["--write", "--file", badSteps])).code).toBe(1);
@@ -227,6 +242,22 @@ describe("init --write", () => {
       expect(out.written).not.toContain(".claude/settings.json");
       expect(out.notes[0]).toContain("team install skipped");
       expect(existsSync(join(repo, ".claude/settings.json"))).toBe(false);
+    });
+
+    test("a local directory or file source is not copied into the shared settings", async () => {
+      for (const source of [{ source: "directory", path: "/Users/someone/warden" }, { source: "file", path: "/tmp/marketplace.json" }]) {
+        knownMarketplaces(source);
+        const { out } = await call(["--write", "--force", "--file", payloadFile({ teamInstall: true })]);
+        expect(out.written).not.toContain(".claude/settings.json");
+        expect(out.notes[0]).toContain(`team install skipped: warden was added from a local ${source.source} source`);
+        expect(existsSync(join(repo, ".claude/settings.json"))).toBe(false);
+      }
+    });
+
+    test("a git source is copied", async () => {
+      knownMarketplaces({ source: "git", url: "https://example.com/fixture.git" });
+      const { out } = await call(["--write", "--file", payloadFile({ teamInstall: true })]);
+      expect(out.written).toContain(".claude/settings.json");
     });
 
     test("a settings file that is not JSON stops the write before anything is created", async () => {

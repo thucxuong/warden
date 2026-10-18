@@ -353,13 +353,31 @@ describe("triage routing", () => {
     expect(r.fix).toBeNull();
   });
 
+  test("an accepted hand-in stays accepted when the worker cannot be started; next starts it", async () => {
+    await startFlow([IMPL, CHECK]);
+    commit(wt, { "src/f1.ts": "export const x = 1;\n" });
+    const busy: SpawnWorker = () => {
+      throw new WardenError("task is busy: another warden command holds the lock", EXIT.BUSY);
+    };
+    const out = JSON.stringify({ summary: "change", filesChanged: ["src/f1.ts"], testsAdded: [], testsReason: "only a constant changed" });
+    const res = await done(ctx, T, out, busy);
+    expect(res.accepted).toBe(true);
+    expect(res.errors).toEqual([]);
+    expect(res.next.status).toBe("running_gate");
+    expect(run().current.id).toBe("check");
+    expect(run().gate).toBeNull();
+    await next(ctx, T, spawn);
+    expect(spawns).toBe(1);
+    expect(run().gate).not.toBeNull();
+  });
+
   test("check left files -> blocked; retry re-runs the check", async () => {
     await startFlow([IMPL, CHECK]);
     checks.push({ passed: true, left: ["coverage/out.json"] });
     await implement();
     await drive();
     expect(run().status).toBe("blocked");
-    expect(run().waiting?.reason).toBe("check left files: coverage/out.json. Add them to .gitignore on main, then type retry");
+    expect(run().waiting?.reason).toBe("check left files: coverage/out.json. Add them to .gitignore on main, merge main into t-1, then type retry");
     expect(eventTypes()).not.toContain("triage.verdict");
 
     rmSync(join(wt, "coverage"), { recursive: true });
@@ -367,6 +385,23 @@ describe("triage routing", () => {
     expect(res.status).toBe("running_gate");
     await drive();
     expect(run().status).toBe("done");
+  });
+
+  test("check left files -> the advice in the block text works: ignore them on main, merge main, retry", async () => {
+    await startFlow([IMPL, CHECK]);
+    checks.push({ passed: true, left: ["out.txt"] });
+    await implement();
+    await drive();
+    expect(run().waiting?.reason).toBe("check left files: out.txt. Add them to .gitignore on main, merge main into t-1, then type retry");
+
+    commit(main, { ".gitignore": ".warden/state/\nout.txt\n" }, "ignore out.txt");
+    sh(wt, "merge", "-q", "--no-edit", "main");
+    expect(existsSync(join(wt, "out.txt"))).toBe(true);
+    await retry(ctx, T, spawn);
+    await drive();
+    const r = run();
+    expect(r.routeBack).toBeNull();
+    expect(r.status).toBe("done");
   });
 
   test("a dirty tree at gate start routes back as dirty; implement then needs no new commit", async () => {
@@ -761,5 +796,21 @@ describe("views and reset", () => {
     expect(sh(main, "branch", "--list", "warden-fix/*")).toBe("");
     expect(existsSync(wt)).toBe(true);
     expect(statusLines(ctx, true)).toEqual([]);
+  });
+
+  test("reset removes the task's triage clean copies left by a killed worker, not another task's", async () => {
+    await startFlow([IMPL, CHECK]);
+    const tmp = realpathSync(tmpdir());
+    const mine = join(tmp, `warden-clean-demo-${T}-${process.pid}`);
+    const other = join(tmp, `warden-clean-demo-${T}-x-${process.pid}`);
+    sh(main, "worktree", "add", "-q", "--detach", mine, "main");
+    sh(main, "worktree", "add", "-q", "--detach", other, "main");
+    try {
+      await reset(ctx, T);
+      expect(existsSync(mine)).toBe(false);
+      expect(existsSync(other)).toBe(true);
+    } finally {
+      for (const path of [mine, other]) if (existsSync(path)) sh(main, "worktree", "remove", "--force", path);
+    }
   });
 });
