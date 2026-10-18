@@ -1,8 +1,6 @@
-import { afterAll, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { afterAll, beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
+import { rmSync } from "node:fs";
+import { join } from "node:path";
 import { validateStepsJson } from "../../plugins/warden/src/config/config.ts";
 import { head, porcelain } from "../../plugins/warden/src/lib/git.ts";
 import { writeJsonAtomic } from "../../plugins/warden/src/lib/json.ts";
@@ -10,6 +8,7 @@ import { taskDir, worktreesDir } from "../../plugins/warden/src/state/paths.ts";
 import { appendEvent } from "../../plugins/warden/src/state/store.ts";
 import { fixNoteProblems, placeholderErrors, validateOutput } from "../../plugins/warden/src/engine/outputs.ts";
 import { DEFAULT_LIMITS, type FlowJson, type RunJson } from "../../plugins/warden/src/types.ts";
+import { cloneTemplate, commit, makeTemplate, removeAll, sh, tmpBase, write, type Template } from "../helpers/repo.ts";
 
 setDefaultTimeout(30_000);
 
@@ -41,38 +40,23 @@ const STEPS = validateStepsJson({
 const bases: string[] = [];
 let main: string;
 let wt: string;
+let template: Template;
 
-function sh(cwd: string, ...args: string[]): string {
-  return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
-}
-
-function write(dir: string, rel: string, text: string): void {
-  mkdirSync(dirname(join(dir, rel)), { recursive: true });
-  writeFileSync(join(dir, rel), text);
-}
-
-function commit(dir: string, files: Record<string, string>): string {
-  for (const [rel, text] of Object.entries(files)) write(dir, rel, text);
-  sh(dir, "add", "-A");
-  sh(dir, "commit", "-q", "-m", "c");
-  return sh(dir, "rev-parse", "HEAD");
-}
+beforeAll(() => {
+  template = makeTemplate("warden-outputs", { ".gitignore": ".warden/state/\n", "src/old.ts": "old\n", ".warden/steps.json": "{}\n" }, "c");
+});
 
 beforeEach(() => {
-  const base = realpathSync(mkdtempSync(join(tmpdir(), "warden-outputs-")));
+  const base = tmpBase("warden-outputs");
   bases.push(base);
   main = join(base, "cp");
-  mkdirSync(main);
-  sh(main, "init", "-q", "-b", "main");
-  sh(main, "config", "user.name", "Test User");
-  sh(main, "config", "user.email", "test@example.com");
-  commit(main, { ".gitignore": ".warden/state/\n", "src/old.ts": "old\n", ".warden/steps.json": "{}\n" });
+  cloneTemplate(template, main);
   wt = join(worktreesDir(main), T);
   sh(main, "worktree", "add", "-q", "-b", "t-1", wt, "main");
 });
 
 afterAll(() => {
-  for (const base of bases) rmSync(base, { recursive: true, force: true });
+  removeAll([...bases, template.root]);
 });
 
 function runAt(stepId: string, extra: Partial<RunJson> = {}): RunJson {

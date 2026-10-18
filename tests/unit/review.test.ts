@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,6 +6,7 @@ import { spawnSync } from "node:child_process";
 import { buildPrompt, claudeBinary, leftoverText, makeReview, reviewerArgs, runReview } from "../../plugins/warden/src/gates/review.ts";
 import { readEvents } from "../../plugins/warden/src/state/store.ts";
 import type { Ctx, Finding, RunJson, StepsJson } from "../../plugins/warden/src/types.ts";
+import { cloneTemplate, commit as commitFiles, makeTemplate, removeAll, sh as git, type Template } from "../helpers/repo.ts";
 
 const FAKE = join(import.meta.dir, "../fixtures/bin/claude");
 const TASK = "T-001";
@@ -16,8 +17,22 @@ let calls: string; // FAKE_CLAUDE_DIR
 let base: string;
 let run: RunJson;
 
+// The repo every test starts from, built once: a base commit, then the change under review.
+let template: Template;
+let templateBase: string;
+
+beforeAll(() => {
+  template = makeTemplate("warden-review", { "a.ts": "export const a = 1;\n", "AGENTS.md": "Be kind.\n" }, "base");
+  templateBase = git(template.dir, "rev-parse", "HEAD");
+  commitFiles(template.dir, {
+    "a.ts": "export const a = 1;\nexport const b = 2;\nexport const c = 3;\n",
+    "bun.lock": "lock\n",
+    ".warden/history/T-001/summary.json": "{}\n",
+  }, "change");
+});
+
 afterAll(() => {
-  for (const r of roots) rmSync(r, { recursive: true, force: true });
+  removeAll([...roots, template.root]);
 });
 
 function sh(cwd: string, cmd: string): string {
@@ -60,16 +75,8 @@ function ctxFor(env: Record<string, string | undefined> = {}): Ctx {
 function setup(stepsJson: StepsJson = steps()): void {
   repo = tempDir("warden-review-");
   calls = tempDir("warden-review-calls-");
-  sh(repo, "git init -q -b main && git config user.email t@t && git config user.name t");
-  writeFileSync(join(repo, "a.ts"), "export const a = 1;\n");
-  writeFileSync(join(repo, "AGENTS.md"), "Be kind.\n");
-  sh(repo, "git add -A && git commit -q -m base");
-  base = sh(repo, "git rev-parse HEAD");
-  writeFileSync(join(repo, "a.ts"), "export const a = 1;\nexport const b = 2;\nexport const c = 3;\n");
-  writeFileSync(join(repo, "bun.lock"), "lock\n");
-  mkdirSync(join(repo, ".warden/history/T-001"), { recursive: true });
-  writeFileSync(join(repo, ".warden/history/T-001/summary.json"), "{}\n");
-  sh(repo, "git add -A && git commit -q -m change");
+  cloneTemplate(template, repo);
+  base = templateBase;
 
   const stateDir = join(repo, ".warden/state", TASK);
   mkdirSync(stateDir, { recursive: true });

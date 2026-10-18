@@ -144,6 +144,24 @@ describe("buildInstructions", () => {
     expect(text).toContain("Run warden done with the PlanOutput JSON");
   });
 
+  test("plan step tells the agent whether brainstorm is needed; implement gets its start commit", () => {
+    const withBrainstorm = buildInstructions({ main, run: runAt(0), flow, steps });
+    expect(withBrainstorm).toContain("This step says brainstorm: the output must have a `brainstorm` object");
+    const noBrainstorm: FlowJson = { ...flow, steps: [{ id: "plan", type: "plan", brainstorm: false }, ...flow.steps.slice(1)] };
+    expect(buildInstructions({ main, run: runAt(0), flow: noBrainstorm, steps })).toContain("leave `brainstorm` out");
+    const impl = buildInstructions({ main, run: runAt(1), flow, steps });
+    expect(impl).toContain("Step start: s");
+    expect(impl).toContain("exactly the files that differ from the start of this step; check with `git diff --name-only <step start> HEAD`");
+  });
+
+  test("plan example is complete and valid for a brainstorm step", () => {
+    const { example, schema } = outputSpec("plan", T);
+    expect(example).toHaveProperty("brainstorm.options");
+    expect(example).toHaveProperty("brainstorm.chosen");
+    expect(example).toHaveProperty("brainstorm.why");
+    expect(schema).toContain("otherwise leave it out");
+  });
+
   test("a fix step gets the fix context instead of the route-back", () => {
     const run = runAt(2, {
       current: { id: "fix-1", type: "fix", mode: "diagnose", startedAt: "", startSha: "s", startDirty: [], attempt: 1 },

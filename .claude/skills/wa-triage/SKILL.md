@@ -2,7 +2,7 @@
 name: wa-triage
 description: Triage warden reports filed by consumer projects on this machine. Reads the report outbox, decides real bug, snowflake or needs info, opens an issue for real bugs, and writes the result back to the report.
 disable-model-invocation: true
-allowed-tools: Bash(plugins/warden/bin/warden report set *) Bash(gh issue list *) Bash(gh issue view *) Bash(gh issue create *) Bash(ls *) Read Glob Grep Edit(triage/**)
+allowed-tools: Bash(plugins/warden/bin/warden report set *) Bash(gh issue list *) Bash(gh issue view *) Bash(gh issue create *) Read Glob Grep Edit(triage/**)
 ---
 
 # wa-triage
@@ -22,7 +22,8 @@ Never ask the user a question, in either mode. A run started by the doorbell has
 
 ## 1. Find the reports
 
-1. Run `ls ${HOME}/.claude/plugins/data/warden-*/reports/` (one plain `ls`, no pipes). Keep the `R-*.json` files. Skip `counter.json`.
+1. Use the Glob tool (not `ls`) with the absolute pattern `<your home>/.claude/plugins/data/warden-*/reports/R-*.json`. Skip `counter.json`.
+   If one command is refused, keep going: `gh issue list|view|create` and `plugins/warden/bin/warden report set` are allowed. Never use shell variables such as `${HOME}` or `~` in a command.
 2. Read each file with Read. Keep the ones where `status` is `sent`.
 3. If there are none, say so and stop.
 

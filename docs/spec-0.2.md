@@ -173,7 +173,7 @@ Changes to the 0.1.1 skill:
 `warden report --status` (no other args; exit 2 with other args):
 - Reads every `${WARDEN_DATA}/reports/R-*.json` whose `projectId` equals this project's `warden.json` `projectId` (main checkout, spec 5.1). Records that do not parse are skipped.
 - Exit 3 when `.warden/warden.json` is missing.
-- Read-only: it does not touch `reports.md` (session start keeps doing that).
+- Read-only: it does not touch `reports.md`. `warden report --status --write` (the only extra arg allowed) also rewrites the `reports.md` rows whose status or fixed-in differs from the outbox and adds `"rowsUpdated":n` to the stdout. Session start never writes `reports.md` (§7).
 - Stdout, sorted by id ascending: `{"reports":[{"id","kind","title","status","fixedIn","note","createdAt"}]}`. `note` is the WA's plain-text note (spec 4.13), such as the needs-info question. No body.
 
 Spec 3.2 rows changed:
@@ -198,16 +198,13 @@ kind: command
 run: pnpm audit --prod
 auto: true
 timeoutSec: 300
-last: 2026-10-11
 ---
 # Dependency audit
 
 Free text for people.
-
-## Results
-- 2026-10-04 pass (exit 0, 12s)
-- 2026-10-11 fail (exit 1, 9s)
 ```
+
+The file is the committed definition only. Run results are never written to it (see "Run results" below).
 
 Frontmatter: the file starts with a `---` line and the frontmatter ends at the next `---` line. One `key: value` per line, split at the first `:`, both sides trimmed. A value wrapped in one pair of matching `"` or `'` is unwrapped. No other YAML.
 
@@ -218,19 +215,15 @@ Frontmatter: the file starts with a `---` line and the frontmatter ends at the n
 | `run` | command, required | non-empty shell text, run with `/bin/sh -c` in the main checkout |
 | `auto` | command, optional | `true` or `false`, default `false` |
 | `timeoutSec` | command, optional | integer 1..540, default 300 (fits the 600 s Bash timeout) |
-| `last` | both, required | `YYYY-MM-DD` or `never` |
+| `last` | both, optional, legacy | `YYYY-MM-DD` or `never`. Only the initial value: it is used while the check has no state (below). Warden never writes it |
 
-An unknown or repeated key, a missing required key, or a command-only key on an agent check makes the file invalid. Errors use the spec 4 format `.warden/checks/<name>.md: <key>: <problem>`.
+An unknown or repeated key, a missing required key (`every`, `kind`, `run` for a command), or a command-only key on an agent check makes the file invalid. Errors use the spec 4 format `.warden/checks/<name>.md: <key>: <problem>`.
 
-Body: everything after the frontmatter. For an agent check, the text before the `## Results` line is the instructions. The engine appends result lines at the end of the file, and first appends `\n## Results\n` when the file has no `## Results` line.
+Body: everything after the frontmatter. For an agent check, the text before a `## Results` line (legacy files), or the whole body, is the instructions.
 
-Result lines (the engine writes them; the newest is last):
-- command: `- <date> pass (exit 0, <s>s)` or `- <date> fail (exit <n>, <s>s)` (`<s>` = whole seconds; exit 124 on timeout)
-- agent: `- <date> done` or `- <date> done: <note>`
+Run results live in untracked state, `.warden/state/_checks/<name>.json`: `{"last":"<date>","results":[{"date","result":"pass|fail|done","detail"?}]}`, newest last, the last 50 kept. `detail` is `exit <n>, <s>s` for a command (`<s>` whole seconds; exit 124 on timeout) or the `--note` for an agent check. One atomic rewrite under the check's lock. Warden never writes a check file and never commits state.
 
-`lastResult` is `pass`, `fail` or `done` from the last line under `## Results` that matches `^- \d{4}-\d{2}-\d{2} (pass|fail|done)\b`, else null.
-
-Writes (result line plus the `last:` line, replaced in place) are one atomic rewrite of the file in the main checkout. Warden never commits check files.
+`last` = state `last`, else the file's `last:`, else never. `lastResult` = the newest state result, else (no state) the last legacy `## Results` line matching `^- \d{4}-\d{2}-\d{2} (pass|fail|done)\b` in the file, else null. A state file that does not parse counts as no state.
 
 Dates are the local date, `YYYY-MM-DD`, as in 0.1. **Due** = `last` is `never`, or today − `last` ≥ `every` days.
 
@@ -240,13 +233,13 @@ Live files (gitignored through `.warden/state/`):
 
 ### 5.2 Built-in check `retro` (replaces `warden.json.lastRetro`)
 
-Decision: **migrate.** The retro's last date moves to `.warden/checks/retro.md` `last:`, so it has one home. `warden.json.lastRetro` is legacy:
+Decision: **migrate.** The retro's last date moves to the check's state (`.warden/state/_checks/retro.json`, §5.1), so it has one home. `warden.json.lastRetro` is legacy:
 - Config still accepts the key (null when absent, spec 4.1 unchanged), so 0.1 files stay valid. 0.2 never writes it.
 - When `.warden/checks/retro.md` is missing, the checks list has a **virtual** `retro` check: `kind: agent`, `every: 2d`, `last` = `warden.json.lastRetro` (null → never). So a CP that has not run the upgrade yet keeps its retro offer.
-- `checks done retro` on the virtual check creates `.warden/checks/retro.md` from the template below with `last:` = the done date. It does not touch `warden.json`.
-- When the file exists, `lastRetro` is ignored.
+- `checks done retro` writes state only. It creates no file and does not touch `warden.json`. A state `last` wins over `lastRetro` and over the file's `last:`.
+- When the file exists, `lastRetro` is ignored; its `last:` (the init value) applies until state exists.
 
-Template (`RETRO_CHECK(last)` in `checks.ts`; init and the upgrade note use the same text):
+Template (`RETRO_CHECK(last)` in `checks.ts`; `last` is the initial value; init and the upgrade note use the same text):
 
 ```markdown
 ---
@@ -257,8 +250,6 @@ last: <last>
 # Retro of recent work
 
 Run the warden:retro skill. It looks back at recent runs and this conversation, routes each finding, and saves .warden/retros/<YYYY-MM-DD>.md once the user agrees. It ends with: warden checks done retro
-
-## Results
 ```
 
 `checks done retro` also requires `.warden/retros/<date>.md` in the main checkout (exit 1 `write .warden/retros/<date>.md first`), as `retro --done` did.
@@ -267,13 +258,13 @@ Run the warden:retro skill. It looks back at recent runs and this conversation, 
 
 ### 5.3 Commands (`src/commands/checks.ts`)
 
-All read and write `<mainRoot>/.warden/checks/` (spec 5.1), wherever they are run. Exit 3 when `.warden/warden.json` is missing in the main checkout.
+All read `<mainRoot>/.warden/checks/` and write `<mainRoot>/.warden/state/_checks/` (spec 5.1), wherever they are run. Exit 3 when `.warden/warden.json` is missing in the main checkout.
 
 | Command | Args | Behaviour | Stdout |
 |---|---|---|---|
 | `warden checks` | — | Lists every check file plus the virtual retro (§5.2), sorted by name. An invalid file is listed with `error` and `due: false` | `{"checks":[CheckRow...]}` |
-| `warden checks run` | `<name> [--background]` | **command:** refuses (exit 4) while the lock is held, or while a live run's `worktree` is the main checkout (`a run is live in the main checkout (<task>); run checks after it`). Takes the lock and runs `run` via `proc.run` (spec 6.1) with cwd = main checkout, env = own env minus `PROJECT_AGENT` plus `WARDEN_MAIN_ROOT`, the file's `timeoutSec`, log `.warden/state/_checks/<name>.log`. Then appends the result line, sets `last` to today and releases the lock. Exit 0 whether the check passed or failed. With `--background`: spawns `process.execPath <root>/src/cli.ts checks run <name>` detached (stdio ignored, cwd main checkout), `.unref()`, returns at once. **agent:** prints the instructions and changes nothing. Exit 1 for an invalid file, 3 for an unknown name | command: `{"name","kind":"command","passed":bool,"exit":n,"durationMs":n,"log":"<abs>","last":"<date>"}`; background: `{"name","started":true,"log":"<abs>"}`; agent: `{"name","kind":"agent","instructions":"<text>","done":"warden checks done <name>"}` |
-| `warden checks done` | `<name> [--date YYYY-MM-DD] [--note <text>]` | Agent checks only (a command check exits 1 `command checks are run by the engine: warden checks run <name>`). `--note` is one line, at most 200 chars. Under the lock: appends `- <date> done[: <note>]`, sets `last` to the date (default today). `retro`: also §5.2 | `{"name","last":"<date>"}` |
+| `warden checks run` | `<name> [--background]` | **command:** refuses (exit 4) while the lock is held, or while a live run's `worktree` is the main checkout (`a run is live in the main checkout (<task>); run checks after it`). Takes the lock and runs `run` via `proc.run` (spec 6.1) with cwd = main checkout, env = own env minus `PROJECT_AGENT` plus `WARDEN_MAIN_ROOT`, the file's `timeoutSec`, log `.warden/state/_checks/<name>.log`. Then records the result in state (`last` = today) and releases the lock. Exit 0 whether the check passed or failed. With `--background`: spawns `process.execPath <root>/src/cli.ts checks run <name>` detached (stdio ignored, cwd main checkout), `.unref()`, returns at once. **agent:** prints the instructions and changes nothing. Exit 1 for an invalid file, 3 for an unknown name | command: `{"name","kind":"command","passed":bool,"exit":n,"durationMs":n,"log":"<abs>","last":"<date>"}`; background: `{"name","started":true,"log":"<abs>"}`; agent: `{"name","kind":"agent","instructions":"<text>","done":"warden checks done <name>"}` |
+| `warden checks done` | `<name> [--date YYYY-MM-DD] [--note <text>]` | Agent checks only (a command check exits 1 `command checks are run by the engine: warden checks run <name>`). `--note` is one line, at most 200 chars. Under the lock: records `done` (with the note) in state, `last` = the date (default today). `retro`: also §5.2 | `{"name","last":"<date>"}` |
 
 ```ts
 export interface CheckRow {
@@ -300,7 +291,7 @@ This replaces the 0.1 retro line (spec 7.2 line 3). The retro now shows as `retr
 
 ### 5.5 Init
 
-`init --write` (spec 8.1) also writes `.warden/checks/retro.md` = `RETRO_CHECK(<today>)` (with `fileIfMissing`, before the INDEX files), so a new project is not due. `.warden/warden.json` is written **without** `lastRetro`. `indexBody` skips a leading frontmatter block, so the checks INDEX line reads `- retro.md: Retro of recent work`.
+`init --write` (spec 8.1) also writes `.warden/checks/retro.md` = `RETRO_CHECK(<today>)` (its `last:` is the initial value only) (with `fileIfMissing`, before the INDEX files), so a new project is not due. `.warden/warden.json` is written **without** `lastRetro`. `indexBody` skips a leading frontmatter block, so the checks INDEX line reads `- retro.md: Retro of recent work`.
 
 ### 5.6 Exports for session start
 
@@ -337,10 +328,12 @@ Lines, in order, each only when it applies:
 2. `upgradeNotice` (spec 7.2 line 2, unchanged).
 3. `newerVersionNotice(ctx.root)` (§6).
 4. Checks: first start the auto checks (§5.4), then the offer line, then the failure line.
-5. Report status changes (spec 7.2 line 4, unchanged).
+5. Report status changes (spec 7.2 line 4, changed): it only tells. For each `reports.md` row whose outbox record has another status than the one last told (kept in `.warden/state/_reports.json`, `{<id>: <status>}`, else the row's own), it prints `warden: report <id> "<title>" is now <status>[ in <fixedIn>].` and records the status as told. It never edits `reports.md`; that file is refreshed only by `warden report` (new row) and `warden report --status --write`.
 6. Bun line from the wrapper (unchanged).
 
 `retroLine` is removed from `session-start.ts`.
+
+**Rule: session start, and everything it triggers (auto checks included), never writes a git-tracked file in the consumer project.** It writes only under `.warden/state/` and the plugin data dir.
 
 ---
 
@@ -356,7 +349,7 @@ Lines, in order, each only when it applies:
 ## 9. Skills, upgrade note, release
 
 Skill text changes (no new skills; `skills.test.ts` keeps its 8 folders):
-- **retro:** step 6 becomes `warden checks done retro`. Step 7 commits `.warden/checks/retro.md` (and any other `.warden/checks/*.md` it changed) instead of `.warden/warden.json`. Step 1 reads the last date from `warden checks` (the `retro` row), not from `warden.json`. Opening line: "Run this only when the user asked for a retro or agreed to one you offered (session start lists it under checks due)."
+- **retro:** step 6 becomes `warden checks done retro`. Step 7 no longer commits check files (state is untracked); it runs `warden report --status --write` first and commits the refreshed `.warden/reports.md` with the retro. Step 1 reads the last date from `warden checks` (the `retro` row), not from `warden.json`. Opening line: "Run this only when the user asked for a retro or agreed to one you offered (session start lists it under checks due)."
 - **report:** step 6: `Tell the user: Report <id> sent.` New last line: `To see the status of earlier reports, run warden report --status.` No mention of how the report is handled.
 - **init:** the `warden.json` line drops `lastRetro`, and it lists `.warden/checks/retro.md` ("the built-in retro check, last set to today").
 
@@ -374,10 +367,9 @@ Skill text changes (no new skills; `skills.test.ts` keeps its 8 folders):
 
    Run the warden:retro skill. It looks back at recent runs and this conversation, routes each finding, and saves .warden/retros/<YYYY-MM-DD>.md once the user agrees. It ends with: warden checks done retro
 
-   ## Results
-
 2. Delete the `lastRetro` key from `.warden/warden.json`.
 3. Add the line `- retro.md: Retro of recent work` to `.warden/checks/INDEX.md`.
+4. Check run results moved out of the check files to `.warden/state/_checks/<name>.json` (untracked). A `last:` line or `## Results` section left in a check file is still read until the check runs once; nothing to remove.
 ```
 
 (The file content is the template of §5.2 without the four-space indent; the builder writes it unindented in a fenced block.) A CP that skips the upgrade keeps working through the virtual retro check.
@@ -413,10 +405,10 @@ Keep the page's structure, Tailwind classes, nav and dark mode. Change only thes
 | `doorbell.test.ts` | Temp HOME with a registration whose `argv` is `/bin/sh -c "<append env and a line to a file>; sleep 1"`, `WARDEN_DATA` under `<tmpHOME>/.claude/plugins/data/warden-t`. One ring → one run. Two rings at once → one runner, then one more run from `pending`. No registration → no spawn. `WARDEN_DATA` outside the data dir → no spawn. Bad registration → log line, no spawn. Child env has `WARDEN_ROLE=wa` and no `PROJECT_AGENT` or `WARDEN_DATA`. A stale lock (dead pid, `at` over 10 s old) is replaced. Timeout → `exit 124` in the log. Nothing on stdout or stderr. |
 | `report.test.ts` | Stdout `{"id","status":"sent"}`; `--status` filters by projectId, sorts, includes note, skips a broken record, exit 3 when not set up, exit 2 with extra args. |
 | `wa-register.test.ts` | Temp HOME and a fake `claude` on PATH: the file has the exact `argv` of §3.4 and mode 0600; defaults and flags; `--off`; no `claude` → exit 1; bad `--timeout-sec` → exit 2. |
-| `checks.test.ts` | Frontmatter parsing incl. quotes and each error; due math (never, exactly `every` days, future date); result line append incl. a missing `## Results`; `last` replaced in place; command pass, fail and timeout, log written; lock busy → 4; busy main checkout → 4; `--background` returns at once and the result lands; agent `run` prints instructions; `done` on a command check → 1; virtual retro from `lastRetro` and `done retro` creating the file; `done retro` without the retros note → 1; `retro --done` alias; `listTasks` skips `_checks`. |
+| `checks.test.ts` | Frontmatter parsing incl. quotes and each error; due math (never, exactly `every` days, future date); results written to state and the check file left unchanged; legacy `last:` and `## Results` read as fallback; command pass, fail and timeout, log written; lock busy → 4; busy main checkout → 4; `--background` returns at once and the result lands; agent `run` prints instructions; `done` on a command check → 1; virtual retro from `lastRetro` and `done retro` writing state only; `done retro` without the retros note → 1; `retro --done` alias; `listTasks` skips `_checks`. |
 | `init.test.ts` | `checks/retro.md` = `RETRO_CHECK(today)`, `warden.json` has no `lastRetro`, INDEX line `- retro.md: Retro of recent work`; versions read from `plugin.json`, not hard-coded. |
 | `upgrade.test.ts` | `newerVersionNotice` with a fake `<tmp>/plugins/cache/wm/warden/0.2.0` and a clone at 0.3.0 → the line; equal or older → null; via `installLocation`; path not in the cache layout → null; broken files → null. |
-| `hooks.test.ts` | Session start order of §7; auto check started (not offered); agent check offered; failure line; no auto start while a run is live in the main checkout; newer-version line; no retro line from `retroLine`. Versions read from `plugin.json`. |
+| `hooks.test.ts` | Session start order of §7; auto check started (not offered); agent check offered; failure line; report change told once and `reports.md` untouched; no auto start while a run is live in the main checkout; newer-version line; no retro line from `retroLine`. Versions read from `plugin.json`. |
 | `cli.test.ts` | Allowlist with `checks`; version read from `plugin.json`. |
 
 ---

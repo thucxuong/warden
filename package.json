@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "bun test",
+    "test": "bun test --parallel",
+    "test:unit": "bun test --parallel tests/unit",
     "typecheck": "tsc --noEmit",
     "check": "bun run typecheck && bun test",
     "validate": "claude plugin validate . --strict && claude plugin validate plugins/warden --strict"

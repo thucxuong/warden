@@ -28,9 +28,9 @@ const TEXT: Record<string, string> = {
   "analyze/spike":
     "Answer the question in the task by investigation, not by building it. Write the answer, the options you looked at and your recommendation to one note under `.warden/knowledge/` or `docs/`, and pass its path as `notePath`. No code changes.",
   plan:
-    "Turn the task into a plan that someone else could build without asking you. Follow the warden:plan skill. Write a decision file for each real choice. When the step says brainstorm, first compare 2–3 options with trade-offs and pick one.",
+    "Turn the task into a plan that someone else could build without asking you. Follow the warden:plan skill. Write a decision file for each real choice. When the step says brainstorm, first compare 2–3 options with trade-offs and pick one, and put them in the `brainstorm` object of the output (see the example in `output`).",
   implement:
-    "Make the change the task and plan ask for, with tests. Commit all of it in one or more commits and leave nothing uncommitted. When you are back from a gate, fix exactly what it reports, nothing else. Do not change gate files. Do not run the checks to prove the step; the engine runs them.",
+    "Make the change the task and plan ask for, with tests. Commit all of it in one or more commits and leave nothing uncommitted. When you are back from a gate, fix exactly what it reports, nothing else. Do not change gate files. Do not run the checks to prove the step; the engine runs them. `filesChanged` must be exactly the files that differ from the start of this step; check with `git diff --name-only <step start> HEAD`.",
   ship:
     "Deliver the proven commit without changing it. 1) Commit the run record: `git add .warden/history/<task> && git commit -m 'chore(<task>): run record'`. 2) Open the PR or merge as the project how-to says. 3) If there are leftovers, put the file text in the description under `## Unresolved review findings`. Any other change sends the run back to the gates.",
   fix:
@@ -144,11 +144,11 @@ interface PlanOutput {
   planMarkdown: string;                    // full plan
   waves: { wave: number; tasks: PlanTask[] }[];   // wave >= 1, ascending
   decisions: string[];                     // .warden/decisions/NNNN-*.md written in this step (may be [])
-  brainstorm?: { options: { name: string; tradeoffs: string }[]; chosen: string; why: string }; // required if the step says brainstorm; options >= 2; chosen is one of the option names
+  brainstorm?: { options: { name: string; tradeoffs: string }[]; chosen: string; why: string }; // an object, required if the step says brainstorm (options >= 2; chosen is one of the option names); otherwise leave it out
 }`,
   implement: `interface ImplementOutput {
   summary: string;
-  filesChanged: string[];                  // must equal git diff --name-only <step start> HEAD
+  filesChanged: string[];                  // exactly the files that differ from the step start: git diff --name-only <step start> HEAD
   testsAdded: string[];                    // test files added or changed; subset of filesChanged
   testsReason?: string;                    // required (>= 10 chars) when testsAdded is []
 }`,

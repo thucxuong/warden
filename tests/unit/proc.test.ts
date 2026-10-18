@@ -19,28 +19,42 @@ function alive(pid: number): boolean {
   }
 }
 
-async function waitUntilDead(pid: number): Promise<void> {
-  for (let i = 0; i < 50 && alive(pid); i++) await Bun.sleep(100);
+async function waitUntil(cond: () => boolean, ms = 20_000): Promise<void> {
+  const end = Date.now() + ms;
+  while (!cond() && Date.now() < end) await Bun.sleep(50);
+}
+
+const waitUntilDead = (pid: number) => waitUntil(() => !alive(pid));
+
+// The pid a command wrote to a file, once it is there.
+async function readPid(file: string): Promise<number> {
+  await waitUntil(() => existsSync(file) && /^\d+\n$/.test(readFileSync(file, "utf8")));
+  return Number(readFileSync(file, "utf8").trim());
 }
 
 describe("stopGroupsOnTerm", () => {
   test("SIGTERM to a worker also stops the commands it started in their own process groups", async () => {
-    const marker = join(dir, "marker");
+    const pidFile = join(dir, "worker-cmd.pid");
     const script = join(dir, "worker.ts");
     const proc = join(import.meta.dir, "../../plugins/warden/src/lib/proc.ts");
     await Bun.write(script, [
       `import { run, stopGroupsOnTerm } from ${JSON.stringify(proc)};`,
       "stopGroupsOnTerm();",
-      `await run(${JSON.stringify(`sleep 2; touch ${marker}`)}, { cwd: ${JSON.stringify(dir)}, log: ${JSON.stringify(join(dir, "worker.log"))} });`,
+      // exec: the pid written is the whole group, so a signal cannot let a shell run its next step
+      `await run(${JSON.stringify(`echo $$ > ${pidFile}; exec sleep 300`)}, { cwd: ${JSON.stringify(dir)}, log: ${JSON.stringify(join(dir, "worker.log"))} });`,
     ].join("\n"));
     const worker = Bun.spawn([process.execPath, script], { stdio: ["ignore", "ignore", "ignore"], detached: true });
-    for (let i = 0; i < 50 && !existsSync(join(dir, "worker.log")); i++) await Bun.sleep(50);
-    await Bun.sleep(300);
-    process.kill(-worker.pid, "SIGTERM"); // what reset does
-    await worker.exited;
-    await Bun.sleep(2500);
-    expect(existsSync(marker)).toBe(false);
-  });
+    let pid = 0;
+    try {
+      pid = await readPid(pidFile); // the command is running and the worker has tracked it
+      process.kill(-worker.pid, "SIGTERM"); // what reset does
+      await worker.exited;
+      await waitUntilDead(pid);
+      expect(alive(pid)).toBe(false);
+    } finally {
+      if (alive(pid)) process.kill(-pid, "SIGKILL");
+    }
+  }, 60_000);
 });
 
 describe("run", () => {
@@ -96,17 +110,18 @@ describe("run", () => {
   test("a command that ignores SIGTERM is killed after the grace period", async () => {
     const log = join(dir, "stubborn.log");
     const pidFile = join(dir, "stubborn.pid");
-    const result = await run(`echo $$ > "${pidFile}"; trap '' TERM; while true; do sleep 0.1; done`, {
+    // The timeout must fire after the shell has set its trap and written the pid, so it is not tight.
+    const result = await run(`trap '' TERM; echo $$ > "${pidFile}"; while true; do sleep 0.1; done`, {
       cwd: dir,
       log,
-      timeoutSec: 1,
+      timeoutSec: 3,
       killGraceMs: 300,
     });
     expect(result.exit).toBe(124);
-    const pid = Number(readFileSync(pidFile, "utf8").trim());
+    const pid = await readPid(pidFile);
     await waitUntilDead(pid);
     expect(alive(pid)).toBe(false);
-  });
+  }, 60_000);
 
   test("a fast command is not affected by the timeout", async () => {
     const result = await run("true", { cwd: dir, log: join(dir, "fast.log"), timeoutSec: 30 });

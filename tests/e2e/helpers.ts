@@ -3,6 +3,7 @@
 // Plugin code is never imported (types only), so the test sees what a real session sees.
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { expect } from "bun:test";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import type { EventLine, RunJson } from "../../plugins/warden/src/types.ts";
@@ -14,12 +15,13 @@ export const FAKE_CLAUDE = join(REPO_ROOT, "tests", "fixtures", "bin", "claude")
 
 // The check script from spec section 11 (two failure lines, unchanged), plus three switches that are off
 // unless the test creates the named file in the main checkout:
-//   SLOW  - the check sleeps (a test commits while the gate runs)
+//   SLOW  - the check creates CHECK_RUNNING, then waits until the test creates RELEASE (a test commits while
+//           the gate runs; no fixed sleep, the test decides when the check may finish; capped at 30 s)
 //   COVER - the check passes but leaves an untracked coverage/ file behind
 export const CHECK_SH = [
   'if [ -f FAIL ]; then echo "error: FAIL file present"; exit 1; fi',
   'if [ -f "$WARDEN_MAIN_ROOT/OPS" ]; then echo "error: environment not ready (OPS)"; exit 1; fi',
-  'if [ -f "$WARDEN_MAIN_ROOT/SLOW" ]; then sleep 4; fi',
+  'if [ -f "$WARDEN_MAIN_ROOT/SLOW" ]; then : > "$WARDEN_MAIN_ROOT/CHECK_RUNNING"; i=0; while [ ! -f "$WARDEN_MAIN_ROOT/RELEASE" ] && [ "$i" -lt 600 ]; do sleep 0.05; i=$((i+1)); done; fi',
   'if [ -f "$WARDEN_MAIN_ROOT/COVER" ]; then mkdir -p coverage; echo x > coverage/lcov.info; fi',
   "exit 0",
   "",
@@ -91,6 +93,7 @@ function baseEnv(home: string, data: string, fake: string): Env {
     HOME: home,
     WARDEN_DATA: data,
     WARDEN_TEST_MODE: "1",
+    WARDEN_POLL_MS: "50", // `warden wait` polls fast (honoured only in test mode)
     WARDEN_CLAUDE_BIN: FAKE_CLAUDE,
     FAKE_CLAUDE_DIR: fake,
     GIT_CONFIG_NOSYSTEM: "1",
@@ -279,7 +282,16 @@ export async function settle(cp: Cp, task: string, ms = 30_000): Promise<RunJson
     const run = readRun(cp, task);
     if (run.gate === null) return run;
     if (Date.now() > deadline) throw new Error(`timed out waiting for the gate of ${task} (job ${run.gate.job})`);
-    await Bun.sleep(100);
+    await Bun.sleep(25);
+  }
+}
+
+// Polls until a file exists (a signal the test script or a fake command writes).
+export async function untilFile(file: string, ms = 20_000): Promise<void> {
+  const deadline = Date.now() + ms;
+  while (!existsSync(file)) {
+    if (Date.now() > deadline) throw new Error(`timed out waiting for file ${file}`);
+    await Bun.sleep(10);
   }
 }
 
@@ -290,7 +302,7 @@ export async function untilEvent(cp: Cp, task: string, type: string, ms = 20_000
     const found = readEvents(cp, task).find((e) => e.type === type);
     if (found) return found;
     if (Date.now() > deadline) throw new Error(`timed out waiting for event ${type} on ${task}`);
-    await Bun.sleep(50);
+    await Bun.sleep(25);
   }
 }
 
@@ -345,6 +357,30 @@ export function writeFlow(cp: Cp, name: string, steps: unknown[]): string {
   writeFileSync(file, JSON.stringify({ schema: 1, name, description: `${name} flow`, steps }));
   return file;
 }
+
+// ---------------------------------------------------------------------------
+// Shared scenario setup
+// ---------------------------------------------------------------------------
+
+export const VERSION: string = JSON.parse(readFileSync(join(PLUGIN_ROOT, ".claude-plugin", "plugin.json"), "utf8")).version;
+export const TODAY = new Date().toISOString().slice(0, 10);
+
+// Runs start, then the plan, then the implement step of a feature run, and returns once the engine has
+// finished check and review and the ship step is waiting for the agent.
+export async function featureToShip(cp: Cp, task: string, file = "src/hello.ts"): Promise<void> {
+  expect(start(cp, task, { template: "feature" }).code).toBe(0);
+  expect(done(cp, task, PLAN_OUTPUT).json.accepted).toBe(true);
+  const impl = implement(cp, task, { [file]: "export const hello = 'hi';\n", "src/hello.test.ts": "// test\n" }, ["src/hello.test.ts"]);
+  expect(impl.code).toBe(0);
+  await settle(cp, task);
+}
+
+// A flow with a human approve step after check.
+export const approveFlow = (cp: Cp): string => writeFlow(cp, "needs-ok", [
+  { id: "implement", type: "implement" },
+  { id: "check", type: "check", check: "default" },
+  { id: "approve", type: "approve", prompt: "Looks right?" },
+]);
 
 // ---------------------------------------------------------------------------
 // Cleanup

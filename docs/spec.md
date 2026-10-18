@@ -501,8 +501,8 @@ Step catalog (`src/engine/catalog.ts`):
 - **analyze / reproduce:** "Reproduce the bug. Write the smallest test that fails because of the bug, and run only that test to see it fail. Do not fix the bug. Leave the test uncommitted; the implement step commits it with the fix. Record steps, expected, actual and the test path. Use `failingTest: null` only when no test is possible, and say why in `findings`."
 - **analyze / diagnose:** "Find the root cause. Write the chain from symptom to cause, at least two links, each tied to evidence (`file:line`, a log line or command output). Keep asking why until you reach a defect or a decision. Do not fix anything yet."
 - **analyze / spike:** "Answer the question in the task by investigation, not by building it. Write the answer, the options you looked at and your recommendation to one note under `.warden/knowledge/` or `docs/`, and pass its path as `notePath`. No code changes."
-- **plan:** "Turn the task into a plan that someone else could build without asking you. Follow the warden:plan skill. Write a decision file for each real choice. When the step says brainstorm, first compare 2–3 options with trade-offs and pick one."
-- **implement:** "Make the change the task and plan ask for, with tests. Commit all of it in one or more commits and leave nothing uncommitted. When you are back from a gate, fix exactly what it reports, nothing else. Do not change gate files. Do not run the checks to prove the step; the engine runs them."
+- **plan:** "Turn the task into a plan that someone else could build without asking you. Follow the warden:plan skill. Write a decision file for each real choice. When the step says brainstorm, first compare 2–3 options with trade-offs and pick one, and put them in the `brainstorm` object of the output (see the example in `output`)."
+- **implement:** "Make the change the task and plan ask for, with tests. Commit all of it in one or more commits and leave nothing uncommitted. When you are back from a gate, fix exactly what it reports, nothing else. Do not change gate files. Do not run the checks to prove the step; the engine runs them. `filesChanged` must be exactly the files that differ from the start of this step; check with `git diff --name-only <step start> HEAD`."
 - **ship:** "Deliver the proven commit without changing it. 1) Commit the run record: `git add .warden/history/<task> && git commit -m 'chore(<task>): run record'`. 2) Open the PR or merge as the project how-to says. 3) If there are leftovers, put the file text in the description under `## Unresolved review findings`. Any other change sends the run back to the gates."
 - **fix:** "A check failed and triage says it is not (only) the change. Delegate this step to the warden:fixer subagent (Agent tool, subagent_type 'warden:fixer') with the context below, then pass its JSON to `warden done`. Do not fix it yourself and do not touch the ticket worktree."
 
@@ -713,6 +713,8 @@ export interface NextResponse {
 export interface DoneResponse { accepted: boolean; errors: string[]; next: NextResponse }
 export interface StatusLine { task: string; flow: string; status: RunStatus; step: string; stepIndex: number; total: number; worktree: string; updatedAt: string }
 ```
+
+`message` is one line, plus up to two lines that say what the engine itself ran, so the agent never claims more: `warden ran: <command> (pass|fail, exit <n>, <s> s), ... on <sha7>` (from the latest check run's `gate.command` events) and `warden review: round <n>, <b> blocking, <m> minor` (from the latest `review.round` event). They are added to every response after a gate result (route back, fix, blocked, waiting, ship, shipped, done), not while a gate runs or at a plain analyze, plan or implement step.
 
 `instructions` (agent steps only; empty otherwise), sections in this order, each left out when empty:
 1. `## Task`: the full text of `state/<task>/task.md`.
@@ -1000,6 +1002,8 @@ The worker:
 5. Applies the transitions in 5.2 (the proof sha is `startSha`). If the next step is engine work, the same worker continues with it. Otherwise it sets `gate = null` in the same write as the transition (so a worker killed right after never leaves a stale `gate`) and exits. A worker never runs an agent step.
 
 `wait` polls `run.json` until `gate == null` or `--max-seconds` passes. On timeout it returns `status:"running_gate"` with the message `gate still running; run: warden wait`. A busy task lock during its `ensureGate` (the worker can hold it longer than 5 s during a fetch or history) is not an error: `wait` polls again.
+
+Test-only: `WARDEN_POLL_MS` (a positive integer, in ms) replaces the 2 s poll of `wait`; it is honoured only when `WARDEN_TEST_MODE=1`.
 
 `done` calls `ensureGate` after the output is accepted and written. If that call fails (lock busy, spawn error), `done` still answers `accepted: true`; the next `wait` or `next` starts the worker.
 

@@ -421,7 +421,7 @@ async function claimJob(ctx: Ctx, main: string, task: string): Promise<GateJob |
     if (run.gate.job !== job || run.gate.stepId !== run.current.id) {
       run.gate = { ...run.gate, job, stepId: run.current.id, startedAt: now(), reruns: 0 };
     }
-    appendEvent(main, task, "gate.started", { step: run.current.id, data: { job } });
+    appendEvent(main, task, "gate.started", { step: run.current.id, data: { job, sha: head(run.worktree) } });
     writeRun(main, run);
     return job;
   });
@@ -988,7 +988,42 @@ function retryHint(task: string): string {
   return `To continue after fixing the cause, the user types "retry" in this chat, or runs: warden retry ${task}`;
 }
 
+// What the engine itself ran, from the events: the latest run of each check step and the latest review round.
+// The agent must not claim more than this.
+function gateLines(s: S): string[] {
+  const groups = new Map<string, { sha: string; cmds: string[] }>();
+  let review = "";
+  for (const e of readEvents(s.main, s.run.task)) {
+    const d = e.data ?? {};
+    if (e.type === "gate.started" && d.job === "check" && e.step) {
+      groups.set(e.step, { sha: String(d.sha ?? "").slice(0, 7), cmds: [] });
+    } else if (e.type === "gate.command" && e.step && groups.has(e.step)) {
+      const secs = `${(Number(d.durationMs) / 1000).toFixed(1)} s`;
+      groups.get(e.step)!.cmds.push(`${d.name} (${d.exit === 0 ? "pass" : `fail, exit ${d.exit}`}, ${secs})`);
+    } else if (e.type === "review.round") {
+      review = d.status === "ok" || d.status === undefined
+        ? `warden review: round ${d.round}, ${d.blocking} blocking, ${d.minor} minor`
+        : `warden review: round ${d.round}, reviewer ${d.status}`;
+    }
+  }
+  const ran = [...groups.values()].filter((g) => g.cmds.length > 0);
+  const lines: string[] = [];
+  if (ran.length > 0) lines.push(`warden ran: ${ran.flatMap((g) => g.cmds).join(", ")} on ${ran[ran.length - 1]!.sha}`);
+  if (review) lines.push(review);
+  return lines;
+}
+
+// A gate result is reported with the next/wait response that follows it and at the end of the run, not while an
+// agent is still working on its own step.
 function message(s: S, status: NextResponse["status"], position: string): string {
+  const text = baseMessage(s, status, position);
+  const { run } = s;
+  if (status === "running_gate") return text;
+  if (status === "agent" && !run.routeBack && ["analyze", "plan", "implement"].includes(run.current.type)) return text;
+  return [text, ...gateLines(s)].join("\n");
+}
+
+function baseMessage(s: S, status: NextResponse["status"], position: string): string {
   const { run } = s;
   switch (status) {
     case "agent": {

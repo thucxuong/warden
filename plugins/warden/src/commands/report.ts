@@ -5,7 +5,7 @@ import { loadWardenJson } from "../config/config.ts";
 import { ring } from "../lib/doorbell.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
 import { readJson, writeJsonAtomic } from "../lib/json.ts";
-import { mainRoot, worktreeRoot } from "../state/paths.ts";
+import { mainRoot, stateRoot, worktreeRoot } from "../state/paths.ts";
 import type { Ctx, ReportRecord } from "../types.ts";
 
 export const REPORTS_HEADER = "| ID | Title | Status | Fixed in |\n|---|---|---|---|\n";
@@ -89,9 +89,11 @@ function setStatus(args: string[]): void {
   console.log(JSON.stringify({ id: record.id, status: record.status }));
 }
 
-// warden report --status: this project's reports with the maintainers' verdicts. Read-only (spec-0.2 4).
+// warden report --status [--write]: this project's reports with the maintainers' verdicts. Read-only, except that
+// --write also brings the rows of .warden/reports.md up to date (spec-0.2 4).
 function printStatus(args: string[], ctx: Ctx): void {
-  if (args.length !== 1) throw new WardenError("usage: warden report --status", EXIT.USAGE);
+  const write = args.includes("--write");
+  if (args.length !== (write ? 2 : 1)) throw new WardenError("usage: warden report --status [--write]", EXIT.USAGE);
   const { projectId } = loadWardenJson(join(mainRoot(ctx.cwd), ".warden", "warden.json"));
   const dir = reportsDir(ctx);
   const names = existsSync(dir) ? readdirSync(dir).filter((f) => /^R-\d{4,}\.json$/.test(f)).sort() : [];
@@ -105,7 +107,7 @@ function printStatus(args: string[], ctx: Ctx): void {
       // a broken record is skipped
     }
   }
-  console.log(JSON.stringify({ reports }));
+  console.log(JSON.stringify(write ? { reports, rowsUpdated: writeReportsTable(ctx) } : { reports }));
 }
 
 export async function run(args: string[], ctx: Ctx): Promise<void> {
@@ -133,7 +135,7 @@ export async function run(args: string[], ctx: Ctx): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Session start: pick up status changes the maintainers wrote into the outbox (spec 7.2 step 4)
+// Status changes: session start tells, only explicit commands rewrite reports.md
 // ---------------------------------------------------------------------------
 
 export interface ReportChange {
@@ -143,28 +145,12 @@ export interface ReportChange {
   fixedIn: string | null;
 }
 
-// Updates every reports.md row whose outbox record has another status and returns what changed.
-// Never throws: a broken table or outbox must not break a session start.
-export function reportStatusChanges(ctx: Ctx): ReportChange[] {
-  try {
-    const path = reportsTablePath(worktreeRoot(ctx.cwd));
-    if (!existsSync(path)) return [];
-
-    const changes: ReportChange[] = [];
-    const lines = readFileSync(path, "utf8").split("\n").map((line) => {
-      const change = changeForRow(ctx, line);
-      if (!change) return line;
-      changes.push(change);
-      return `| ${change.id} | ${change.title} | ${change.status} | ${change.fixedIn ?? NO_VERSION} |`;
-    });
-    if (changes.length > 0) writeFileSync(path, lines.join("\n"));
-    return changes;
-  } catch {
-    return [];
-  }
+function seenPath(ctx: Ctx): string {
+  return join(stateRoot(mainRoot(ctx.cwd)), "_reports.json");
 }
 
-function changeForRow(ctx: Ctx, line: string): ReportChange | null {
+// Row to record status, or null when they agree. `seen` (the status last told) wins over the row's own status.
+function changeForRow(ctx: Ctx, line: string, seen: Record<string, string> = {}): ReportChange | null {
   const cells = line.split("|").map((c) => c.trim());
   // A row splits into ["", id, title, status, fixedIn, ""].
   const [, id, title, status] = cells;
@@ -173,5 +159,43 @@ function changeForRow(ctx: Ctx, line: string): ReportChange | null {
   const recordPath = join(reportsDir(ctx), `${id}.json`);
   if (!existsSync(recordPath)) return null;
   const record = readJson<ReportRecord>(recordPath);
-  return record.status === status ? null : { id, title, status: record.status, fixedIn: record.fixedIn };
+  return record.status === (seen[id] ?? status) ? null : { id, title, status: record.status, fixedIn: record.fixedIn };
+}
+
+// What changed since the agent was last told. Read-only for the project: it never touches reports.md, it only notes
+// the statuses it returned in .warden/state/. Never throws: a broken table or outbox must not break a session start.
+export function reportStatusChanges(ctx: Ctx): ReportChange[] {
+  try {
+    const path = reportsTablePath(worktreeRoot(ctx.cwd));
+    if (!existsSync(path)) return [];
+    const file = seenPath(ctx);
+    const seen = existsSync(file) ? readJson<Record<string, string>>(file) : {};
+    const changes = readFileSync(path, "utf8").split("\n").flatMap((line) => {
+      const change = changeForRow(ctx, line, seen);
+      return change ? [change] : [];
+    });
+    if (changes.length > 0) {
+      for (const c of changes) seen[c.id] = c.status;
+      mkdirSync(dirname(file), { recursive: true });
+      writeJsonAtomic(file, seen);
+    }
+    return changes;
+  } catch {
+    return [];
+  }
+}
+
+// Rewrites every reports.md row whose outbox record has another status. Returns how many rows changed.
+function writeReportsTable(ctx: Ctx): number {
+  const path = reportsTablePath(worktreeRoot(ctx.cwd));
+  if (!existsSync(path)) return 0;
+  let count = 0;
+  const lines = readFileSync(path, "utf8").split("\n").map((line) => {
+    const change = changeForRow(ctx, line);
+    if (!change) return line;
+    count += 1;
+    return `| ${change.id} | ${change.title} | ${change.status} | ${change.fixedIn ?? NO_VERSION} |`;
+  });
+  if (count > 0) writeFileSync(path, lines.join("\n"));
+  return count;
 }

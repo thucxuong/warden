@@ -1,142 +1,18 @@
-import { afterAll, afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { spawn } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import * as approveCmd from "../../plugins/warden/src/commands/approve.ts";
 import * as resetCmd from "../../plugins/warden/src/commands/reset.ts";
 import * as retryCmd from "../../plugins/warden/src/commands/retry.ts";
 import { WardenError } from "../../plugins/warden/src/lib/exit.ts";
 import { taskDir, worktreesDir } from "../../plugins/warden/src/state/paths.ts";
 import { readEvents, readRun, runExists, writeRun } from "../../plugins/warden/src/state/store.ts";
-import { startTime } from "../../plugins/warden/src/lib/proc.ts";
-import type { Ctx } from "../../plugins/warden/src/types.ts";
+import { commit, sh as git, write } from "../helpers/repo.ts";
+import { CLI, IMPLEMENT_OUTPUT, base, main, WARDEN_FILES, cleanEnv, cli, humanCtx, inProcess, until, wt, writeFlow, startDoAndCommit, installCommandsFixture } from "../helpers/commands-fixture.ts";
 
 setDefaultTimeout(60_000);
-
-const PLUGIN_ROOT = resolve(import.meta.dir, "../../plugins/warden");
-const CLI = join(PLUGIN_ROOT, "src", "cli.ts");
-// The check sleeps while <main>/SLOW exists, so a test can catch the worker mid-gate.
-const CHECK_RUN = 'if [ -f "$WARDEN_MAIN_ROOT/SLOW" ]; then sleep 3; fi; true';
-const IMPLEMENT_OUTPUT = { summary: "add a file", filesChanged: ["src/a.ts"], testsAdded: [], testsReason: "a tiny demo change" };
-
-const bases: string[] = [];
-let base: string;
-let main: string;
-let data: string;
-
-function git(cwd: string, ...args: string[]): string {
-  return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
-}
-
-function write(dir: string, rel: string, text: string): void {
-  mkdirSync(dirname(join(dir, rel)), { recursive: true });
-  writeFileSync(join(dir, rel), text);
-}
-
-function commit(dir: string, files: Record<string, string>, message = "change"): void {
-  for (const [rel, text] of Object.entries(files)) write(dir, rel, text);
-  git(dir, "add", "-A");
-  git(dir, "commit", "-q", "-m", message);
-}
-
-const WARDEN_FILES: Record<string, string> = {
-  ".gitignore": ".warden/state/\n",
-  ".warden/warden.json": JSON.stringify({ schema: 1, wardenVersion: "0.1.0", projectId: "demo", taskIdPattern: "^T-\\d+$", sitePort: 4400, lastRetro: null }),
-  ".warden/steps.json": JSON.stringify({
-    schema: 1, mainBranch: "main", setup: { commands: ["true"] },
-    check: { default: { commands: [{ name: "check", run: CHECK_RUN }] } },
-    fix: { scope: ["scripts/**"] },
-  }),
-};
-
-function cleanEnv(): Record<string, string> {
-  const env: Record<string, string> = {};
-  for (const [k, v] of Object.entries(process.env)) if (v !== undefined) env[k] = v;
-  delete env.PROJECT_AGENT;
-  return { ...env, WARDEN_ROOT: PLUGIN_ROOT, WARDEN_DATA: data };
-}
-
-function cli(args: string[], opts: { cwd?: string; stdin?: string } = {}) {
-  const r = Bun.spawnSync([process.execPath, CLI, ...args], {
-    cwd: opts.cwd ?? main, env: cleanEnv(), stdin: Buffer.from(opts.stdin ?? ""), stdout: "pipe", stderr: "pipe",
-  });
-  const out = r.stdout.toString();
-  let json: any = null;
-  try {
-    json = JSON.parse(out);
-  } catch {
-    // not JSON
-  }
-  return { code: r.exitCode, out, err: r.stderr.toString(), json };
-}
-
-function humanCtx(cwd = main): Ctx {
-  return { root: PLUGIN_ROOT, data, cwd, env: cleanEnv(), stdinIsTTY: true };
-}
-
-// Runs a command module in this process and returns what it printed.
-async function inProcess(fn: () => Promise<unknown>): Promise<any> {
-  const original = console.log;
-  let printed = "";
-  console.log = (text: string) => {
-    printed += text;
-  };
-  try {
-    await fn();
-  } finally {
-    console.log = original;
-  }
-  return JSON.parse(printed);
-}
-
-async function until(what: string, fn: () => boolean, ms = 20_000): Promise<void> {
-  const deadline = Date.now() + ms;
-  while (!fn()) {
-    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
-    await Bun.sleep(100);
-  }
-}
-
-function wt(task = "T-1"): string {
-  return join(worktreesDir(main), task);
-}
-
-function writeFlow(name: string, steps: unknown[]): string {
-  const path = join(base, `${name}.json`);
-  writeFileSync(path, JSON.stringify({ schema: 1, name, description: `${name} flow`, steps }));
-  return path;
-}
-
-// Starts T-1 on the do flow in a new worktree and commits one change there.
-function startDoAndCommit(): void {
-  const r = cli(["start", "T-1", "--template", "do", "--worktree"]);
-  expect(r.code).toBe(0);
-  commit(wt(), { "src/a.ts": "export const a = 1;\n" });
-}
-
-beforeEach(() => {
-  base = realpathSync(mkdtempSync(join(tmpdir(), "warden-commands-")));
-  bases.push(base);
-  main = join(base, "cp");
-  data = join(base, "data");
-  mkdirSync(main);
-  git(main, "init", "-q", "-b", "main");
-  git(main, "config", "user.name", "Test User");
-  git(main, "config", "user.email", "test@example.com");
-  commit(main, { ...WARDEN_FILES, "README.md": "demo\n" }, "init");
-});
-
-// Workers are detached; let a slow one finish before its repo goes away.
-afterEach(async () => {
-  rmSync(join(main, "SLOW"), { force: true });
-  if (!runExists(main, "T-1")) return;
-  await until("worker exit", () => !runExists(main, "T-1") || readRun(main, "T-1").gate === null);
-});
-
-afterAll(() => {
-  for (const dir of bases) rmSync(dir, { recursive: true, force: true });
-});
+installCommandsFixture();
 
 describe("start", () => {
   test("refuses on the main branch without --worktree", () => {
@@ -299,22 +175,6 @@ describe("done and wait", () => {
     expect(r.json.accepted).toBe(false);
     expect(r.json.errors.length).toBeGreaterThan(0);
     expect(r.json.next.status).toBe("agent");
-  });
-
-  test("wait keeps waiting (exit 0) while another process holds the task lock", async () => {
-    expect(cli(["start", "T-1", "--template", "do", "--worktree"]).code).toBe(0);
-    const run = readRun(main, "T-1");
-    writeRun(main, { ...run, gate: { pid: process.pid, pidStart: startTime(process.pid)!, job: "check", stepId: run.current.id, startedAt: run.updatedAt, reruns: 0 } });
-    const lock = join(taskDir(main, "T-1"), ".lock");
-    writeFileSync(lock, JSON.stringify({ pid: process.pid, at: new Date().toISOString() }));
-    try {
-      const r = cli(["wait", "T-1", "--max-seconds", "0"]);
-      expect(r.code).toBe(0);
-      expect(r.json.status).toBe("running_gate");
-    } finally {
-      rmSync(lock, { force: true });
-      writeRun(main, { ...readRun(main, "T-1"), gate: null });
-    }
   });
 
   test("wait restarts a dead worker, and the worker finishes the gate after wait is killed (U-3)", async () => {

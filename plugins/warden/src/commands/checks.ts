@@ -1,4 +1,5 @@
 // warden checks | checks run <name> [--background] | checks done <name> [--date] [--note]: periodic checks (spec-0.2 5).
+// The .md file is the committed definition. Run results live in untracked state (.warden/state/_checks/<name>.json), so a run never dirties the project.
 import { spawn } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
 import { join } from "node:path";
@@ -30,8 +31,10 @@ const DEFAULT_TIMEOUT_SEC = 300;
 const EMPTY_LOCK_GRACE_MS = 5000;
 const LIVE = ["active", "waiting", "blocked"];
 const RESULTS_HEADING = /^## Results[ \t]*$/m;
+const MAX_RESULTS = 50;
 const RESULT_LINE = /^- \d{4}-\d{2}-\d{2} (pass|fail|done)\b/;
 
+// `last` is only the initial value: once the retro has run, state wins.
 export function RETRO_CHECK(last: string): string {
   return `---
 every: 2d
@@ -41,8 +44,6 @@ last: ${last}
 # Retro of recent work
 
 Run the warden:retro skill. It looks back at recent runs and this conversation, routes each finding, and saves .warden/retros/<YYYY-MM-DD>.md once the user agrees. It ends with: warden checks done retro
-
-## Results
 `;
 }
 
@@ -119,7 +120,7 @@ function parseCheck(text: string, name: string): Parsed {
     else raw[kv.key] = kv.value;
   }
 
-  for (const key of ["every", "kind", "last"]) if (!(key in raw)) fail(key, "missing");
+  for (const key of ["every", "kind"]) if (!(key in raw)) fail(key, "missing");
   const kind = raw.kind;
   if (kind !== undefined && kind !== "command" && kind !== "agent") fail("kind", "must be command or agent");
   const every = /^\d+d$/.test(raw.every ?? "") ? Number.parseInt(raw.every!, 10) : NaN;
@@ -140,7 +141,7 @@ function parseCheck(text: string, name: string): Parsed {
 
   if (error !== null) return { check: null, error, raw };
   return {
-    check: { every, kind: kind as Check["kind"], run: raw.run ?? "", auto: raw.auto === "true", timeoutSec, last: raw.last === "never" ? null : raw.last! },
+    check: { every, kind: kind as Check["kind"], run: raw.run ?? "", auto: raw.auto === "true", timeoutSec, last: raw.last === undefined || raw.last === "never" ? null : raw.last },
     error: null,
     raw,
   };
@@ -165,25 +166,47 @@ function lastResultOf(text: string): CheckRow["lastResult"] {
   return null;
 }
 
-// Sets last: in the frontmatter and appends one result line at the end, adding "## Results" first when missing.
-function withResult(text: string, date: string, resultLine: string): string {
-  const lines = text.split("\n");
-  const end = frontmatterEnd(lines);
-  for (let i = 1; i < end; i++) {
-    if (splitKeyValue(lines[i]!)?.key === "last") lines[i] = `last: ${date}${lines[i]!.endsWith("\r") ? "\r" : ""}`;
-  }
-  const eol = text.includes("\r\n") ? "\r\n" : "\n"; // keep a CRLF file CRLF
-  let out = lines.join("\n");
-  if (!out.endsWith("\n")) out += eol;
-  if (!RESULTS_HEADING.test(out)) out += `${eol}## Results${eol}`;
-  return `${out}${resultLine}${eol}`;
-}
-
 function writeText(path: string, text: string): void {
   mkdirSync(join(path, ".."), { recursive: true });
   const tmp = `${path}.tmp-${process.pid}`;
   writeFileSync(tmp, text);
   renameSync(tmp, path);
+}
+
+// ---------------------------------------------------------------------------
+// Run results: untracked state, never the check file
+// ---------------------------------------------------------------------------
+
+interface ResultEntry {
+  date: string;
+  result: "pass" | "fail" | "done";
+  detail?: string;
+}
+
+interface CheckState {
+  last: string | null;
+  results: ResultEntry[];
+}
+
+function statePath(main: string, name: string): string {
+  return join(stateRoot(main), "_checks", `${name}.json`);
+}
+
+// null when there is no usable state; the frontmatter last: and the legacy ## Results lines then apply.
+function readState(main: string, name: string): CheckState | null {
+  try {
+    const s = JSON.parse(readFileSync(statePath(main, name), "utf8")) as Partial<CheckState>;
+    const last = typeof s.last === "string" && validDate(s.last) ? s.last : null;
+    const results = Array.isArray(s.results) ? s.results.filter((r) => r && ["pass", "fail", "done"].includes(r.result) && validDate(String(r.date))) : [];
+    return { last, results };
+  } catch {
+    return null;
+  }
+}
+
+function recordResult(main: string, name: string, entry: ResultEntry): void {
+  const results = [...(readState(main, name)?.results ?? []), entry].slice(-MAX_RESULTS);
+  writeText(statePath(main, name), JSON.stringify({ last: entry.date, results }, null, 2) + "\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -209,7 +232,6 @@ function legacyLastRetro(main: string): string | null {
 interface Loaded {
   name: string;
   text: string;
-  virtual: boolean;
 }
 
 // The file, or for a missing retro.md the virtual retro built from warden.json lastRetro (5.2).
@@ -218,12 +240,12 @@ function loadCheck(main: string, name: string): Loaded | null {
   const path = checkPath(main, name);
   if (existsSync(path)) {
     try {
-      return { name, text: readFileSync(path, "utf8"), virtual: false };
+      return { name, text: readFileSync(path, "utf8") };
     } catch {
-      return { name, text: "", virtual: false };
+      return { name, text: "" };
     }
   }
-  return name === "retro" ? { name, text: RETRO_CHECK(legacyLastRetro(main) ?? "never"), virtual: true } : null;
+  return name === "retro" ? { name, text: RETRO_CHECK(legacyLastRetro(main) ?? "never") } : null;
 }
 
 function isDue(last: string | null, every: number, today: string): boolean {
@@ -233,12 +255,13 @@ function isDue(last: string | null, every: number, today: string): boolean {
 function rowOf(main: string, loaded: Loaded, today: string): CheckRow {
   const { check, error, raw } = parseCheck(loaded.text, loaded.name);
   const running = lockHeld(main, loaded.name);
+  const state = readState(main, loaded.name);
   if (!check) {
     return {
       name: loaded.name,
       kind: raw.kind === "agent" ? "agent" : "command",
       every: raw.every ?? "",
-      last: raw.last !== undefined && validDate(raw.last) ? raw.last : null,
+      last: state?.last ?? (raw.last !== undefined && validDate(raw.last) ? raw.last : null),
       due: false,
       auto: false,
       running,
@@ -246,15 +269,16 @@ function rowOf(main: string, loaded: Loaded, today: string): CheckRow {
       error: error ?? "invalid",
     };
   }
+  const last = state?.last ?? check.last;
   return {
     name: loaded.name,
     kind: check.kind,
     every: `${check.every}d`,
-    last: check.last,
-    due: isDue(check.last, check.every, today),
+    last,
+    due: isDue(last, check.every, today),
     auto: check.auto,
     running,
-    lastResult: lastResultOf(loaded.text),
+    lastResult: state ? (state.results.at(-1)?.result ?? null) : lastResultOf(loaded.text),
   };
 }
 
@@ -470,10 +494,7 @@ async function runCheck(args: string[], ctx: Ctx): Promise<void> {
     const passed = result.exit === 0;
     const date = localDate();
     const seconds = Math.round(result.durationMs / 1000);
-    const resultLine = `- ${date} ${passed ? "pass" : "fail"} (exit ${result.exit}, ${seconds}s)`;
-    // Read the file again: it may have been edited while the command ran.
-    const fresh = existsSync(checkPath(main, name)) ? readFileSync(checkPath(main, name), "utf8") : loaded.text;
-    writeText(checkPath(main, name), withResult(fresh, date, resultLine));
+    recordResult(main, name, { date, result: passed ? "pass" : "fail", detail: `exit ${result.exit}, ${seconds}s` });
     print({ name, kind: "command", passed, exit: result.exit, durationMs: result.durationMs, log, last: date });
   } finally {
     releaseLock(main, name);
@@ -492,7 +513,7 @@ function done(args: string[], ctx: Ctx): void {
   }
 
   const main = setupMain(ctx);
-  const { loaded, check } = loadValid(main, name);
+  const { check } = loadValid(main, name);
   if (check.kind === "command") {
     throw new WardenError(`command checks are run by the engine: warden checks run ${name}`, EXIT.REJECTED);
   }
@@ -502,8 +523,7 @@ function done(args: string[], ctx: Ctx): void {
 
   if (!takeLock(main, name)) throw new WardenError(`check ${name} is busy`, EXIT.BUSY);
   try {
-    const text = loaded.virtual ? RETRO_CHECK(date) : readFileSync(checkPath(main, name), "utf8");
-    writeText(checkPath(main, name), withResult(text, date, `- ${date} done${note ? `: ${note}` : ""}`));
+    recordResult(main, name, { date, result: "done", ...(note ? { detail: note } : {}) });
   } finally {
     releaseLock(main, name);
   }

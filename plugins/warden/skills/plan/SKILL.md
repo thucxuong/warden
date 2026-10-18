@@ -111,9 +111,9 @@ Run `warden done` with the `PlanOutput` JSON. The schema is in the `output` fiel
 - `waves` mirrors the chain. Waves count up from 1. Each task has `id` (`T1`, `T2`, ...), `title`, `approach`, `leverage`, `unlocks` and `blockedBy`. `blockedBy` may only list tasks from earlier waves. Task ids are unique.
 - `why` is required for `adopt` and `build`.
 - `decisions` lists the decision files you wrote, or `[]`.
-- `brainstorm` is required when the step says brainstorm. It has `options` (at least 2, each with `name` and `tradeoffs`), `chosen` (one of the option names) and `why`.
+- `brainstorm` is required when the step says brainstorm, and it must be an object (not a string, not null). It has `options` (at least 2, each with `name` and `tradeoffs`), `chosen` (one of the option names) and `why`. When the step does not say brainstorm, leave it out.
 
-Example:
+Example of a minimal valid output for a brainstorm step:
 
 ```json
 {
@@ -126,6 +126,13 @@ Example:
       { "id": "T2", "title": "Add the route", "approach": "compose",
         "leverage": "src/routes/users.ts", "unlocks": "GET /api/items", "blockedBy": ["T1"] } ] }
   ],
-  "decisions": [".warden/decisions/0003-items-pagination.md"]
+  "decisions": [".warden/decisions/0003-items-pagination.md"],
+  "brainstorm": {
+    "options": [
+      { "name": "offset pages", "tradeoffs": "simple, slow on large tables" },
+      { "name": "cursor pages", "tradeoffs": "fast, more code" } ],
+    "chosen": "offset pages",
+    "why": "the table is small and the code stays short"
+  }
 }
 ```

@@ -12,6 +12,12 @@ const DEFAULT_MAX_SECONDS = 540;
 const MAX_SECONDS = 590;
 const POLL_MS = 2000;
 
+// Test-only: WARDEN_POLL_MS shortens the poll, honoured only when WARDEN_TEST_MODE=1.
+function pollMs(env: Record<string, string | undefined>): number {
+  const n = Number(env.WARDEN_POLL_MS);
+  return env.WARDEN_TEST_MODE === "1" && Number.isInteger(n) && n > 0 ? n : POLL_MS;
+}
+
 function maxSeconds(value: string | undefined): number {
   if (value === undefined) return DEFAULT_MAX_SECONDS;
   const n = /^\d+$/.test(value) ? Number(value) : NaN;
@@ -25,6 +31,7 @@ export async function run(args: string[], ctx: Ctx): Promise<void> {
   const deadline = Date.now() + maxSeconds(parsed.values["--max-seconds"]) * 1000;
   const main = mainRoot(ctx.cwd);
   const spawnWorker = defaultSpawnWorker(ctx);
+  const poll = pollMs(ctx.env);
 
   for (;;) {
     // Every poll, so a worker that dies while we wait is restarted too. The worker can hold the task
@@ -41,7 +48,7 @@ export async function run(args: string[], ctx: Ctx): Promise<void> {
       printJson({ ...describeRun(ctx, task), status: "running_gate", message: "gate still running; run: warden wait" });
       return;
     }
-    await Bun.sleep(Math.min(POLL_MS, left));
+    await Bun.sleep(Math.min(poll, left));
   }
   printJson(describeRun(ctx, task));
 }

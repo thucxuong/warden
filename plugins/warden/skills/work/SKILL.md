@@ -16,6 +16,7 @@ Repeat these steps until the status is `shipped`, `done`, `waiting` or `blocked`
    - analyze, reproduce: write a failing test first. Record what you expected and what happened.
    - analyze, diagnose: find the root cause first. Diagnose before you prescribe.
    - feature plan with brainstorm: compare 2 or 3 options with their trade-offs. Pick one.
+   - implement: `filesChanged` is exactly the files that differ from the step start. Check with `git diff --name-only <step start> HEAD`.
 3. Hand back the output with a heredoc:
    ```
    warden done <<'EOF'

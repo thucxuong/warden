@@ -154,17 +154,19 @@ export function ring(ctx: Ctx): void {
     dir = reg.dir as string;
 
     const lock = join(dir, "lock");
-    if (!takeLock(lock)) {
+    let mine = takeLock(lock);
+    if (!mine) {
       const seen = readRaw(lock);
-      if (holderAlive(lock)) {
-        writeFileSync(join(dir, "pending"), new Date().toISOString());
-        return;
+      if (!holderAlive(lock)) {
+        // Delete only the stale lock we judged: another ring may have replaced it since.
+        if (readRaw(lock) === seen) rmSync(lock, { force: true });
+        mine = takeLock(lock);
       }
-      // Delete only the stale lock we judged: another ring may have replaced it since.
-      if (readRaw(lock) === seen) rmSync(lock, { force: true });
-      if (!takeLock(lock)) {
+      if (!mine) {
         writeFileSync(join(dir, "pending"), new Date().toISOString());
-        return;
+        // The runner drops its lock and then looks for pending. If it did both before our write, nobody will read
+        // it: look at the lock again, and start the runner ourselves when it is gone.
+        if (existsSync(lock) || !takeLock(lock)) return;
       }
     }
 

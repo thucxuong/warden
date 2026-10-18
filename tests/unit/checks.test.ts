@@ -109,7 +109,6 @@ describe("file format", () => {
     ["repeated key", check({ ...CMD }).replace("last: never", "last: never\nlast: never"), "last: repeated key"],
     ["missing every", check({ kind: "agent", last: "never" }), "every: missing"],
     ["missing kind", check({ every: "1d", last: "never" }), "kind: missing"],
-    ["missing last", check({ every: "1d", kind: "agent" }), "last: missing"],
     ["missing run", check({ every: "1d", kind: "command", last: "never" }), "run: missing"],
     ["bad kind", check({ ...CMD, kind: "robot" }), "kind: must be command or agent"],
     ["every 0", check({ ...CMD, every: "0d" }), "every: must be"],
@@ -145,6 +144,45 @@ describe("file format", () => {
   });
 });
 
+describe("state", () => {
+  const stateFile = (name: string) => JSON.parse(read(`.warden/state/_checks/${name}.json`));
+
+  test("last: is optional and means never", () => {
+    put(".warden/checks/t.md", check({ every: "1d", kind: "agent" }));
+    expect(row("t")).toMatchObject({ last: null, due: true });
+    expect(row("t").error).toBeUndefined();
+  });
+
+  test("state wins over the frontmatter last, which is only the initial value", () => {
+    put(".warden/checks/t.md", check({ every: "3d", kind: "agent", last: "2020-01-01" }), );
+    expect(row("t")).toMatchObject({ last: "2020-01-01", due: true });
+    put(".warden/state/_checks/t.json", JSON.stringify({ last: today, results: [{ date: today, result: "done" }] }));
+    expect(row("t")).toMatchObject({ last: today, due: false, lastResult: "done" });
+  });
+
+  test("legacy Results lines count until there is state", () => {
+    put(".warden/checks/t.md", check({ ...CMD, auto: "true", last: today }, "# T\n\n## Results\n- 2026-10-01 fail (exit 1, 1s)\n"));
+    expect(row("t").lastResult).toBe("fail");
+    put(".warden/state/_checks/t.json", JSON.stringify({ last: today, results: [{ date: today, result: "pass" }] }));
+    expect(row("t").lastResult).toBe("pass");
+  });
+
+  test("a broken state file is ignored", () => {
+    put(".warden/checks/t.md", check({ every: "3d", kind: "agent", last: "2020-01-01" }));
+    put(".warden/state/_checks/t.json", "{ nope");
+    expect(row("t")).toMatchObject({ last: "2020-01-01", lastResult: null });
+  });
+
+  test("the log keeps the last 50 results", async () => {
+    put(".warden/checks/t.md", check(AGENT));
+    for (let i = 0; i < 52; i++) await call(["done", "t", "--note", `n${i}`]);
+    const results = stateFile("t").results;
+    expect(results).toHaveLength(50);
+    expect(results[0].detail).toBe("n2");
+    expect(results[49].detail).toBe("n51");
+  });
+});
+
 describe("due", () => {
   const rows = (last: string, every = "7d") => {
     put(".warden/checks/t.md", check({ every, kind: "agent", last }));
@@ -163,16 +201,16 @@ describe("due", () => {
 });
 
 describe("checks run (command)", () => {
-  test("pass appends a result line, replaces last in place and writes the log", async () => {
-    put(".warden/checks/ok.md", check({ ...CMD, run: "echo hello" }, "# Ok\n\nText.\n\n## Results\n- 2026-01-01 pass (exit 0, 1s)\n"));
+  test("pass writes the result to state, leaves the check file alone and writes the log", async () => {
+    const text = check({ ...CMD, run: "echo hello" }, "# Ok\n\nText.\n");
+    put(".warden/checks/ok.md", text);
     const { out, code } = await call(["run", "ok"]);
     expect(code).toBeNull();
     expect(out).toMatchObject({ name: "ok", kind: "command", passed: true, exit: 0, last: today, log: join(main, ".warden/state/_checks/ok.log") });
     expect(out.durationMs).toBeNumber();
     expect(readFileSync(out.log, "utf8")).toBe("hello\n");
-    expect(read(".warden/checks/ok.md")).toBe(
-      `---\nevery: 7d\nkind: command\nrun: echo hello\nlast: ${today}\n---\n# Ok\n\nText.\n\n## Results\n- 2026-01-01 pass (exit 0, 1s)\n- ${today} pass (exit 0, 0s)\n`,
-    );
+    expect(read(".warden/checks/ok.md")).toBe(text);
+    expect(JSON.parse(read(".warden/state/_checks/ok.json"))).toEqual({ last: today, results: [{ date: today, result: "pass", detail: "exit 0, 0s" }] });
     expect(row("ok")).toMatchObject({ lastResult: "pass", due: false, running: false });
     expect(existsSync(join(main, ".warden/state/_checks/ok.lock"))).toBe(false);
   });
@@ -182,7 +220,8 @@ describe("checks run (command)", () => {
     const { out, code } = await call(["run", "bad"]);
     expect(code).toBeNull();
     expect(out).toMatchObject({ passed: false, exit: 3 });
-    expect(read(".warden/checks/bad.md")).toContain(`\n## Results\n- ${today} fail (exit 3, 0s)\n`);
+    expect(JSON.parse(read(".warden/state/_checks/bad.json")).results).toEqual([{ date: today, result: "fail", detail: "exit 3, 0s" }]);
+    expect(read(".warden/checks/bad.md")).not.toContain("Results");
     expect(row("bad").lastResult).toBe("fail");
   });
 
@@ -191,7 +230,7 @@ describe("checks run (command)", () => {
     const { out } = await call(["run", "slow"]);
     expect(out).toMatchObject({ passed: false, exit: 124 });
     expect(readFileSync(out.log, "utf8")).toContain("timed out");
-    expect(read(".warden/checks/slow.md")).toMatch(/- \d{4}-\d{2}-\d{2} fail \(exit 124, 1s\)\n$/);
+    expect(JSON.parse(read(".warden/state/_checks/slow.json")).results[0]).toMatchObject({ result: "fail", detail: "exit 124, 1s" });
   }, 15_000);
 
   test("runs in the main checkout without PROJECT_AGENT and with WARDEN_MAIN_ROOT", async () => {
@@ -205,10 +244,13 @@ describe("checks run (command)", () => {
     }
   });
 
-  test("adds a Results heading when it is missing", async () => {
-    put(".warden/checks/ok.md", check(CMD, "# Ok"));
+  test("results accumulate in state and the file is byte for byte the same", async () => {
+    const text = check(CMD, "# Ok");
+    put(".warden/checks/ok.md", text);
     await call(["run", "ok"]);
-    expect(read(".warden/checks/ok.md")).toEndWith(`# Ok\n\n## Results\n- ${today} pass (exit 0, 0s)\n`);
+    await call(["run", "ok"]);
+    expect(JSON.parse(read(".warden/state/_checks/ok.json")).results).toHaveLength(2);
+    expect(read(".warden/checks/ok.md")).toBe(text);
   });
 
   test("a held lock exits 4", async () => {
@@ -217,7 +259,7 @@ describe("checks run (command)", () => {
     expect(row("ok").running).toBe(true);
     const r = await call(["run", "ok"]);
     expect(r.code).toBe(4);
-    expect(read(".warden/checks/ok.md")).not.toContain("## Results");
+    expect(existsSync(join(main, ".warden/state/_checks/ok.json"))).toBe(false);
   });
 
   test("a stale lock (dead pid, or another start time) is replaced", async () => {
@@ -257,9 +299,9 @@ describe("checks run (command)", () => {
     expect(Date.now() - started).toBeLessThan(900);
     expect(out).toEqual({ name: "bg", started: true, log: join(main, ".warden/state/_checks/bg.log") });
     const deadline = Date.now() + 15_000;
-    while (!read(".warden/checks/bg.md").includes("## Results") && Date.now() < deadline) await Bun.sleep(100);
-    expect(read(".warden/checks/bg.md")).toContain(`- ${today} pass (exit 0,`);
-    expect(read(".warden/checks/bg.md")).toContain(`last: ${today}`);
+    while (!existsSync(join(main, ".warden/state/_checks/bg.json")) && Date.now() < deadline) await Bun.sleep(100);
+    expect(JSON.parse(read(".warden/state/_checks/bg.json"))).toMatchObject({ last: today, results: [{ date: today, result: "pass" }] });
+    expect(read(".warden/checks/bg.md")).not.toContain("Results");
   }, 20_000);
 
   test("startCheckInBackground is false while the check runs", () => {
@@ -286,22 +328,26 @@ describe("checks run and done (agent)", () => {
     expect(read(".warden/checks/look.md")).toBe(text);
   });
 
-  test("done appends a result line (with a note) and sets last", async () => {
+  test("done writes the result (with a note) and last to state, not to the file", async () => {
     put(".warden/checks/look.md", check(AGENT, "# Look\n"));
     expect((await call(["done", "look", "--note", "all fine"])).out).toEqual({ name: "look", last: today });
     expect((await call(["done", "look", "--date", "2026-10-01"])).out).toEqual({ name: "look", last: "2026-10-01" });
-    expect(read(".warden/checks/look.md")).toBe(
-      `---\nevery: 3d\nkind: agent\nlast: 2026-10-01\n---\n# Look\n\n## Results\n- ${today} done: all fine\n- 2026-10-01 done\n`,
-    );
+    expect(read(".warden/checks/look.md")).toBe(check(AGENT, "# Look\n"));
+    expect(JSON.parse(read(".warden/state/_checks/look.json"))).toEqual({
+      last: "2026-10-01",
+      results: [{ date: today, result: "done", detail: "all fine" }, { date: "2026-10-01", result: "done" }],
+    });
     expect(row("look").lastResult).toBe("done");
   });
 
-  test("a CRLF check file keeps CRLF and its instructions stop at Results", async () => {
+  test("a CRLF check file with legacy Results: its instructions stop at Results and done leaves it alone", async () => {
     const crlf = (s: string) => s.replace(/\n/g, "\r\n");
-    put(".warden/checks/look.md", crlf(check(AGENT, "# Look\n\n## Results\n- 2026-10-01 done\n")));
+    const text = crlf(check(AGENT, "# Look\n\n## Results\n- 2026-10-01 done\n"));
+    put(".warden/checks/look.md", text);
     expect((await call(["run", "look"])).out.instructions).toBe("# Look");
     await call(["done", "look", "--date", "2026-10-02"]);
-    expect(read(".warden/checks/look.md")).toBe(crlf(`---\nevery: 3d\nkind: agent\nlast: 2026-10-02\n---\n# Look\n\n## Results\n- 2026-10-01 done\n- 2026-10-02 done\n`));
+    expect(read(".warden/checks/look.md")).toBe(text);
+    expect(row("look")).toMatchObject({ last: "2026-10-02", lastResult: "done" });
   });
 
   test("done on a command check exits 1", async () => {
@@ -352,21 +398,23 @@ describe("retro", () => {
     expect(existsSync(join(main, ".warden/checks/retro.md"))).toBe(false);
   });
 
-  test("done retro creates the file from the template and leaves warden.json alone", async () => {
+  test("done retro writes state only: no retro.md is created and warden.json is left alone", async () => {
     put(".warden/warden.json", JSON.stringify({ schema: 1, wardenVersion: "0.1.1", projectId: "demo", taskIdPattern: "^DM-\\d{3}$", lastRetro: "2020-01-01" }));
     const before = read(".warden/warden.json");
     put(`.warden/retros/${today}.md`, "# Retro\n");
     expect((await call(["done", "retro"])).out).toEqual({ name: "retro", last: today });
-    expect(read(".warden/checks/retro.md")).toBe(`${RETRO_CHECK(today)}- ${today} done\n`);
+    expect(existsSync(join(main, ".warden/checks/retro.md"))).toBe(false);
     expect(read(".warden/warden.json")).toBe(before);
     expect(row("retro")).toMatchObject({ last: today, due: false, lastResult: "done" });
   });
 
-  test("done retro on an existing file keeps its text", async () => {
-    put(".warden/checks/retro.md", RETRO_CHECK("2026-01-01").replace("every: 2d", "every: 5d"));
+  test("done retro on an existing file keeps its text and the state date wins", async () => {
+    const text = RETRO_CHECK("2026-01-01").replace("every: 2d", "every: 5d");
+    put(".warden/checks/retro.md", text);
     put(".warden/retros/2026-10-01.md", "# Retro\n");
     await call(["done", "retro", "--date", "2026-10-01"]);
-    expect(read(".warden/checks/retro.md")).toBe(`${RETRO_CHECK("2026-10-01").replace("every: 2d", "every: 5d")}- 2026-10-01 done\n`);
+    expect(read(".warden/checks/retro.md")).toBe(text);
+    expect(row("retro")).toMatchObject({ last: "2026-10-01", every: "5d" });
   });
 
   test("retro --done is an alias with the same output", async () => {
@@ -395,7 +443,8 @@ describe("retro", () => {
       console.log = realLog;
     }
     expect(JSON.parse(lines.join(""))).toEqual({ name: "retro", last: today });
-    expect(existsSync(join(main, ".warden/checks/retro.md"))).toBe(true);
+    expect(existsSync(join(main, ".warden/state/_checks/retro.json"))).toBe(true);
+    expect(existsSync(join(main, ".warden/checks/retro.md"))).toBe(false);
   });
 });
 

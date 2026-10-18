@@ -82,9 +82,15 @@ describe("ring", () => {
   });
 
   test("a second ring right away adds no run; one during a run adds exactly one more", async () => {
-    register();
+    // Each run stays up until the test lets it go, so "during a run" does not depend on timing.
+    const go = (n: number) => writeFileSync(`${out}.go${n}`, "");
+    register({
+      argv: ["/bin/sh", "-c", `echo run >> "${out}"; n=$(wc -l < "${out}" | tr -d ' '); while [ ! -e "${out}.go$n" ]; do sleep 0.05; done`],
+    });
     ring(ctx());
     ring(ctx());
+    await until(() => runs() === 1);
+    go(1);
     await idle();
     await Bun.sleep(300);
     expect(runs()).toBe(1);
@@ -92,11 +98,28 @@ describe("ring", () => {
     ring(ctx());
     await until(() => runs() === 2);
     ring(ctx()); // while the second run is going
+    go(2);
+    await until(() => runs() === 3);
+    go(3);
     await until(() => !existsSync(join(dir, "lock")) && logText().split("exit").length === 4);
+    await Bun.sleep(300);
     expect(runs()).toBe(3);
     expect(logText().split("wa-triage start").length).toBe(4);
     expect(existsSync(join(dir, "pending"))).toBe(false);
-  }, 30_000);
+  }, 60_000);
+
+  test("a ring that lands as a run ends is never left waiting", async () => {
+    register({ argv: ["/bin/sh", "-c", `echo run >> "${out}"`] });
+    for (let i = 0; i < 40; i++) {
+      const before = runs();
+      ring(ctx());
+      await until(() => runs() > before);
+      await Bun.sleep((i % 10) / 2); // sweep the second ring across the end of the run
+      ring(ctx());
+      // Settled: no runner and nothing pending. A lost ring leaves pending behind with no runner to read it.
+      await until(() => !existsSync(join(dir, "lock")) && !existsSync(join(dir, "pending")));
+    }
+  }, 60_000);
 
   test("no registration, a data dir outside ~/.claude/plugins/data, or no HOME: nothing happens", async () => {
     ring(ctx());

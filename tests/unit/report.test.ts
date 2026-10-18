@@ -142,15 +142,18 @@ describe("reportStatusChanges", () => {
     expect(readFileSync(join(repo, ".warden/reports.md"), "utf8")).toBe(before);
   });
 
-  test("updates the changed row and reports it once", async () => {
+  test("reports a changed row once, remembers it in state and never edits reports.md", async () => {
     await fileTwo();
+    const before = readFileSync(join(repo, ".warden/reports.md"), "utf8");
     writeFileSync(join(data, "reports/R-0002.json"), JSON.stringify({ ...readRecord("R-0002"), status: "fixed", fixedIn: "0.2.0" }));
 
     expect(reportStatusChanges(ctx())).toEqual([{ id: "R-0002", title: "Two", status: "fixed", fixedIn: "0.2.0" }]);
-    const table = readFileSync(join(repo, ".warden/reports.md"), "utf8");
-    expect(table).toContain("| R-0002 | Two | fixed | 0.2.0 |");
-    expect(table).toContain("| R-0001 | One | sent | — |");
+    expect(readFileSync(join(repo, ".warden/reports.md"), "utf8")).toBe(before);
+    expect(JSON.parse(readFileSync(join(repo, ".warden/state/_reports.json"), "utf8"))).toEqual({ "R-0002": "fixed" });
     expect(reportStatusChanges(ctx())).toEqual([]);
+
+    writeFileSync(join(data, "reports/R-0002.json"), JSON.stringify({ ...readRecord("R-0002"), status: "wontfix" }));
+    expect(reportStatusChanges(ctx())).toEqual([{ id: "R-0002", title: "Two", status: "wontfix", fixedIn: "0.2.0" }]);
   });
 
   test("a row without an outbox record, or no table, is ignored", async () => {
@@ -161,6 +164,33 @@ describe("reportStatusChanges", () => {
 
   test("outside a git repo it returns nothing", () => {
     expect(reportStatusChanges(ctx(tempDir("warden-nogit-")))).toEqual([]);
+  });
+});
+
+describe("warden report --status --write", () => {
+  test("rewrites the changed rows of reports.md from the outbox", async () => {
+    await call(run, ["--kind", "bug", "--title", "One", "--file", bodyFile()]);
+    await call(run, ["--kind", "bug", "--title", "Two", "--file", bodyFile()]);
+    writeFileSync(join(data, "reports/R-0002.json"), JSON.stringify({ ...readRecord("R-0002"), status: "fixed", fixedIn: "0.2.0" }));
+
+    const res = await call(run, ["--status", "--write"]);
+    expect(res.out.rowsUpdated).toBe(1);
+    expect(res.out.reports).toHaveLength(2);
+    const table = readFileSync(join(repo, ".warden/reports.md"), "utf8");
+    expect(table).toContain("| R-0002 | Two | fixed | 0.2.0 |");
+    expect(table).toContain("| R-0001 | One | sent | — |");
+    expect(reportStatusChanges(ctx())).toEqual([]);
+    expect((await call(run, ["--status", "--write"])).out.rowsUpdated).toBe(0);
+  });
+
+  test("--status alone leaves reports.md alone, and stray arguments exit 2", async () => {
+    await call(run, ["--kind", "bug", "--title", "One", "--file", bodyFile()]);
+    writeFileSync(join(data, "reports/R-0001.json"), JSON.stringify({ ...readRecord("R-0001"), status: "fixed" }));
+    const before = readFileSync(join(repo, ".warden/reports.md"), "utf8");
+    expect((await call(run, ["--status"])).out.rowsUpdated).toBeUndefined();
+    expect(readFileSync(join(repo, ".warden/reports.md"), "utf8")).toBe(before);
+    expect((await call(run, ["--status", "--write", "x"])).code).toBe(2);
+    expect((await call(run, ["--status", "x"])).code).toBe(2);
   });
 });
 

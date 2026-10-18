@@ -85,7 +85,7 @@ describe("wa-triage", () => {
   const text = read(resolve(import.meta.dir, "../../.claude/skills/wa-triage/SKILL.md"));
 
   test("covers the outbox, the verdicts, issue creation and write-back", () => {
-    expect(text).toContain("${HOME}/.claude/plugins/data/warden-*/reports/");
+    expect(text).toContain("/.claude/plugins/data/warden-*/reports/R-*.json");
     for (const verdict of ["Real bug", "Snowflake", "Needs info"]) expect(text).toContain(verdict);
     expect(text).toContain("gh issue create -R thucxuong/warden");
     expect(text).toContain("status");
