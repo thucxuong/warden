@@ -173,7 +173,7 @@ Changes to the 0.1.1 skill:
 `warden report --status` (no other args; exit 2 with other args):
 - Reads every `${WARDEN_DATA}/reports/R-*.json` whose `projectId` equals this project's `warden.json` `projectId` (main checkout, spec 5.1). Records that do not parse are skipped.
 - Exit 3 when `.warden/warden.json` is missing.
-- Read-only: it does not touch `reports.md`. `warden report --status --write` (the only extra arg allowed) also rewrites the `reports.md` rows whose status or fixed-in differs from the outbox and adds `"rowsUpdated":n` to the stdout. Session start never writes `reports.md` (§7).
+- Read-only: it does not touch `reports.md`. `warden report --status --write` (the only extra arg allowed) also rewrites the `reports.md` rows whose status or fixed-in differs from the outbox, appends a row for each of the project's outbox records that has none (creating the table if missing), and adds `"rowsUpdated":n` to the stdout. Session start never writes `reports.md` (§7).
 - Stdout, sorted by id ascending: `{"reports":[{"id","kind","title","status","fixedIn","note","createdAt"}]}`. `note` is the WA's plain-text note (spec 4.13), such as the needs-info question. No body.
 
 Spec 3.2 rows changed:
@@ -349,8 +349,8 @@ Lines, in order, each only when it applies:
 ## 9. Skills, upgrade note, release
 
 Skill text changes (no new skills; `skills.test.ts` keeps its 8 folders):
-- **retro:** step 6 becomes `warden checks done retro`. Step 7 no longer commits check files (state is untracked); it runs `warden report --status --write` first and commits the refreshed `.warden/reports.md` with the retro. Step 1 reads the last date from `warden checks` (the `retro` row), not from `warden.json`. Opening line: "Run this only when the user asked for a retro or agreed to one you offered (session start lists it under checks due)."
-- **report:** step 6: `Tell the user: Report <id> sent.` New last line: `To see the status of earlier reports, run warden report --status.` No mention of how the report is handled.
+- **retro:** step 6 becomes `warden checks done retro`. Step 7 no longer commits check files (state is untracked); it runs `warden report --status --write` first and commits the refreshed `.warden/reports.md` with the retro. A second retro on the same day appends a `## Retro <HH:MM>` section to that day's file (one INDEX line per file). Step 1 reads the last date from `warden checks` (the `retro` row), not from `warden.json`. Opening line: "Run this only when the user asked for a retro or agreed to one you offered (session start lists it under checks due)."
+- **report:** new step 7: commit `.warden/reports.md` alone (`chore: warden report <id>`) in the main checkout when it is on the main branch and nothing else is staged. Step 6: `Tell the user: Report <id> sent.` New last line: `To see the status of earlier reports, run warden report --status.` No mention of how the report is handled.
 - **init:** the `warden.json` line drops `lastRetro`, and it lists `.warden/checks/retro.md` ("the built-in retro check, last set to today").
 
 `plugins/warden/upgrades/v0.2.0.md` (exact):

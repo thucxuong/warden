@@ -256,6 +256,7 @@ function compareSets(listed: string[], actual: string[], field: string, errors: 
 function checkEvidence(input: OutputCheckInput, type: CatalogType, step: FlowStep | null, o: Obj, errors: string[]): void {
   const { run } = input;
   const variant = step?.type === "analyze" ? step.variant : undefined;
+  if (type === "ship" && !existsSync(run.worktree)) return evidenceShip(input, o, errors); // worktree removed after merging
   const upstream = mainRef(input.main, input.steps.mainBranch);
   const changed = actualChanged(run, upstream);
   const committed = committedSince(run, upstream);
@@ -348,13 +349,16 @@ function evidenceImplement(run: RunJson, o: Obj, committed: string[], errors: st
 
 function evidenceShip(input: OutputCheckInput, o: Obj, errors: string[]): void {
   const { run, flow } = input;
-  const proven = gatesProven(run, flow);
-  if (!proven.proven) errors.push(`gates are not proven for HEAD: ${proven.reason}`);
+  // The agent may have merged and removed the worktree before handing in; then only the merge evidence is checked.
+  if (existsSync(run.worktree)) {
+    const proven = gatesProven(run, flow);
+    if (!proven.proven) errors.push(`gates are not proven for HEAD: ${proven.reason}`);
 
-  const history = `.warden/history/${run.task}`;
-  if (lsTree(run.worktree, "HEAD", `${history}/summary.json`).length === 0) errors.push(`the run record is not committed: commit ${history}/`);
-  const pending = porcelain(run.worktree).filter((p) => p.startsWith(`${history}/`));
-  if (pending.length > 0) errors.push(`the run record has uncommitted changes: ${pending.join(", ")}`);
+    const history = `.warden/history/${run.task}`;
+    if (lsTree(run.worktree, "HEAD", `${history}/summary.json`).length === 0) errors.push(`the run record is not committed: commit ${history}/`);
+    const pending = porcelain(run.worktree).filter((p) => p.startsWith(`${history}/`));
+    if (pending.length > 0) errors.push(`the run record has uncommitted changes: ${pending.join(", ")}`);
+  }
 
   if (o.pr === null && o.mergeCommit === null) errors.push("pr or mergeCommit is required");
   if (o.merged === true) {

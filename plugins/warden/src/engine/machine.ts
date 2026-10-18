@@ -678,7 +678,7 @@ export async function next(ctx: Ctx, task: string, spawnWorker: SpawnWorker = de
       event(s, "approve.skipped", run.current.id);
       advance(s);
       writeRun(main, run);
-    } else if (run.status === "active" && run.current.type === "ship" && !run.gate && historyWritten(main, run)) {
+    } else if (run.status === "active" && run.current.type === "ship" && !run.gate && existsSync(run.worktree) && historyWritten(main, run)) {
       const proven = gatesProven(run, s.flow);
       if (!proven.proven) {
         rerunGates(s, proven.reason, true);
@@ -967,10 +967,19 @@ export function findRunForWorktree(ctx: Ctx, toplevel: string, orFinished = fals
     .map((task) => readRun(main, task))
     .filter((run) => run.worktree === toplevel);
   const runs = here.filter((run) => LIVE.includes(run.status));
-  if (runs.length === 0 && orFinished && here.length > 0) {
-    return here.reduce((a, b) => (b.updatedAt >= a.updatedAt ? b : a));
+  if (runs.length === 0) {
+    const live = listTasks(main).filter((task) => runExists(main, task)).map((task) => readRun(main, task))
+      .filter((run) => LIVE.includes(run.status));
+    // From the main checkout, a live run whose worktree is gone (removed after merging) is the run meant.
+    const orphans = live.filter((run) => !existsSync(run.worktree));
+    if (toplevel === main && orphans.length === 1) return orphans[0]!;
+    if (orFinished && here.length > 0) return here.reduce((a, b) => (b.updatedAt >= a.updatedAt ? b : a));
+    const list = live.map((run) => `${run.task} (${run.current.id})`).join(", ");
+    throw new WardenError(
+      `no active run in this worktree${live.length > 0 ? `; live runs: ${list}; pass the task id: warden done <task>` : ""}`,
+      EXIT.NOT_FOUND,
+    );
   }
-  if (runs.length === 0) throw new WardenError("no active run in this worktree", EXIT.NOT_FOUND);
   if (runs.length > 1) throw new WardenError("several runs here; pass the task id", EXIT.USAGE);
   return runs[0]!;
 }
@@ -1099,7 +1108,7 @@ function nextResponse(ctx: Ctx, main: string, task: string): NextResponse {
       context.ship = {
         historyDir: historyDirFor(run),
         leftoversPath: run.leftovers ? join(dir, run.leftovers) : null,
-        proofSha: run.proofs[run.proofs.length - 1]?.sha ?? head(run.worktree),
+        proofSha: run.proofs[run.proofs.length - 1]?.sha ?? (existsSync(run.worktree) ? head(run.worktree) : ""),
       };
     }
     instructions = buildInstructions({ main, run, flow, steps: s.steps, fix: context.fix, fixNoteText: noteText });

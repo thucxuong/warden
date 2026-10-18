@@ -114,6 +114,22 @@ describe("buildSummary", () => {
     expect(s.costUsd).toBeCloseTo(0.0013 + 0.00007 + 0.00037 + 0.0108 + 0.75, 9);
   });
 
+  test("review round tokens are added to the review step and the run total", () => {
+    const withTokens = (n: number, input: number): ReviewRound => ({
+      ...round(n, 0.1, []), tokens: { input, output: 10, cacheRead: 20, cacheWrite: 5 },
+    });
+    const base = buildSummary(input());
+    const s = buildSummary(input({ reviewRounds: [withTokens(1, 100), round(2, null, []), withTokens(2, 200)] }));
+    const review = s.steps.find((x) => x.id === "review")!;
+    expect(review.tokens).toEqual({
+      input: 900 + 300, output: base.steps.find((x) => x.id === "review")!.tokens.output + 20,
+      cacheRead: base.steps.find((x) => x.id === "review")!.tokens.cacheRead + 40,
+      cacheWrite: base.steps.find((x) => x.id === "review")!.tokens.cacheWrite + 10,
+    });
+    expect(s.tokens.input).toBe(base.tokens.input + 300);
+    expect(s.tokens.output).toBe(base.tokens.output + 20);
+  });
+
   test("run-level fields: status, times, rounds, branch, author", () => {
     const s = buildSummary(input());
     expect(s).toMatchObject({

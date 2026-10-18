@@ -228,6 +228,14 @@ describe("environment and binary", () => {
 });
 
 describe("round record", () => {
+  test("records the reviewer's token usage from the claude -p JSON", async () => {
+    const usage = { input_tokens: 120, output_tokens: 45, cache_read_input_tokens: 800, cache_creation_input_tokens: 60 };
+    respond(null, JSON.stringify({ ...JSON.parse(reply([])), usage }));
+    const round = await makeReview(ctxFor())(run);
+    expect(round.tokens).toEqual({ input: 120, output: 45, cacheRead: 800, cacheWrite: 60 });
+    expect(JSON.parse(readFileSync(stateFile("review/1-1.json"), "utf8")).tokens).toEqual(round.tokens);
+  });
+
   test("writes review/<round>-<try>.json and .raw.txt and scopes findings", async () => {
     const outside: Finding = { file: "a.ts", line: 40, severity: "blocking", summary: "far away" };
     const stdout = reply([blocking, outside], 0.0123);

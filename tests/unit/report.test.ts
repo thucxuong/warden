@@ -183,6 +183,19 @@ describe("warden report --status --write", () => {
     expect((await call(run, ["--status", "--write"])).out.rowsUpdated).toBe(0);
   });
 
+  test("appends a row for an outbox record that has none, and creates a missing table", async () => {
+    await call(run, ["--kind", "bug", "--title", "One", "--file", bodyFile()]);
+    await call(run, ["--kind", "bug", "--title", "Two", "--file", bodyFile()]);
+    rmSync(join(repo, ".warden/reports.md"));
+    writeFileSync(join(data, "reports/R-0002.json"), JSON.stringify({ ...readRecord("R-0002"), status: "accepted" }));
+
+    expect((await call(run, ["--status", "--write"])).out.rowsUpdated).toBe(2);
+    expect(readFileSync(join(repo, ".warden/reports.md"), "utf8")).toBe(
+      "| ID | Title | Status | Fixed in |\n|---|---|---|---|\n| R-0001 | One | sent | — |\n| R-0002 | Two | accepted | — |\n",
+    );
+    expect((await call(run, ["--status", "--write"])).out.rowsUpdated).toBe(0);
+  });
+
   test("--status alone leaves reports.md alone, and stray arguments exit 2", async () => {
     await call(run, ["--kind", "bug", "--title", "One", "--file", bodyFile()]);
     writeFileSync(join(data, "reports/R-0001.json"), JSON.stringify({ ...readRecord("R-0001"), status: "fixed" }));

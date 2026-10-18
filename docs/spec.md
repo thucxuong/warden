@@ -317,6 +317,7 @@ Task resolution for commands that take an optional `[<task>]`:
 - Otherwise find the one live run (status `active`, `waiting` or `blocked`) whose `worktree` equals `git rev-parse --show-toplevel` of cwd.
 - If none matches, exit 3: `no active run in this worktree`. Exception: `next` and `wait` then use the most recently updated finished run (`done` or `shipped`) of this worktree, if any, and print its normal `NextResponse` (`<task>: done.`, exit 0), so the agent sees how the run ended (for example after a typed `retry` finished it).
 - If several match, exit 2: `several runs here; pass the task id`.
+- When none matches and live runs exist, the exit 3 message lists them and says `pass the task id: warden done <task>`. From the main checkout, if exactly one live run has a worktree that no longer exists (removed after merging), that run is used.
 
 Names used below (all computed in `state/paths.ts`):
 - `mainRoot`: the main checkout (5.1).
@@ -503,7 +504,7 @@ Step catalog (`src/engine/catalog.ts`):
 - **analyze / spike:** "Answer the question in the task by investigation, not by building it. Write the answer, the options you looked at and your recommendation to one note under `.warden/knowledge/` or `docs/`, and pass its path as `notePath`. No code changes."
 - **plan:** "Turn the task into a plan that someone else could build without asking you. Follow the warden:plan skill. Write a decision file for each real choice. When the step says brainstorm, first compare 2–3 options with trade-offs and pick one, and put them in the `brainstorm` object of the output (see the example in `output`)."
 - **implement:** "Make the change the task and plan ask for, with tests. Commit all of it in one or more commits and leave nothing uncommitted. When you are back from a gate, fix exactly what it reports, nothing else. Do not change gate files. Do not run the checks to prove the step; the engine runs them. `filesChanged` must be exactly the files that differ from the start of this step; check with `git diff --name-only <step start> HEAD`."
-- **ship:** "Deliver the proven commit without changing it. 1) Commit the run record: `git add .warden/history/<task> && git commit -m 'chore(<task>): run record'`. 2) Open the PR or merge as the project how-to says. 3) If there are leftovers, put the file text in the description under `## Unresolved review findings`. Any other change sends the run back to the gates."
+- **ship:** "Deliver the proven commit without changing it. 1) Commit the run record: `git add .warden/history/<task> && git commit -m 'chore(<task>): run record'`. 2) Open the PR or merge as the project how-to says. 3) If there are leftovers, put the file text in the description under `## Unresolved review findings`. 4) Hand in the ship output with `warden done` BEFORE you remove the worktree or the branch. Any other change sends the run back to the gates."
 - **fix:** "A check failed and triage says it is not (only) the change. Delegate this step to the warden:fixer subagent (Agent tool, subagent_type 'warden:fixer') with the context below, then pass its JSON to `warden done`. Do not fix it yourself and do not touch the ticket worktree."
 
 Template files:
@@ -686,6 +687,7 @@ export interface Finding { file: string; line: number; severity: Severity; summa
 export interface ReviewRound {
   schema: 1; round: number; sha: string; base: string; model: string;
   costUsd: number | null; kept: Finding[]; dropped: Finding[];
+  tokens?: { input: number; output: number; cacheRead: number; cacheWrite: number } | null;   // from the claude -p JSON
   status: "ok" | "malformed" | "unavailable" | "error"; raw: string;   // raw = state-relative path of reviewer stdout
 }
 ```
@@ -822,7 +824,7 @@ Logs, raw reviewer output and the steps.json snapshot are not copied. The commit
 ```ts
 export interface StepSummary {
   id: string; type: StepType | "fix"; startedAt: string; endedAt: string | null; durationMs: number; attempts: number;
-  tokens: { input: number; output: number; cacheRead: number; cacheWrite: number }; costUsd: number;  // review steps add Σ ReviewRound.costUsd
+  tokens: { input: number; output: number; cacheRead: number; cacheWrite: number }; costUsd: number;  // review steps add Σ ReviewRound.costUsd and Σ ReviewRound.tokens
 }
 export interface HistorySummary {
   schema: 1; task: string; flow: string; status: "shipping" | RunStatus;   // committed history: always "shipping"; live summaries: run.status
@@ -1217,7 +1219,7 @@ Outcome:
 - **malformed, unavailable or error:** retry once in the same round (the round is not counted). A second failure calls `block`.
 - `review/leftover.md` has the heading `## Unresolved review findings (round <n>, past the <max>-round cap)` and one line per blocking finding: `- [blocking] <file>:<line> — <summary>`.
 
-Cost: `total_cost_usd` from stdout is saved to `ReviewRound.costUsd` and the event, for every try. The review step's `StepSummary.costUsd` adds them (7.6).
+Cost: `total_cost_usd` from stdout is saved to `ReviewRound.costUsd` and the event, for every try. Tokens: `modelUsage` (summed over models) or else `usage` from the same JSON is saved to `ReviewRound.tokens`. The review step's `StepSummary.costUsd` and `tokens` add them (7.6).
 
 ### 6.4 Fixer handoff (`agents/fixer.md`, fix-step validation)
 
@@ -1449,7 +1451,7 @@ Token attribution (`lib/tokens.ts`, verified format):
 
 Cost = Σ tokens × `prices.json` rate for the model family (`/opus/`, `/sonnet/`, `/haiku/`). An unknown family costs 0 and is flagged `"unpriced"`.
 
-The reviewer's `claude -p` runs with `--no-session-persistence`, so it has no transcript. Its cost comes from `ReviewRound.costUsd` (6.3) and is added to the review step's `costUsd` and to the run total. Its tokens are not counted.
+The reviewer's `claude -p` runs with `--no-session-persistence`, so it has no transcript. Its cost comes from `ReviewRound.costUsd` (6.3) and is added to the review step's `costUsd` and to the run total. Its tokens come from `ReviewRound.tokens` (6.3) and are added to the review step's `tokens` and to the run total.
 
 `src/lib/prices.json`, USD per million tokens, an estimate **[U-7]**:
 

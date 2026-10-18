@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1 — 2026-10-18
+
+- Allow `warden done` from main checkout when the worktree is removed after merging.
+- Skip gate proof check when the worktree is gone at ship time.
+- Track token usage (input, output, cache read/write) from the reviewer.
+- Fix `warden report --status --write` to append missing report rows.
+
 ## 0.1.0 — 2026-10-18
 
 - Install via marketplace (option A, option B with team settings.json).

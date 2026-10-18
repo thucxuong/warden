@@ -16,6 +16,7 @@ description: Send a bug report or an enhancement request about warden itself. Re
    EOF
    ```
 6. Tell the user: Report <id> sent. Use the id it prints, for example `R-0001`.
+7. Commit the new row, only when the main checkout is on the main branch and nothing else is staged (`git diff --cached --quiet`). Otherwise leave it and tell the user. Run `git add .warden/reports.md`, then `git commit -m "chore: warden report <id>" -- .warden/reports.md`. Never switch branches. Do not push unless the user asks.
 
 Session start shows later when the status of a report changes.
 To see the status of earlier reports, run warden report --status.

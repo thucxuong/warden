@@ -2,12 +2,15 @@ import { existsSync, realpathSync } from "node:fs";
 import path from "node:path";
 import type { Finding, ReviewRound } from "../types";
 
+export type ReviewTokens = { input: number; output: number; cacheRead: number; cacheWrite: number };
+
 export type ReviewStatus = ReviewRound["status"];
 
 export interface ParsedReview {
   status: ReviewStatus;
   findings: Finding[];
   costUsd: number | null;
+  tokens: ReviewTokens | null;
   detail: string;
 }
 
@@ -24,25 +27,26 @@ export function parseReviewerStdout(stdout: string, exitCode: number): ParsedRev
   const outer = parseJson(stdout);
   if (outer === undefined || typeof outer !== "object" || outer === null || Array.isArray(outer)) {
     const status: ReviewStatus = exitCode !== 0 ? "error" : "malformed";
-    return result(status, [], null, "reviewer stdout is not a JSON object");
+    return result(status, [], null, null, "reviewer stdout is not a JSON object");
   }
   const envelope = outer as Record<string, unknown>;
   const costUsd = typeof envelope.total_cost_usd === "number" ? envelope.total_cost_usd : null;
+  const tokens = readTokens(envelope);
   const text = typeof envelope.result === "string" ? envelope.result : "";
   const isError = envelope.is_error === true;
 
   if (isError || exitCode !== 0) {
     const reason = isError ? "reviewer reported an error" : `reviewer exited with code ${exitCode}`;
     const status = looksUnavailable(text, isError) ? "unavailable" : "error";
-    return result(status, [], costUsd, `${reason}: ${firstLine(text)}`);
+    return result(status, [], costUsd, tokens, `${reason}: ${firstLine(text)}`);
   }
 
   const extracted = extractFindings(envelope.structured_output, text);
   if ("problem" in extracted) {
     const status = looksUnavailable(text, false) ? "unavailable" : "malformed";
-    return result(status, [], costUsd, `${extracted.problem}: ${firstLine(text)}`);
+    return result(status, [], costUsd, tokens, `${extracted.problem}: ${firstLine(text)}`);
   }
-  return result("ok", extracted.findings, costUsd, `${extracted.findings.length} finding(s)`);
+  return result("ok", extracted.findings, costUsd, tokens, `${extracted.findings.length} finding(s)`);
 }
 
 export function scopeFindings(
@@ -144,6 +148,31 @@ function firstLine(text: string): string {
   return text.trim().split("\n")[0]!.slice(0, 200);
 }
 
-function result(status: ReviewStatus, findings: Finding[], costUsd: number | null, detail: string): ParsedReview {
-  return { status, findings, costUsd, detail };
+function result(
+  status: ReviewStatus, findings: Finding[], costUsd: number | null, tokens: ReviewTokens | null, detail: string,
+): ParsedReview {
+  return { status, findings, costUsd, tokens, detail };
+}
+
+// Reviewer usage from the claude -p JSON: modelUsage (all models, camelCase) when present, else usage (snake_case).
+function readTokens(envelope: Record<string, unknown>): ReviewTokens | null {
+  const total: ReviewTokens = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+  const num = (value: unknown) => (typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0);
+  const models = Object.values(asObject(envelope.modelUsage) ?? {}).map(asObject).filter((m) => m !== null);
+  if (models.length > 0) {
+    for (const m of models) {
+      total.input += num(m.inputTokens);
+      total.output += num(m.outputTokens);
+      total.cacheRead += num(m.cacheReadInputTokens);
+      total.cacheWrite += num(m.cacheCreationInputTokens);
+    }
+    return total;
+  }
+  const usage = asObject(envelope.usage);
+  if (!usage) return null;
+  total.input = num(usage.input_tokens);
+  total.output = num(usage.output_tokens);
+  total.cacheRead = num(usage.cache_read_input_tokens);
+  total.cacheWrite = num(usage.cache_creation_input_tokens);
+  return total;
 }

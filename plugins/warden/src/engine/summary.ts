@@ -59,9 +59,17 @@ function buildSteps(input: SummaryInput, endMs: number): StepSummary[] {
     });
   }
 
-  // The reviewer has no transcript, so its cost comes from the round records. With several review steps it goes to the first.
+  // The reviewer has no transcript, so its cost and tokens come from the round records. With several review steps it goes to the first.
   const reviewStep = steps.find((s) => s.type === "review");
-  if (reviewStep) reviewStep.costUsd = roundUsd(reviewStep.costUsd + reviewCost(input.reviewRounds));
+  if (reviewStep) {
+    reviewStep.costUsd = roundUsd(reviewStep.costUsd + reviewCost(input.reviewRounds));
+    for (const r of input.reviewRounds) {
+      reviewStep.tokens.input += r.tokens?.input ?? 0;
+      reviewStep.tokens.output += r.tokens?.output ?? 0;
+      reviewStep.tokens.cacheRead += r.tokens?.cacheRead ?? 0;
+      reviewStep.tokens.cacheWrite += r.tokens?.cacheWrite ?? 0;
+    }
+  }
   return steps;
 }
 

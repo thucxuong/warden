@@ -107,7 +107,7 @@ function printStatus(args: string[], ctx: Ctx): void {
       // a broken record is skipped
     }
   }
-  console.log(JSON.stringify(write ? { reports, rowsUpdated: writeReportsTable(ctx) } : { reports }));
+  console.log(JSON.stringify(write ? { reports, rowsUpdated: writeReportsTable(ctx, projectId) } : { reports }));
 }
 
 export async function run(args: string[], ctx: Ctx): Promise<void> {
@@ -185,17 +185,35 @@ export function reportStatusChanges(ctx: Ctx): ReportChange[] {
   }
 }
 
-// Rewrites every reports.md row whose outbox record has another status. Returns how many rows changed.
-function writeReportsTable(ctx: Ctx): number {
+// Brings reports.md in line with the outbox: rewrites every row whose record has another status and appends a row for
+// each of this project's records that has none (the table is created if missing). Returns how many rows changed.
+function writeReportsTable(ctx: Ctx, projectId: string): number {
   const path = reportsTablePath(worktreeRoot(ctx.cwd));
-  if (!existsSync(path)) return 0;
   let count = 0;
-  const lines = readFileSync(path, "utf8").split("\n").map((line) => {
+  const known = new Set<string>();
+  const lines = (existsSync(path) ? readFileSync(path, "utf8") : REPORTS_HEADER).split("\n").map((line) => {
+    const id = line.split("|")[1]?.trim();
+    if (id) known.add(id);
     const change = changeForRow(ctx, line);
     if (!change) return line;
     count += 1;
     return `| ${change.id} | ${change.title} | ${change.status} | ${change.fixedIn ?? NO_VERSION} |`;
   });
-  if (count > 0) writeFileSync(path, lines.join("\n"));
-  return count;
+  const dir = reportsDir(ctx);
+  const names = existsSync(dir) ? readdirSync(dir).filter((f) => /^R-\d{4,}\.json$/.test(f)).sort() : [];
+  const added: string[] = [];
+  for (const name of names) {
+    try {
+      const r = readJson<ReportRecord>(join(dir, name));
+      if (r.schema !== 1 || r.projectId !== projectId || known.has(r.id)) continue;
+      added.push(`| ${r.id} | ${cell(r.title)} | ${r.status} | ${r.fixedIn ?? NO_VERSION} |`);
+    } catch {
+      // a broken record is skipped
+    }
+  }
+  if (count + added.length === 0) return 0;
+  while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, [...lines, ...added].join("\n") + "\n");
+  return count + added.length;
 }

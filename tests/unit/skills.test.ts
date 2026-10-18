@@ -64,6 +64,20 @@ describe("skills", () => {
   });
 });
 
+describe("retro and report skills", () => {
+  test("retro appends a timed section for a second retro and commits reports.md", () => {
+    const text = read(join(skillsDir, "retro", "SKILL.md"));
+    expect(text).toContain("## Retro <HH:MM>");
+    expect(text).toContain("warden report --status --write");
+    expect(text).toContain("`.warden/reports.md`, `.warden/checks/retro.md`");
+  });
+
+  test("report ends by committing reports.md alone", () => {
+    const text = read(join(skillsDir, "report", "SKILL.md"));
+    expect(text).toContain('git commit -m "chore: warden report <id>" -- .warden/reports.md');
+  });
+});
+
 describe("fixer agent", () => {
   const text = read(join(pluginRoot, "agents", "fixer.md"));
   const fm = parseFrontmatter(text);

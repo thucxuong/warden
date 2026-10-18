@@ -253,6 +253,7 @@ export interface Finding { file: string; line: number; severity: Severity; summa
 export interface ReviewRound {
   schema: 1; round: number; sha: string; base: string; model: string;
   costUsd: number | null; kept: Finding[]; dropped: Finding[];
+  tokens?: { input: number; output: number; cacheRead: number; cacheWrite: number } | null;   // reviewer usage from claude -p JSON
   status: "ok" | "malformed" | "unavailable" | "error"; raw: string;   // raw = state-relative path of reviewer stdout
 }
 

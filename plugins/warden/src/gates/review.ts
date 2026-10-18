@@ -58,6 +58,7 @@ export async function runReview(ctx: Ctx, run: RunJson): Promise<ReviewRound> {
       base,
       model: steps.review.model,
       costUsd: parsed.costUsd,
+      tokens: parsed.tokens,
       kept: scoped.kept,
       dropped: scoped.dropped,
       status: parsed.status,

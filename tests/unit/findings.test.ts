@@ -8,6 +8,29 @@ const fixture = (name: string) => readFileSync(path.join(import.meta.dir, "../fi
 const finding = (file: string, line: number): Finding => ({ file, line, severity: "blocking", summary: "x" });
 
 describe("parseReviewerStdout", () => {
+  const withUsage = (extra: object) =>
+    JSON.stringify({ is_error: false, total_cost_usd: 0.1, result: "ok", structured_output: { findings: [] }, ...extra });
+
+  test("reads tokens from usage", () => {
+    const usage = { input_tokens: 10, output_tokens: 20, cache_read_input_tokens: 30, cache_creation_input_tokens: 40 };
+    expect(parseReviewerStdout(withUsage({ usage }), 0).tokens).toEqual({ input: 10, output: 20, cacheRead: 30, cacheWrite: 40 });
+  });
+
+  test("sums modelUsage over models, preferring it to usage", () => {
+    const modelUsage = {
+      "claude-sonnet-4": { inputTokens: 1, outputTokens: 2, cacheReadInputTokens: 3, cacheCreationInputTokens: 4 },
+      "claude-haiku-4": { inputTokens: 10, outputTokens: 20, cacheReadInputTokens: 30, cacheCreationInputTokens: 40 },
+    };
+    const parsed = parseReviewerStdout(withUsage({ modelUsage, usage: { input_tokens: 999 } }), 0);
+    expect(parsed.tokens).toEqual({ input: 11, output: 22, cacheRead: 33, cacheWrite: 44 });
+  });
+
+  test("tokens are null when the JSON has no usage, and kept on an error reply", () => {
+    expect(parseReviewerStdout(withUsage({}), 0).tokens).toBeNull();
+    const failed = parseReviewerStdout(withUsage({ is_error: true, usage: { input_tokens: 5 } }), 1);
+    expect(failed.tokens).toEqual({ input: 5, output: 0, cacheRead: 0, cacheWrite: 0 });
+  });
+
   test("reads structured_output and the cost", () => {
     const parsed = parseReviewerStdout(fixture("structured.json"), 0);
     expect(parsed.status).toBe("ok");
