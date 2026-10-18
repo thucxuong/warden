@@ -135,13 +135,13 @@ describe("buildInstructions", () => {
     expect(text).toContain(".warden/context/INDEX.md:\n- overview.md: what this is\n\n.warden/decisions/INDEX.md:\n- 0001-x.md: chose x");
     expect(text).toContain(`## Earlier outputs\n\n- plan: ${join(taskDir(main, T), "outputs/1-plan.json")}\n- plan.md: ${join(taskDir(main, T), "plan.md")}`);
     expect(text).not.toContain("2-implement.json");
-    expect(text.trimEnd().endsWith('## Hand back\n\nRun warden done with the ImplementOutput JSON (schema in "output").')).toBe(true);
+    expect(text.trimEnd().endsWith('## Hand back\n\nRun: warden done --json \'<the ImplementOutput JSON on one line>\' (schema in "output"). One command; no heredoc or temp file.')).toBe(true);
   });
 
   test("empty sections are left out", () => {
     const text = buildInstructions({ main, run: runAt(0), flow, steps });
     expect(headings(text)).toEqual(["## Task", "## Step: plan (plan)", "## Hand back"]);
-    expect(text).toContain("Run warden done with the PlanOutput JSON");
+    expect(text).toContain("warden done --json '<the PlanOutput JSON");
   });
 
   test("plan step tells the agent whether brainstorm is needed; implement gets its start commit", () => {
@@ -177,7 +177,7 @@ describe("buildInstructions", () => {
     expect(text).toContain("- branch: warden-fix/T-1-1\n- verdict: UNCLEAR");
     expect(text).toContain("- mayMerge: false");
     expect(text).toContain("old note");
-    expect(text).toContain("Run warden done with the FixOutput JSON");
+    expect(text).toContain("warden done --json '<the FixOutput JSON");
   });
 
   test("project rules are capped at 16 KB", () => {

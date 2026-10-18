@@ -6,7 +6,7 @@ argument-hint: "<task-id> [what to do]"
 
 # Compose and start a task
 
-1. Read the task from `$ARGUMENTS`. Write the task id and the full "what to do" text to a scratch file. Add anything the user said in the chat. `warden start` stores this file as the task text. It survives new sessions and compaction.
+1. Read the task from `$ARGUMENTS`. Keep the task id and the full "what to do" text, plus anything the user said in the chat. `warden start` stores it as the task text. It survives new sessions and compaction.
 2. Classify the task with this table.
 
 | Signal | Template |
@@ -25,7 +25,7 @@ argument-hint: "<task-id> [what to do]"
    Flow: <name>
    Why: <one line>
    ```
-6. Start the run: `warden start <task> --template <t> --text-file <scratch file>`. For a saved or custom flow, use `--flow <name or path>` instead of `--template`.
+6. Start the run: `warden start <task> --template <t> --text '<what to do>'` (one command; write a single quote in the text as `’`). For a saved or custom flow, use `--flow <name or path>` instead of `--template`.
    Add `--worktree` unless the user is already on a ticket branch.
 7. If warden created or reused a worktree, `cd` into it. Run every later command from there.
 8. Continue with the work skill.

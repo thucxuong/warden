@@ -15,7 +15,7 @@ import { readFlowFile, resolveFlowPath, TEMPLATES } from "./flow.ts";
 import { parseArgs, printJson, requiredTask, type ParsedArgs } from "./next.ts";
 
 const USAGE =
-  "warden start <task> --template do|feature|bugfix | --flow <name|path> [--text-file <p>] [--worktree] [--branch <b>]";
+  "warden start <task> --template do|feature|bugfix | --flow <name|path> [--text <t> | --text-file <p>] [--worktree] [--branch <b>]";
 
 function checkTaskId(task: string, pattern: string): void {
   if (task === SESSIONS_DIR_NAME) throw new WardenError(`${SESSIONS_DIR_NAME} is a reserved name`);
@@ -34,7 +34,9 @@ function chooseFlow(ctx: Ctx, parsed: ParsedArgs): FlowJson {
   return readFlowFile(resolveFlowPath(ctx, (template ?? flow)!)) as FlowJson;
 }
 
-function readTaskText(ctx: Ctx, file: string | undefined): string | null {
+function readTaskText(ctx: Ctx, text: string | undefined, file: string | undefined): string | null {
+  if (text !== undefined && file !== undefined) throw new WardenError("use --text or --text-file, not both", EXIT.USAGE);
+  if (text !== undefined) return text;
   if (file === undefined) return null;
   try {
     return readFileSync(resolve(ctx.cwd, file), "utf8");
@@ -126,12 +128,12 @@ function allowWorktreesDir(main: string): void {
 }
 
 export async function run(args: string[], ctx: Ctx): Promise<void> {
-  const parsed = parseArgs(args, ["--template", "--flow", "--text-file", "--branch"], ["--worktree"]);
+  const parsed = parseArgs(args, ["--template", "--flow", "--text", "--text-file", "--branch"], ["--worktree"]);
   const task = requiredTask(parsed, USAGE);
   const useWorktree = parsed.switches.has("--worktree");
   if (!useWorktree && parsed.values["--branch"] !== undefined) throw new WardenError("--branch needs --worktree", EXIT.USAGE);
   const flow = chooseFlow(ctx, parsed);
-  const taskText = readTaskText(ctx, parsed.values["--text-file"]);
+  const taskText = readTaskText(ctx, parsed.values["--text"], parsed.values["--text-file"]);
 
   const main = mainRoot(ctx.cwd);
   checkTaskId(task, loadWardenJson(join(main, ".warden", "warden.json")).taskIdPattern);

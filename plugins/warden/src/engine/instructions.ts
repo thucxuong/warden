@@ -142,7 +142,7 @@ export function buildInstructions(input: InstructionsInput): string {
     section("Project rules", projectRules(run.worktree)),
     section("Read as needed", readAsNeeded(run.worktree)),
     section("Earlier outputs", earlierOutputs(input)),
-    section("Hand back", `Run warden done with the ${OUTPUT_TYPE_NAME[type]} JSON (schema in "output").`),
+    section("Hand back", `Run: warden done --json '<the ${OUTPUT_TYPE_NAME[type]} JSON on one line>' (schema in "output"). One command; no heredoc or temp file.`),
   ];
   return sections.filter((s) => s !== "").join("\n\n") + "\n";
 }

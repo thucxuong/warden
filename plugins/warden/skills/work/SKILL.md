@@ -17,12 +17,11 @@ Repeat these steps until the status is `shipped`, `done`, `waiting` or `blocked`
    - analyze, diagnose: find the root cause first. Diagnose before you prescribe.
    - feature plan with brainstorm: compare 2 or 3 options with their trade-offs. Pick one.
    - implement: `filesChanged` is exactly the files that differ from the step start. Check with `git diff --name-only <step start> HEAD`.
-3. Hand back the output with a heredoc:
+3. Hand back the output in one command, with the JSON on one line in single quotes:
    ```
-   warden done <<'EOF'
-   { ...the output JSON... }
-   EOF
+   warden done --json '{"summary":"...","filesChanged":["src/a.ts"]}'
    ```
+   Do not use a heredoc, a pipe or a temp file. Write a single quote inside the JSON as `\u0027`.
    `warden done` returns at once. If `accepted` is false, fix each item in `errors`. Then call `warden done` again.
 4. If the status is `running_gate`, run `warden wait` with a Bash timeout of 600000. It blocks for up to 540 seconds. Repeat until the status is no longer `running_gate`.
    Do not edit files or commit while a gate runs. The engine throws the result away if HEAD or the tree moves.

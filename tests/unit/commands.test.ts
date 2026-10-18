@@ -168,6 +168,21 @@ describe("done and wait", () => {
     expect(readRun(main, "T-1").proofs.map((p) => p.stepId)).toEqual(["check"]);
   });
 
+  test("start --text stores the task text; --text with --text-file is a usage error", () => {
+    const r = cli(["start", "T-1", "--template", "do", "--worktree", "--text", "Add a greeting."]);
+    expect(r.code).toBe(0);
+    expect(readFileSync(join(taskDir(main, "T-1"), "task.md"), "utf8")).toBe("Add a greeting.");
+    expect(cli(["start", "T-2", "--template", "do", "--worktree", "--text", "x", "--text-file", "y"]).code).toBe(2);
+  });
+
+  test("done --json takes the output as one argument, like stdin", () => {
+    expect(cli(["start", "T-1", "--template", "do", "--worktree"]).code).toBe(0);
+    const r = cli(["done", "--json", JSON.stringify(IMPLEMENT_OUTPUT)], { cwd: wt() });
+    expect(r.code).toBe(1);
+    expect(r.json.accepted).toBe(false);
+    expect(cli(["done", "--json", "{}", "--file", "x"], { cwd: wt() }).code).toBe(2);
+  });
+
   test("a rejected output exits 1 with errors on stdout", () => {
     expect(cli(["start", "T-1", "--template", "do", "--worktree"]).code).toBe(0);
     const r = cli(["done"], { cwd: wt(), stdin: JSON.stringify(IMPLEMENT_OUTPUT) });

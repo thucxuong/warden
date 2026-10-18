@@ -725,7 +725,7 @@ export interface StatusLine { task: string; flow: string; status: RunStatus; ste
 6. `## Project rules`: the full text of each `.warden/rules/*.md` (worktree copy), in name order, capped at 16 KB in total; past the cap, the line `[more rules: read .warden/rules/INDEX.md]`.
 7. `## Read as needed`: the contents of `.warden/context/INDEX.md`, `.warden/knowledge/INDEX.md` and `.warden/decisions/INDEX.md` (one line per file, so the agent opens only what it needs). Context topics are never inlined.
 8. `## Earlier outputs`: absolute paths of the latest accepted output per earlier step id (`outputs/<seq>-<id>.json`), and `plan.md` when it exists.
-9. `## Hand back`: `Run warden done with the <OutputType> JSON (schema in "output").`
+9. `## Hand back`: `Run: warden done --json '<the <OutputType> JSON on one line>' (schema in "output"). One command; no heredoc or temp file.`
 
 For a fix step, section 5 is `## Fix context` instead: every `context.fix` field on its own line, plus the fix note of the matched triage rule when there is one.
 
@@ -1537,7 +1537,7 @@ Loop until the status is `shipped`, `done`, `waiting` or `blocked`:
    - analyze reproduce → write a failing test first, record expected vs actual.
    - analyze diagnose → root cause first, then diagnose before prescribing.
    - feature plan with brainstorm → compare 2–3 options with trade-offs and pick one.
-3. Hand back the output with a heredoc: `warden done <<'EOF'` … `EOF`. `done` returns at once. If `accepted` is false, fix each item in `errors` and call `done` again.
+3. Hand back the output in one command: `warden done --json '<json on one line>'` (no heredoc, pipe or temp file, so a `Bash(warden *)` permission rule covers it). `done` returns at once. If `accepted` is false, fix each item in `errors` and call `done` again.
 4. Status `running_gate`: run `warden wait` with Bash timeout 600000 (it blocks up to 540 s). Repeat until it is no longer `running_gate`. Do not edit or commit while a gate runs; the worker throws the result away if HEAD or the tree moves.
 5. Status `waiting` or `blocked`: tell the user the `message`, then end the turn. The user types `approve`, `reject: <why>` or `retry`.
 6. Rules:
