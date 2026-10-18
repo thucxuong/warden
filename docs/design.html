@@ -8,21 +8,29 @@
   <style>
     html { scroll-behavior: smooth; }
     section { scroll-margin-top: 4.5rem; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-200">
   <nav class="sticky top-0 z-10 border-b border-slate-200 bg-slate-50/90 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
     <div class="mx-auto flex max-w-5xl gap-4 overflow-x-auto px-4 py-3 text-sm whitespace-nowrap" id="nav">
       <a href="#goal">Goal</a>
-      <a href="#install">Install &amp; upgrade</a>
-      <a href="#flows">Workflows</a>
-      <a href="#layout">Project layout</a>
-      <a href="#retro">Retro</a>
-      <a href="#start">Session start</a>
+      <a href="#install">Install</a>
+      <a href="#engine">Engine</a>
+      <a href="#compose">Workflows</a>
+      <a href="#plan">Planning</a>
+      <a href="#heal">Self-healing</a>
+      <a href="#review">Review</a>
+      <a href="#hooks">Enforcement</a>
+      <a href="#state">State &amp; logs</a>
+      <a href="#layout">Layout</a>
+      <a href="#overview">Lead overview</a>
       <a href="#report">Reporting</a>
       <a href="#maintainer">Maintainer</a>
       <a href="#tools">Tools</a>
-      <a href="#open">Open questions</a>
+      <a href="#dag">Multi-ticket</a>
+      <a href="#harness">From harness</a>
+      <a href="#open">Open</a>
     </div>
   </nav>
 
@@ -40,65 +48,195 @@
     <section id="goal">
       <h2 class="text-xl font-semibold mt-10 mb-3">1. Goal &amp; principles</h2>
       <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <ul class="list-disc pl-5 space-y-1.5">
-          <li><b>As simple as possible.</b> No server, no build step. The opposite of the current harness repo (~53k files).</li>
-          <li><b>Claude Code only</b> for now.</li>
-          <li><b>Tailored to software delivery:</b> immediate action, feature flow, bugfix flow.</li>
-          <li><b>Traceable at high level</b>, visible in the CP — not in warden.</li>
+        <ul class="list-disc pl-5 space-y-1.5 text-sm">
+          <li><b>As simple as possible.</b> Much smaller than the current harness repo.</li>
+          <li><b>Claude Code only</b> for now. Not for community use — internal team tool.</li>
+          <li><b>Code runs the workflow, JSON holds progress.</b> The CPA does creative work; the warden engine runs every gate.</li>
+          <li><b>Warden says <i>what</i> a step must achieve; the CP says <i>how</i></b> it runs internally (verify differs per CP).</li>
           <li><b>Warden is hidden from the CPA:</b> no repo link, no issue numbers, no warden code in the CP.</li>
-          <li><b>CP adopts warden's structure</b>; the CPA builds its own project tools (snowflakes) to adapt.</li>
-          <li><b>Warden CLI in Bun + TypeScript 7</b>. Bun runs <code class="font-mono text-sm bg-slate-100 dark:bg-slate-800 rounded px-1.5">.ts</code> directly (~5–10 ms startup vs 60–90 ms for Node), no build; <code class="font-mono text-sm bg-slate-100 dark:bg-slate-800 rounded px-1.5">Bun.$</code> for gh/git calls. Registry tools use Bun too — one runtime. TypeScript 7 (native compiler) is a dev-only type checker in the warden repo — users never install it. Strict mode. Built-in modules only, no runtime npm dependencies, one file per command. <code class="font-mono text-sm bg-slate-100 dark:bg-slate-800 rounded px-1.5">bun build --compile</code> is the path to a single binary later; revisit Rust once stable.</li>
-          <li><b>Task IDs:</b> each CP chooses its own format (set in <code class="font-mono text-sm bg-slate-100 dark:bg-slate-800 rounded px-1.5">warden.json</code>). Warden itself uses <code class="font-mono text-sm bg-slate-100 dark:bg-slate-800 rounded px-1.5">WD-xxxx</code>.</li>
-          <li><b>Every doc has one purpose.</b> No "this or that" — each kind of information has exactly one home.</li>
+          <li><b>Every doc has one purpose.</b> Each kind of information has exactly one home.</li>
+          <li><b>Stack:</b> Bun + TypeScript 7. Bun runs <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">.ts</code> directly (~5–10 ms startup), <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">Bun.$</code> for gh/git. TypeScript 7 is a dev-only type checker in the warden repo. Strict mode, built-in modules only, no runtime npm dependencies, one file per command. <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">bun build --compile</code> for a single binary later; revisit Rust once stable.</li>
+          <li><b>Task IDs:</b> each CP chooses its own format (in <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">warden.json</code>). Warden itself uses <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">WD-xxxx</code>.</li>
         </ul>
       </div>
     </section>
 
     <!-- INSTALL -->
     <section id="install">
-      <h2 class="text-xl font-semibold mt-10 mb-3">2. Install &amp; upgrade</h2>
-      <div class="grid gap-3 sm:grid-cols-2">
+      <h2 class="text-xl font-semibold mt-10 mb-3">2. Install, onboarding &amp; upgrade</h2>
+      <div class="grid gap-3 sm:grid-cols-3">
         <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <h3 class="font-semibold">Install (manual, once)</h3>
-          <p class="mt-2 text-sm">Warden is a Claude Code plugin. Install via the plugin marketplace, then run:</p>
-          <pre class="mt-2 font-mono text-sm bg-slate-100 dark:bg-slate-800 rounded p-4 overflow-x-auto">/warden:init</pre>
-          <p class="mt-2 text-sm">Creates <code class="font-mono text-sm bg-slate-100 dark:bg-slate-800 rounded px-1.5">.warden/</code>, registers the CP on this machine.</p>
+          <p class="mt-2 text-sm">Install Bun, then the warden Claude Code plugin from the private marketplace.</p>
         </div>
         <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <h3 class="font-semibold">Upgrade (automatic + guided)</h3>
-          <ul class="mt-2 text-sm list-disc pl-5 space-y-1">
-            <li>Plugin auto-update replaces warden code.</li>
-            <li><code class="font-mono text-sm bg-slate-100 dark:bg-slate-800 rounded px-1.5">/warden:upgrade</code> applies structure changes. The warden script hands the steps to the CPA as text — never a repo link.</li>
-            <li>Warden code lives only in the plugin cache, never in the CP.</li>
-          </ul>
+          <h3 class="font-semibold">Onboarding — one run</h3>
+          <p class="mt-2 text-sm"><code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">/warden:init</code> scans the stack, drafts <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">context/</code> and <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">steps.json</code> (check commands it finds), asks the user to confirm, done. No phases.</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <h3 class="font-semibold">Upgrade</h3>
+          <p class="mt-2 text-sm">Plugin auto-update replaces warden code. <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">/warden:upgrade</code> applies layout changes from upgrade notes the warden script hands over as text.</p>
         </div>
       </div>
     </section>
 
-    <!-- FLOWS -->
-    <section id="flows">
-      <h2 class="text-xl font-semibold mt-10 mb-3">3. Workflows</h2>
-      <div class="space-y-3">
+    <!-- ENGINE -->
+    <section id="engine">
+      <h2 class="text-xl font-semibold mt-10 mb-3">3. The engine — the CPA never runs the gates</h2>
+      <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <p class="text-sm">A small Bun program owns progress. The CPA does the creative work only (analyse, plan, implement, fix). Checks, triage and review are run <b>by the engine</b>, so they cannot be skipped.</p>
+        <div class="mt-4 grid gap-2 sm:grid-cols-4 text-sm">
+          <div class="rounded-lg bg-indigo-50 p-3 dark:bg-indigo-950"><b>1.</b> <code>warden next</code> — current step + what it needs</div>
+          <div class="rounded-lg bg-indigo-50 p-3 dark:bg-indigo-950"><b>2.</b> CPA does the work</div>
+          <div class="rounded-lg bg-indigo-50 p-3 dark:bg-indigo-950"><b>3.</b> <code>warden done</code> — hands back output JSON</div>
+          <div class="rounded-lg bg-indigo-50 p-3 dark:bg-indigo-950"><b>4.</b> Engine validates the output and evidence, runs gates, moves forward or routes back</div>
+        </div>
+        <h3 class="mt-5 font-semibold">How the CP says "how" — <code>.warden/steps.json</code></h3>
+        <ul class="mt-2 text-sm list-disc pl-5 space-y-1">
+          <li><b>Check steps</b> (verify, e2e…): just commands. The engine runs them; exit code is the evidence.</li>
+          <li><b>Agent steps</b> (plan, implement…): the CP's instructions + the required output format.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- COMPOSE -->
+    <section id="compose">
+      <h2 class="text-xl font-semibold mt-10 mb-3">4. Workflows — the CPA composes its own</h2>
+      <div class="grid gap-3 sm:grid-cols-2">
         <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div class="flex flex-wrap items-center gap-2"><code class="font-mono text-sm bg-slate-100 dark:bg-slate-800 rounded px-1.5">/warden:do</code><span class="text-sm text-slate-500">Immediate action — small task</span></div>
-          <div class="mt-3 flex flex-wrap items-center gap-2 text-sm" data-steps="act,verify"></div>
+          <h3 class="font-semibold">Step catalog (from warden)</h3>
+          <div class="mt-2 flex flex-wrap gap-2 text-xs">
+            <span class="rounded-full px-2 py-0.5 font-medium bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">analyze</span>
+            <span class="rounded-full px-2 py-0.5 font-medium bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">plan</span>
+            <span class="rounded-full px-2 py-0.5 font-medium bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">implement</span>
+            <span class="rounded-full px-2 py-0.5 font-medium bg-emerald-100 text-emerald-800">check</span>
+            <span class="rounded-full px-2 py-0.5 font-medium bg-emerald-100 text-emerald-800">review</span>
+            <span class="rounded-full px-2 py-0.5 font-medium bg-amber-100 text-amber-800">approve</span>
+            <span class="rounded-full px-2 py-0.5 font-medium bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">ship</span>
+          </div>
+          <p class="mt-2 text-xs text-slate-500">Indigo = agent step · green = engine-run gate · amber = human approval</p>
+          <p class="mt-3 text-sm">Each type has a clear input, output and evidence. <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">/warden:compose</code> lets the CPA build a workflow JSON for the task — and use it right away.</p>
         </div>
         <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div class="flex flex-wrap items-center gap-2"><code class="font-mono text-sm bg-slate-100 dark:bg-slate-800 rounded px-1.5">/warden:feature</code><span class="text-sm text-slate-500">Feature implementation</span></div>
-          <div class="mt-3 flex flex-wrap items-center gap-2 text-sm" data-steps="plan,implement,verify,review,ship"></div>
-        </div>
-        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div class="flex flex-wrap items-center gap-2"><code class="font-mono text-sm bg-slate-100 dark:bg-slate-800 rounded px-1.5">/warden:bugfix</code><span class="text-sm text-slate-500">Extra prefix steps, then the feature flow</span></div>
-          <div class="mt-3 flex flex-wrap items-center gap-2 text-sm" data-steps="reproduce*,diagnose*,plan,implement,verify,review,ship"></div>
+          <h3 class="font-semibold">Starting templates</h3>
+          <div class="mt-2 space-y-2 text-sm">
+            <div><code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">do</code> <span class="text-slate-500">implement → check</span></div>
+            <div><code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">feature</code> <span class="text-slate-500">plan → implement → check → review → ship</span></div>
+            <div><code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">bugfix</code> <span class="text-slate-500">reproduce → diagnose → feature flow</span></div>
+          </div>
         </div>
       </div>
-      <p class="mt-2 text-sm text-slate-500">Each step writes one line to <code class="font-mono bg-slate-100 dark:bg-slate-800 rounded px-1.5">tasks/&lt;ticket-id&gt;.md</code>. Steps marked amber are bugfix-only.</p>
+      <div class="mt-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <h3 class="font-semibold"><code>warden flow check</code> — the linter</h3>
+        <p class="mt-2 text-sm">Warden doesn't fix the workflow shape; it only lints it:</p>
+        <ul class="mt-2 text-sm list-disc pl-5 space-y-1">
+          <li>Every agent step is bound to a hook that triggers the CLI for <b>verification</b> or <b>approval</b>.</li>
+          <li>Approval steps are skipped when <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">PROJECT_AGENT=1</code>.</li>
+          <li>Limits (fixer rounds, review rounds) cannot be raised.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- PLAN -->
+    <section id="plan">
+      <h2 class="text-xl font-semibold mt-10 mb-3">5. Planning — recursive task breakdown</h2>
+      <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 text-sm">
+        <p>From the harness <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">recursive-task-breakdown</code> skill. The agent works freely, but must drill down until every building block is visible.</p>
+        <ol class="mt-2 list-decimal pl-5 space-y-1">
+          <li>List what already exists (the "factor pool": repo, tools, deps).</li>
+          <li>Break the task into leaves; each is <i>reuse · configure · compose · adopt · build</i>.</li>
+          <li>Keep breaking down until every leaf's inputs exist or come from an earlier step.</li>
+          <li>Independent steps become waves.</li>
+        </ol>
+        <p class="mt-2">Kept from harness writing rules: no placeholders, self-review.</p>
+      </div>
+    </section>
+
+    <!-- HEAL -->
+    <section id="heal">
+      <h2 class="text-xl font-semibold mt-10 mb-3">6. Self-healing (from the reference app, simplified)</h2>
+      <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 text-sm">
+        <ol class="list-decimal pl-5 space-y-1.5">
+          <li>A check fails → engine runs <b>triage</b>: re-run the failed check on a clean copy of the main branch.</li>
+          <li>Verdict from evidence:
+            <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-rose-100 text-rose-800">CODE</span> back to the latest implement step ·
+            <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-800">OPS</span> setup broken ·
+            <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700">UNCLEAR</span> never treated as CODE.</li>
+          <li>OPS / UNCLEAR, or a 3rd CODE on one task → <b>fixer</b>: reproduce, root cause with evidence, small fix, test, write <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">fixes/&lt;date&gt;-&lt;task&gt;.md</code>.</li>
+          <li>Max <b>2</b> fixer rounds, then stop and ask a person.</li>
+          <li>Each fix adds an error pattern to <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">triage-rules.json</code> — triage gets smarter.</li>
+        </ol>
+        <div class="mt-4 overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-100 dark:bg-slate-800 text-left font-medium"><tr><th class="px-3 py-2">What broke</th><th class="px-3 py-2">Where the fix goes</th></tr></thead>
+            <tbody>
+              <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">CP customization (its steps, tools, scripts)</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Its own PR</td></tr>
+              <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Warden itself</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">CPA tells WA via <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">warden report</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="mt-3 text-slate-500">Rules: no blind fixes; never loosen a check, add retries or raise timeouts; the fixer can't edit gates; never work around a setup problem in app code.</p>
+      </div>
+    </section>
+
+    <!-- REVIEW -->
+    <section id="review">
+      <h2 class="text-xl font-semibold mt-10 mb-3">7. Code review (from the reference app)</h2>
+      <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 text-sm">
+        <ul class="list-disc pl-5 space-y-1.5">
+          <li>Engine starts a fresh, read-only reviewer (<code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">claude -p</code>) on the diff only, plus the CP's review rules.</li>
+          <li>Must return JSON findings <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">{file, line, severity, summary}</code>.
+            <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-rose-100 text-rose-800">blocking</span> = bug, security, data loss, broken contract ·
+            <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700">minor</span> = everything else. Findings outside the diff are dropped.</li>
+          <li>Blocking → back to implement → checks + review run again. Max <b>3</b> rounds; leftovers go into the PR description.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- HOOKS -->
+    <section id="hooks">
+      <h2 class="text-xl font-semibold mt-10 mb-3">8. Enforcement — no skipped steps</h2>
+      <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 text-sm">
+        <ul class="list-disc pl-5 space-y-1.5">
+          <li><b>Gates run by the engine</b>, not reported by the CPA.</li>
+          <li><b>Proof is tied to the commit:</b> any code change after a gate cancels it.</li>
+          <li><b>Hooks:</b>
+            <ul class="list-[circle] pl-5 mt-1 space-y-1">
+              <li>Editing files is blocked in steps that shouldn't change code (e.g. plan).</li>
+              <li>Push / PR / merge blocked unless gates passed for the current commit.</li>
+              <li>Ending a turn is blocked while a run is active and not waiting on a person.</li>
+              <li>The CPA can't write warden's state files directly.</li>
+            </ul>
+          </li>
+          <li><b>Optional — tamper-evident log:</b> each log line stores a fingerprint of the line before it, so a hand edit or deleted line breaks the chain and warden notices.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- STATE -->
+    <section id="state">
+      <h2 class="text-xl font-semibold mt-10 mb-3">9. State &amp; logs — one home, even with worktrees</h2>
+      <div class="grid gap-3 sm:grid-cols-2">
+        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 text-sm">
+          <h3 class="font-semibold">Live — not committed</h3>
+          <p class="mt-2">The engine finds the main checkout via <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">git rev-parse --git-common-dir</code>, so every worktree writes to the same place:</p>
+          <pre class="mt-2 text-xs bg-slate-100 dark:bg-slate-800 rounded p-3 overflow-x-auto">&lt;main repo&gt;/.warden/state/&lt;task&gt;/
+  run.json       current flow, step, rounds, gate proofs
+  events.jsonl   one line per event
+  plan.md, triage/, review/</pre>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 text-sm">
+          <h3 class="font-semibold">Final — committed</h3>
+          <p class="mt-2">The ship step copies the task's record into the PR:</p>
+          <pre class="mt-2 text-xs bg-slate-100 dark:bg-slate-800 rounded p-3 overflow-x-auto">.warden/history/&lt;task&gt;/</pre>
+          <p class="mt-2">Merged with the code, so the team sees it. Session start reads live state to resume ("WD-0012 stopped at check").</p>
+        </div>
+      </div>
     </section>
 
     <!-- LAYOUT -->
     <section id="layout">
-      <h2 class="text-xl font-semibold mt-10 mb-3">4. Consumer project layout — <code class="font-mono">.warden/</code></h2>
-      <p class="text-sm mb-3">Committed to git, readable by people. Warden owns the rules; it writes a <code class="font-mono bg-slate-100 dark:bg-slate-800 rounded px-1.5">.warden/README.md</code> map into each CP.</p>
+      <h2 class="text-xl font-semibold mt-10 mb-3">10. Consumer project layout — <code>.warden/</code></h2>
       <input id="filter" type="search" placeholder="Filter paths or content…" class="mb-3 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900" />
       <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <table class="w-full text-sm" id="layout-table">
@@ -107,71 +245,48 @@
           </thead>
           <tbody>
             <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">warden.json</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Warden version, project ID, task ID format, last retro date</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Anything else</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Init, upgrade, retro</td></tr>
-            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">context/&lt;topic&gt;.md</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">What the project is: overview, architecture, stack, domain glossary</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Rules, decisions</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Init, after big changes</td></tr>
+            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">steps.json</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">How each step runs here: check commands, agent-step instructions</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Workflow order</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Init, customization PR</td></tr>
+            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">flows/&lt;name&gt;.json</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Saved, reusable workflows the CPA composed</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">One-off flows (those live in state)</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Compose</td></tr>
+            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">triage-rules.json</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Known error patterns → verdict, each linked to a fix note</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Fix details</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Fixer</td></tr>
+            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">fixes/&lt;date&gt;-&lt;task&gt;.md</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">One fix: symptom, root cause, fix, test, how triage should classify it</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Feature work</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Fixer</td></tr>
+            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">state/&lt;task&gt;/</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Live run: run.json, events.jsonl, artifacts. Main checkout only. Not committed</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Anything hand-written</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Engine only</td></tr>
+            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">history/&lt;task&gt;/</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Final run record, committed</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Live runs</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Ship step</td></tr>
+            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">context/&lt;topic&gt;.md</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">What the project is: overview, architecture, stack, glossary</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Rules, decisions</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Init, big changes</td></tr>
             <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">rules/&lt;topic&gt;.md</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Must / never rules (code, test, git)</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Reasons — link a decision</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Retro, decision</td></tr>
-            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">decisions/NNNN-&lt;slug&gt;.md</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">One decision: context, choice, why. Never edited — superseded by a new one</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">How-to steps</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Plan step</td></tr>
+            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">decisions/NNNN-&lt;slug&gt;.md</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">One decision: context, choice, why. Never edited, only superseded</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">How-to steps</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Plan step</td></tr>
             <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">knowledge/&lt;area&gt;.md</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Facts learned about one code area: gotchas, quirks</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Rules</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Any step, when surprised</td></tr>
-            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">tasks/&lt;ticket-id&gt;.md</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">One task: flow, step statuses, one line per step, links</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Logs, code</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Every step</td></tr>
-            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">tasks/done/</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Shipped tasks</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Active tasks</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Ship step</td></tr>
-            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">checks/&lt;name&gt;.md</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">One periodic check: interval, how to run, past results</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Anything else</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">When the check runs</td></tr>
-            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">retros/&lt;date&gt;.md</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">One retro: findings, and where each was sent</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">The fixes themselves</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Retro</td></tr>
-            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">reports.md</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Reports sent to warden: report ID, title, status, fixed-in version</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Issue links, repo names</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Report, session start</td></tr>
-            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">tools.md</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Tools copied from warden: name, version, customized yes/no, fixes applied</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Tools the CPA built itself</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Add tool, apply fix</td></tr>
-            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">.claude/skills/&lt;tool&gt;/</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">The CP's own tools (snowflakes): repo, e2e, azure…</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Warden workflows</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">When the CPA builds a tool</td></tr>
+            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">checks/&lt;name&gt;.md</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">One periodic check: interval, how to run, past results</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Anything else</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">When it runs</td></tr>
+            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">retros/&lt;date&gt;.md</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">One retro: findings, where each was sent</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">The fixes themselves</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Retro</td></tr>
+            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">reports.md</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Reports sent to warden: ID, title, status, fixed-in version</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Issue links, repo names</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Report, session start</td></tr>
+            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">tools.md</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Tools copied from warden: name, version, customized, fixes applied</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">CPA-built tools</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Add tool, apply fix</td></tr>
+            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">.claude/skills/&lt;tool&gt;/</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">The CP's tools — copied from warden or built by the CPA</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Warden workflows</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Add tool, CPA builds</td></tr>
           </tbody>
         </table>
       </div>
-      <div class="mt-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <h3 class="font-semibold">Rules for keeping it lean as it grows</h3>
-        <ul class="mt-2 text-sm list-disc pl-5 space-y-1">
-          <li>Every folder has an <code class="font-mono bg-slate-100 dark:bg-slate-800 rounded px-1.5">INDEX.md</code> — one line per file. The agent reads the index first, opens only what it needs.</li>
-          <li>Each file stays under ~200 lines; past that it is split by topic.</li>
-          <li>Shipped tasks move to <code class="font-mono bg-slate-100 dark:bg-slate-800 rounded px-1.5">tasks/done/</code>.</li>
-        </ul>
-      </div>
+      <p class="mt-2 text-sm text-slate-500">Every folder has an <code class="bg-slate-100 dark:bg-slate-800 rounded px-1.5">INDEX.md</code> (one line per file); files stay under ~200 lines, then split by topic.</p>
     </section>
 
-    <!-- RETRO -->
-    <section id="retro">
-      <h2 class="text-xl font-semibold mt-10 mb-3">5. Retro</h2>
-      <p class="text-sm mb-3">Runs on <code class="font-mono bg-slate-100 dark:bg-slate-800 rounded px-1.5">/warden:retro</code>, or automatically when <b>2 days</b> have passed without one. Each finding type has exactly one destination.</p>
+    <!-- OVERVIEW -->
+    <section id="overview">
+      <h2 class="text-xl font-semibold mt-10 mb-3">11. Lead overview — every ticket, time and tokens</h2>
       <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <table class="w-full text-sm">
-          <thead class="bg-slate-100 dark:bg-slate-800 text-left font-medium"><tr><th class="px-3 py-2">Finding</th><th class="px-3 py-2">Goes to</th></tr></thead>
+          <thead class="bg-slate-100 dark:bg-slate-800 text-left font-medium"><tr><th class="px-3 py-2">Data</th><th class="px-3 py-2">Source</th></tr></thead>
           <tbody>
-            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">A warden workflow is wrong</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Report to warden <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-rose-100 text-rose-800">bug</span></td></tr>
-            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Warden lacks something every project needs</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Report to warden <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-800">enhancement</span></td></tr>
-            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Repeated project mistake</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">rules/</td></tr>
-            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Fact learned about a code area</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">knowledge/</td></tr>
-            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Missing project tool</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">.claude/skills/</td></tr>
-            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">A choice that was made</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">decisions/</td></tr>
+            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Start / end per ticket and step, duration</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Engine events</td></tr>
+            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Tokens per ticket and step (incl. subagents)</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Claude Code transcripts in <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">~/.claude/projects/</code> record usage + timestamp per message (verified). A hook links each session to the active task.</td></tr>
+            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Cost</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Tokens × price table (estimate)</td></tr>
+            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Rounds, triage verdicts, review findings, fixer runs</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Engine events</td></tr>
+            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Who, commit, PR</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">git, gh</td></tr>
           </tbody>
         </table>
       </div>
-    </section>
-
-    <!-- SESSION START -->
-    <section id="start">
-      <h2 class="text-xl font-semibold mt-10 mb-3">6. Session start (silent)</h2>
-      <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <p class="text-sm">A warden hook runs on every CPA session start and does three things:</p>
-        <ol class="mt-2 text-sm list-decimal pl-5 space-y-1">
-          <li>Gets the status of this CP's reports and compares it with <code class="font-mono bg-slate-100 dark:bg-slate-800 rounded px-1.5">reports.md</code>.</li>
-          <li>Checks whether the retro is due (2 days).</li>
-          <li>Checks whether a newer warden version exists.</li>
-          <li>Checks whether fix notes exist for tools listed in <code class="font-mono bg-slate-100 dark:bg-slate-800 rounded px-1.5">tools.md</code>.</li>
-        </ol>
-        <p class="mt-3 text-sm">The CPA then gives the user a short heads-up:</p>
-        <pre class="mt-2 font-mono text-sm bg-slate-100 dark:bg-slate-800 rounded p-4 overflow-x-auto">R-0012 fixed in v0.4.0 — upgrade recommended
-R-0015 marked project-specific — build it as a local tool
-Retro due (last run 2 days ago)
-Tool e2e: 1 fix note available (v1.2.1)</pre>
-      </div>
+      <p class="mt-2 text-sm"><code class="bg-slate-100 dark:bg-slate-800 rounded px-1.5">warden site</code> builds one HTML page: ticket table → click for timeline, tokens, findings; plus docs, ticket DAG and code graph. Replaces the Next.js docs site and Pipeline Studio. Committed history makes it team-wide. Later option: Claude Code's OpenTelemetry export for a live cross-project dashboard.</p>
     </section>
 
     <!-- REPORTING -->
     <section id="report">
-      <h2 class="text-xl font-semibold mt-10 mb-3">7. Reporting — warden stays hidden</h2>
+      <h2 class="text-xl font-semibold mt-10 mb-3">12. Reporting, retro &amp; session start — warden stays hidden</h2>
       <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <svg viewBox="0 0 760 210" class="w-full h-auto" role="img" aria-label="Report flow">
           <defs><marker id="a" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="currentColor"/></marker></defs>
@@ -179,144 +294,140 @@ Tool e2e: 1 fix note available (v1.2.1)</pre>
             <rect x="10" y="20" width="150" height="60" rx="10" fill="none" stroke="currentColor" opacity=".5"/>
             <text x="85" y="46" text-anchor="middle" font-weight="600">CPA</text>
             <text x="85" y="64" text-anchor="middle" opacity=".7">/warden:report</text>
-
             <rect x="230" y="20" width="160" height="60" rx="10" fill="none" stroke="#6366f1"/>
             <text x="310" y="46" text-anchor="middle" font-weight="600">warden script</text>
             <text x="310" y="64" text-anchor="middle" opacity=".7">stamps R-0012</text>
-
             <rect x="460" y="20" width="130" height="60" rx="10" fill="none" stroke="#6366f1"/>
             <text x="525" y="46" text-anchor="middle" font-weight="600">WA</text>
             <text x="525" y="64" text-anchor="middle" opacity=".7">triage (headless)</text>
-
             <rect x="640" y="20" width="110" height="60" rx="10" fill="none" stroke="currentColor" opacity=".5"/>
             <text x="695" y="46" text-anchor="middle" font-weight="600">GitHub</text>
             <text x="695" y="64" text-anchor="middle" opacity=".7">issue</text>
-
             <line x1="160" y1="50" x2="226" y2="50" stroke="currentColor" marker-end="url(#a)"/>
             <line x1="390" y1="50" x2="456" y2="50" stroke="currentColor" marker-end="url(#a)"/>
             <line x1="590" y1="50" x2="636" y2="50" stroke="currentColor" marker-end="url(#a)"/>
-
             <rect x="230" y="130" width="160" height="60" rx="10" fill="none" stroke="#6366f1"/>
             <text x="310" y="156" text-anchor="middle" font-weight="600">session-start hook</text>
             <text x="310" y="174" text-anchor="middle" opacity=".7">plain status lines</text>
             <path d="M695,80 L695,160 L394,160" fill="none" stroke="currentColor" stroke-dasharray="4 4" marker-end="url(#a)"/>
             <path d="M230,160 L85,160 L85,84" fill="none" stroke="currentColor" stroke-dasharray="4 4" marker-end="url(#a)"/>
-
             <line x1="200" y1="5" x2="200" y2="205" stroke="#f43f5e" stroke-dasharray="2 6"/>
             <text x="205" y="202" fill="#f43f5e" font-size="11">CPA sees nothing right of this line</text>
           </g>
         </svg>
-        <ul class="mt-3 text-sm list-disc pl-5 space-y-1">
-          <li><b>Only WA creates issues.</b> The CPA writes the report; the warden script gives it an ID and hands it to WA on this machine right away (no waiting).</li>
-          <li>The link between report IDs and issue numbers stays on the warden side.</li>
-          <li>The CPA only ever sees report IDs and plain status — no URLs, issue numbers or repo names.</li>
-          <li>Hiding is "don't tell", not a lock. No extra blocking rule — <i>decided: not needed</i>.</li>
-        </ul>
+        <div class="mt-3 grid gap-3 sm:grid-cols-2 text-sm">
+          <ul class="list-disc pl-5 space-y-1">
+            <li><b>Only WA creates issues.</b> The CPA sees report IDs and plain status only.</li>
+            <li>Hiding is "don't tell", not a lock — no blocking rule (decided).</li>
+          </ul>
+          <ul class="list-disc pl-5 space-y-1">
+            <li><b>Session start (silent):</b> report statuses vs <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">reports.md</code>, retro due?, newer warden version?, tool fix notes?, live runs to resume.</li>
+            <li><b>Retro:</b> on <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">/warden:retro</code> or automatically at most every <b>2 days</b>. Warden bug → report <i>bug</i>; missing for all → report <i>enhancement</i>; repeated mistake → <code class="text-xs">rules/</code>; code fact → <code class="text-xs">knowledge/</code>; missing tool → <code class="text-xs">.claude/skills/</code>; choice → <code class="text-xs">decisions/</code>.</li>
+          </ul>
+        </div>
       </div>
     </section>
 
     <!-- MAINTAINER -->
     <section id="maintainer">
-      <h2 class="text-xl font-semibold mt-10 mb-3">8. WA as open-source maintainer</h2>
-      <div class="grid gap-3 sm:grid-cols-2">
-        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <h3 class="font-semibold">Triage verdicts</h3>
-          <div class="mt-2 flex flex-wrap gap-2">
+      <h2 class="text-xl font-semibold mt-10 mb-3">13. WA as open-source maintainer</h2>
+      <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 text-sm">
+        <ul class="list-disc pl-5 space-y-1">
+          <li>Triage verdicts:
             <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-rose-100 text-rose-800">real bug</span>
             <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-800">snowflake — build it locally</span>
-            <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700">needs info</span>
-          </div>
-          <p class="mt-3 text-sm">Each verdict comes with a reason.</p>
-        </div>
-        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <h3 class="font-semibold">Releases</h3>
-          <ul class="mt-2 text-sm list-disc pl-5 space-y-1">
-            <li>Small, frequent releases. Version 0.x until v1.</li>
-            <li><code class="font-mono bg-slate-100 dark:bg-slate-800 rounded px-1.5">CHANGELOG.md</code> lists changes per version.</li>
-            <li><code class="font-mono bg-slate-100 dark:bg-slate-800 rounded px-1.5">upgrades/vX.Y.Z.md</code> — steps for the CPA when the layout changes.</li>
-          </ul>
-        </div>
-      </div>
-      <div class="mt-3 overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <table class="w-full text-sm">
-          <thead class="bg-slate-100 dark:bg-slate-800 text-left font-medium"><tr><th class="px-3 py-2">Phase</th><th class="px-3 py-2">Who decides</th></tr></thead>
-          <tbody>
-            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Before v1</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">WA triages, decides and releases on its own</td></tr>
-            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">v1 and later</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">You make important calls (breaking changes, roadmap); WA proposes</td></tr>
-          </tbody>
-        </table>
+            <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700">needs info</span>, each with a reason.</li>
+          <li>Small, frequent releases, 0.x until v1. <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">CHANGELOG.md</code> + <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">upgrades/vX.Y.Z.md</code>.</li>
+          <li><b>Before v1:</b> WA triages, decides, releases. <b>From v1:</b> you make the important calls; WA proposes.</li>
+        </ul>
       </div>
     </section>
 
     <!-- TOOLS -->
     <section id="tools">
-      <h2 class="text-xl font-semibold mt-10 mb-3">9. Tool registry (shadcn-style)</h2>
-      <p class="text-sm mb-3">Warden offers ready-made, general Bun CLI tools. The CP copies a tool in and then <b>owns</b> it — the CPA can customize it freely instead of writing it from scratch.</p>
+      <h2 class="text-xl font-semibold mt-10 mb-3">14. Tool registry (shadcn-style)</h2>
       <div class="grid gap-3 sm:grid-cols-2">
-        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <h3 class="font-semibold">In the warden repo</h3>
-          <pre class="mt-2 font-mono text-sm bg-slate-100 dark:bg-slate-800 rounded p-4 overflow-x-auto">registry/&lt;tool&gt;/
-  tool.json       name, version, needs (e.g. az, gh)
-  SKILL.md        how the CPA uses it
-  bin/*.ts        Bun scripts
-  fixes/
-    vX.Y.Z.md     fix note per release</pre>
-        </div>
-        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <h3 class="font-semibold">Commands in the CP</h3>
-          <ul class="mt-2 text-sm list-disc pl-5 space-y-1.5">
-            <li><code class="font-mono bg-slate-100 dark:bg-slate-800 rounded px-1.5">/warden:tools</code> — list available tools. The CPA checks here <i>before</i> writing a tool itself.</li>
-            <li><code class="font-mono bg-slate-100 dark:bg-slate-800 rounded px-1.5">/warden:add &lt;tool&gt;</code> — copy into <code class="font-mono bg-slate-100 dark:bg-slate-800 rounded px-1.5">.claude/skills/&lt;tool&gt;/</code>, record in <code class="font-mono bg-slate-100 dark:bg-slate-800 rounded px-1.5">.warden/tools.md</code>.</li>
-            <li><code class="font-mono bg-slate-100 dark:bg-slate-800 rounded px-1.5">/warden:fix &lt;tool&gt;</code> — read pending fix notes and apply them to the CP's copy.</li>
+        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 text-sm">
+          <pre class="text-xs bg-slate-100 dark:bg-slate-800 rounded p-3 overflow-x-auto">registry/&lt;tool&gt;/
+  tool.json     name, version, needs (az, gh…)
+  SKILL.md      how the CPA uses it
+  bin/*.ts      Bun scripts
+  fixes/vX.Y.Z.md</pre>
+          <ul class="mt-3 list-disc pl-5 space-y-1">
+            <li><code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">/warden:tools</code> list · <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">/warden:add</code> copy in (CP owns it) · <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">/warden:fix</code> apply fix notes.</li>
+            <li>Fixes are notes (what, how, how to apply to a customized copy), never overwrites.</li>
+            <li>Retro can promote a CPA-built tool → WA generalizes it.</li>
           </ul>
         </div>
-      </div>
-
-      <div class="mt-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <h3 class="font-semibold">Tool fixes — a note, not a patch</h3>
-        <p class="mt-2 text-sm">Tool code is never overwritten. Each fix ships as a markdown note so the CPA can adapt it onto its customized copy — like an engineer applying a fix by hand.</p>
-        <pre class="mt-3 font-mono text-sm bg-slate-100 dark:bg-slate-800 rounded p-4 overflow-x-auto"># e2e v1.2.1 — fix
-
-## What was wrong
-Retries ignored the timeout flag; flaky tests hung CI.
-
-## How it was fixed
-`bin/run.ts`: pass `--timeout` into the retry loop.
-
-## How to apply to a customized copy
-Find where retries are run. Make each retry honour the timeout.
-Check: `bun bin/run.ts --timeout 1000` stops within ~1s.</pre>
-        <p class="mt-3 text-sm">After applying, the CPA updates the tool's version and fixes-applied list in <code class="font-mono bg-slate-100 dark:bg-slate-800 rounded px-1.5">tools.md</code>.</p>
-      </div>
-
-      <div class="mt-3 grid gap-3 sm:grid-cols-2">
-        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <h3 class="font-semibold">Promotion loop</h3>
-          <p class="mt-2 text-sm">A retro finds a CPA-built tool that any project could use → report <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-800">enhancement</span> → WA generalizes it into the registry. Project-only tools stay local.</p>
-        </div>
-        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <h3 class="font-semibold">Starter tools (proposed)</h3>
-          <div class="mt-2 flex flex-wrap gap-2 text-sm">
+        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 text-sm">
+          <h3 class="font-semibold">Starter tools</h3>
+          <div class="mt-2 flex flex-wrap gap-2">
             <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700">git-pr</span>
             <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700">ado</span>
+            <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700">github-issues</span>
             <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700">e2e</span>
             <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700">ci-status</span>
+            <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700">graph (graphify)</span>
           </div>
-          <p class="mt-2 text-sm text-slate-500">Copied tools carry no warden repo link.</p>
+          <p class="mt-3"><b>graph:</b> code graph only by default (free). When installed, the agent queries it before searching files.</p>
+          <p class="mt-2"><b>Ticket tools</b> (ado, github-issues) expose a standard <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">dag</code> command: <code class="text-xs">{id, title, status, blocked_by[]}</code>.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- DAG -->
+    <section id="dag">
+      <h2 class="text-xl font-semibold mt-10 mb-3">15. Multi-ticket orchestration (ticket DAG)</h2>
+      <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 text-sm">
+        <ul class="list-disc pl-5 space-y-1">
+          <li><code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">/warden:orchestrate &lt;epic&gt;</code> reads the DAG from the CP's ticket tool.</li>
+          <li>A wave = every ticket whose blockers are all done.</li>
+          <li>One agent per ticket, each in its own git worktree, each with its own engine run.</li>
+          <li>Merge in dependency order, rebasing on main before each.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- HARNESS -->
+    <section id="harness">
+      <h2 class="text-xl font-semibold mt-10 mb-3">16. From the old harness</h2>
+      <div class="grid gap-3 sm:grid-cols-2 text-sm">
+        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <h3 class="font-semibold"><span class="rounded-full px-2 py-0.5 text-xs font-medium bg-emerald-100 text-emerald-800">keep</span></h3>
+          <ul class="mt-2 list-disc pl-5 space-y-1">
+            <li>Workflow instructions (as step catalog + templates)</li>
+            <li>recursive-task-breakdown for planning</li>
+            <li>Brainstorm-before-build (feature only)</li>
+            <li>Bugfix rules: reproduce, expected vs actual, root cause first</li>
+            <li>Task-type table → picks a template</li>
+            <li>hone output shape for retro; friction notes → reports</li>
+            <li>Self-healing + code review (reference app)</li>
+            <li>Event log idea — much simpler</li>
+            <li>Graphify, docs site, ticket DAG — simplified</li>
+          </ul>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <h3 class="font-semibold"><span class="rounded-full px-2 py-0.5 text-xs font-medium bg-rose-100 text-rose-800">drop</span></h3>
+          <ul class="mt-2 list-disc pl-5 space-y-1">
+            <li>wflow/wfs state machine with handlers and replay</li>
+            <li>Superpowers planning</li>
+            <li>10-phase onboarding</li>
+            <li>Release/upgrade kits (plugin + fix notes instead)</li>
+            <li>Runbook soak tests</li>
+            <li>Next.js docs site, Pipeline Studio adapter</li>
+            <li>Skill copies across .harness / .cursor / .claude</li>
+          </ul>
         </div>
       </div>
     </section>
 
     <!-- OPEN -->
     <section id="open">
-      <h2 class="text-xl font-semibold mt-10 mb-3">10. Open questions</h2>
+      <h2 class="text-xl font-semibold mt-10 mb-3">17. Open questions</h2>
       <div class="space-y-2">
         <details class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900" open>
-          <summary class="cursor-pointer font-medium">Anything missing from the layout table?</summary>
-        </details>
-        <details class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900" open>
-          <summary class="cursor-pointer font-medium">Which parts of the old harness actually helped?</summary>
-          <p class="mt-2 text-sm text-slate-500">Only those get carried over.</p>
+          <summary class="cursor-pointer font-medium">Tamper-evident log — yes or no?</summary>
+          <p class="mt-2 text-sm text-slate-500">Recommended: yes. ~10 lines of code; makes hand edits to state visible.</p>
         </details>
       </div>
       <p class="mt-10 text-xs text-slate-400">Draft · 2026-10-18</p>
@@ -324,38 +435,23 @@ Check: `bun bin/run.ts --timeout 1000` stops within ~1s.</pre>
   </main>
 
   <script>
-    // Render step chips
-    document.querySelectorAll('[data-steps]').forEach(el => {
-      const steps = el.dataset.steps.split(',');
-      el.innerHTML = steps.map((s, i) => {
-        const extra = s.endsWith('*');
-        const name = s.replace('*', '');
-        const cls = extra
-          ? 'bg-amber-100 text-amber-800'
-          : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300';
-        return `<span class="rounded-full px-3 py-1 font-medium ${cls}">${name}</span>` +
-          (i < steps.length - 1 ? '<span class="text-slate-400">→</span>' : '');
-      }).join('');
-    });
-
-    // Filter layout table
     const rows = [...document.querySelectorAll('#layout-table tbody tr')];
     document.getElementById('filter').addEventListener('input', e => {
       const q = e.target.value.toLowerCase();
       rows.forEach(r => { r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none'; });
     });
 
-    // Highlight active nav link
     const links = [...document.querySelectorAll('#nav a')];
-    links.forEach(a => a.className = 'text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400');
+    const idle = 'text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400';
+    const active = 'text-indigo-600 font-medium dark:text-indigo-400';
+    links.forEach(a => a.className = idle);
     const obs = new IntersectionObserver(entries => {
       entries.forEach(en => {
         if (!en.isIntersecting) return;
         links.forEach(a => {
           const on = a.getAttribute('href') === '#' + en.target.id;
-          a.className = on
-            ? 'text-indigo-600 font-medium dark:text-indigo-400'
-            : 'text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400';
+          a.className = on ? active : idle;
+          if (on) a.scrollIntoView({ block: 'nearest', inline: 'nearest' });
         });
       });
     }, { rootMargin: '-40% 0px -55% 0px' });
