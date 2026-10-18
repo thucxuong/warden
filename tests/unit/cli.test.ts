@@ -6,6 +6,7 @@ import { COMMANDS } from "../../plugins/warden/src/cli.ts";
 
 const pluginRoot = resolve(import.meta.dir, "../../plugins/warden");
 const cliPath = join(pluginRoot, "src/cli.ts");
+const pluginVersion = (JSON.parse(readFileSync(join(pluginRoot, ".claude-plugin/plugin.json"), "utf8")) as { version: string }).version;
 
 let dataDir: string;
 beforeAll(() => {
@@ -42,13 +43,13 @@ describe("cli", () => {
   test("version prints the plugin version as JSON", () => {
     const r = runCli(["version"]);
     expect(r.code).toBe(0);
-    expect(JSON.parse(r.out)).toEqual({ version: "0.1.1" });
+    expect(JSON.parse(r.out)).toEqual({ version: pluginVersion });
   });
 
   test("allowlist is exactly the spec list", () => {
     expect([...COMMANDS]).toEqual([
       "version", "init", "start", "next", "done", "wait", "status", "approve", "retry", "reset",
-      "flow", "report", "retro", "upgrade", "tools", "site", "hook", "gate",
+      "flow", "report", "retro", "upgrade", "tools", "site", "hook", "gate", "checks",
     ]);
   });
 

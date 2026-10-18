@@ -90,6 +90,8 @@ Then:
 - `warden approve <task>` — approve a waiting step (human only; TTY required).
 - `warden retry <task>` — retry a blocked step.
 - `warden reset <task>` — delete a task's live state (human only; TTY required).
+- `warden report --status` — list this project's reports with status, fixed-in version and note.
+- `warden checks` — list the periodic checks and which are due. `warden checks run <name>` runs one; `warden checks done <name>` marks an agent check done.
 - `warden site` — open the task dashboard at http://127.0.0.1:4400.
 
 ## Branch protection
@@ -110,5 +112,15 @@ claude --plugin-dir /path/to/warden/plugins/warden
 ```
 
 A local plugin is loaded as `warden@inline` and uses `~/.claude/plugins/data/warden-inline/` for state.
+
+### WA doorbell (maintainers)
+
+To have `warden report` wake the Warden Agent on this machine, register it once per machine, from the warden repo:
+
+```bash
+bun scripts/wa-register.ts
+```
+
+A report then starts a headless `/wa-triage` here. Run `bun scripts/wa-register.ts --off` to stop. The log is `triage/doorbell/doorbell.log`.
 
 See [docs/design.html](docs/design.html) and [docs/spec.md](docs/spec.md) for architecture and implementation details.

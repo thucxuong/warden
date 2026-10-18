@@ -3,11 +3,12 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync,
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { run } from "../../plugins/warden/src/commands/init.ts";
-import { retroLine } from "../../plugins/warden/src/hooks/session-start.ts";
+import { RETRO_CHECK } from "../../plugins/warden/src/commands/checks.ts";
 import { WardenError } from "../../plugins/warden/src/lib/exit.ts";
 import type { Ctx, InitScan } from "../../plugins/warden/src/types.ts";
 
 const pluginRoot = resolve(import.meta.dir, "../../plugins/warden");
+const pluginVersion = (JSON.parse(readFileSync(join(pluginRoot, ".claude-plugin/plugin.json"), "utf8")) as { version: string }).version;
 const temps: string[] = [];
 let repo: string;
 let home: string;
@@ -136,15 +137,17 @@ describe("init --write", () => {
     const { out } = await call(["--write", "--file", payloadFile()]);
     expect(out.written).toEqual(expect.arrayContaining([
       ".warden/warden.json", ".warden/steps.json", ".warden/triage-rules.json", ".warden/reports.md", ".warden/tools.md",
-      ".warden/context/overview.md", ".warden/context/stack.md", "scripts/warden-setup.sh", ".gitignore",
+      ".warden/context/overview.md", ".warden/context/stack.md", ".warden/checks/retro.md", "scripts/warden-setup.sh", ".gitignore",
       ...["context", "rules", "decisions", "knowledge", "checks", "retros", "fixes", "flows"].map((d) => `.warden/${d}/INDEX.md`),
     ]));
 
     const warden = JSON.parse(readFileSync(join(repo, ".warden/warden.json"), "utf8"));
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    expect(warden).toEqual({ schema: 1, wardenVersion: "0.1.1", projectId: "demo", taskIdPattern: "^DM-\\d{3}$", sitePort: 4400, lastRetro: today });
-    expect(retroLine(warden.lastRetro)).toBeNull(); // a fresh project is not due for a retro
+    expect(warden).toEqual({ schema: 1, wardenVersion: pluginVersion, projectId: "demo", taskIdPattern: "^DM-\\d{3}$", sitePort: 4400 });
+    expect(warden).not.toHaveProperty("lastRetro");
+    expect(readFileSync(join(repo, ".warden/checks/retro.md"), "utf8")).toBe(RETRO_CHECK(today)); // a fresh project is not due
+    expect(readFileSync(join(repo, ".warden/checks/INDEX.md"), "utf8")).toContain("- retro.md: Retro of recent work");
     const steps = JSON.parse(readFileSync(join(repo, ".warden/steps.json"), "utf8"));
     expect(steps.review.model).toBe("sonnet"); // defaults filled
     expect(JSON.parse(readFileSync(join(repo, ".warden/triage-rules.json"), "utf8"))).toEqual({ schema: 1, rules: [] });

@@ -30,6 +30,9 @@ export function parsePrompt(prompt: string, taskIdPattern: string): PromptAction
   };
 }
 
+// The gate can finish before the agent looks, so "done" is a possible outcome of next.
+const RUN_NEXT = "Run: warden next. The checks may already have finished, so the run can be done, not only the next step.";
+
 function contextJson(text: string): string {
   return JSON.stringify({ hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: text } });
 }
@@ -73,17 +76,17 @@ async function act(call: HookCall, action: PromptAction, run: RunJson): Promise<
     case "approve":
       if (!waitingForApprove) return `warden: ${task} is not waiting for approve (status ${run.status}).`;
       await approve(ctx, task, call.spawnWorker);
-      return `warden: the user approved ${task} at ${at}. Run: warden next`;
+      return `warden: the user approved ${task} at ${at}. ${RUN_NEXT}`;
     case "reject":
       if (!waitingForApprove) return `warden: ${task} is not waiting for approve (status ${run.status}).`;
       if (action.text === null) return `warden: reject needs a reason; the user should type "reject: <why>".`;
       await reject(ctx, task, action.text, call.spawnWorker);
-      return `warden: the user rejected ${task} at ${at}: ${action.text}. Run: warden next`;
+      return `warden: the user rejected ${task} at ${at}: ${action.text}. ${RUN_NEXT}`;
     case "retry":
       if (run.status !== "blocked" && run.waiting?.kind !== "merge-fix") {
         return `warden: ${task} is not blocked or waiting for a fix merge (status ${run.status}).`;
       }
       await retry(ctx, task, call.spawnWorker);
-      return `warden: the user retried ${task} at ${at}. Run: warden next`;
+      return `warden: the user retried ${task} at ${at}. ${RUN_NEXT}`;
   }
 }

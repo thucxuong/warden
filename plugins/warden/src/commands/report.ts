@@ -1,10 +1,11 @@
 // warden report: file a report in this machine's outbox and note it in .warden/reports.md (spec 3.2, 4.13).
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { loadWardenJson } from "../config/config.ts";
+import { ring } from "../lib/doorbell.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
 import { readJson, writeJsonAtomic } from "../lib/json.ts";
-import { worktreeRoot } from "../state/paths.ts";
+import { mainRoot, worktreeRoot } from "../state/paths.ts";
 import type { Ctx, ReportRecord } from "../types.ts";
 
 export const REPORTS_HEADER = "| ID | Title | Status | Fixed in |\n|---|---|---|---|\n";
@@ -88,8 +89,28 @@ function setStatus(args: string[]): void {
   console.log(JSON.stringify({ id: record.id, status: record.status }));
 }
 
+// warden report --status: this project's reports with the maintainers' verdicts. Read-only (spec-0.2 4).
+function printStatus(args: string[], ctx: Ctx): void {
+  if (args.length !== 1) throw new WardenError("usage: warden report --status", EXIT.USAGE);
+  const { projectId } = loadWardenJson(join(mainRoot(ctx.cwd), ".warden", "warden.json"));
+  const dir = reportsDir(ctx);
+  const names = existsSync(dir) ? readdirSync(dir).filter((f) => /^R-\d{4,}\.json$/.test(f)).sort() : [];
+  const reports: object[] = [];
+  for (const name of names) {
+    try {
+      const r = readJson<ReportRecord>(join(dir, name));
+      if (r.schema !== 1 || r.projectId !== projectId) continue;
+      reports.push({ id: r.id, kind: r.kind, title: r.title, status: r.status, fixedIn: r.fixedIn ?? null, note: r.note ?? null, createdAt: r.createdAt });
+    } catch {
+      // a broken record is skipped
+    }
+  }
+  console.log(JSON.stringify({ reports }));
+}
+
 export async function run(args: string[], ctx: Ctx): Promise<void> {
   if (args[0] === "set") return setStatus(args);
+  if (args.includes("--status")) return printStatus(args, ctx);
   const kind = flagValue(args, "--kind");
   const title = flagValue(args, "--title")?.trim();
   if (kind !== "bug" && kind !== "enhancement") throw new WardenError("--kind must be bug or enhancement", EXIT.USAGE);
@@ -107,7 +128,8 @@ export async function run(args: string[], ctx: Ctx): Promise<void> {
     createdAt: new Date().toISOString(), status: "sent", fixedIn: null, note: null,
   }));
   appendRow(reportsTablePath(root), REPORTS_HEADER, `| ${record.id} | ${cell(title)} | sent | ${NO_VERSION} |`);
-  console.log(JSON.stringify({ id: record.id }));
+  ring(ctx);
+  console.log(JSON.stringify({ id: record.id, status: "sent" }));
 }
 
 // ---------------------------------------------------------------------------

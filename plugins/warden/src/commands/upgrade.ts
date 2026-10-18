@@ -1,9 +1,9 @@
 // warden upgrade --notes | --done: apply upgrade notes to .warden/ (spec 3.2, 10.5).
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { loadWardenJson } from "../config/config.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
-import { writeJsonAtomic } from "../lib/json.ts";
+import { readJson, writeJsonAtomic } from "../lib/json.ts";
 import { compareSemver, readPluginVersion } from "../lib/version.ts";
 import { worktreeRoot } from "../state/paths.ts";
 import type { Ctx } from "../types.ts";
@@ -34,7 +34,8 @@ export async function run(args: string[], ctx: Ctx): Promise<void> {
     console.log(JSON.stringify({ from: warden.wardenVersion, to, notes: collectNotes(ctx.root, warden.wardenVersion, to) }));
     return;
   }
-  writeJsonAtomic(wardenPath, { ...warden, wardenVersion: to });
+  const { lastRetro: _dropped, ...rest } = warden; // 0.2 never writes lastRetro (spec-0.2 5.2)
+  writeJsonAtomic(wardenPath, { ...rest, wardenVersion: to });
   console.log(JSON.stringify({ wardenVersion: to }));
 }
 
@@ -45,6 +46,36 @@ export function upgradeNotice(ctx: Ctx): string | null {
     const plugin = readPluginVersion(ctx.root);
     if (compareSemver(plugin, warden.wardenVersion) <= 0) return null;
     return `warden: updated to ${plugin}; this project is on ${warden.wardenVersion}. Run /warden:upgrade.`;
+  } catch {
+    return null;
+  }
+}
+
+// The session-start line when the marketplace clone holds a newer warden than this session runs (spec 0.2 section 6).
+// No network. Never throws: null on any problem, and for any plugin not loaded from the cache.
+export function newerVersionNotice(pluginRoot: string): string | null {
+  try {
+    const layout = /^(.+\/plugins)\/cache\/([^/]+)\/([^/]+)\/[^/]+$/.exec(realpathSync(pluginRoot));
+    if (!layout || layout[3] !== "warden") return null;
+    const pluginsDir = layout[1]!;
+    const marketplace = layout[2]!;
+
+    let installLocation: unknown;
+    try {
+      installLocation = readJson<Record<string, { installLocation?: unknown } | undefined>>(join(pluginsDir, "known_marketplaces.json"))[marketplace]?.installLocation;
+    } catch {
+      // No usable registry file: use the default clone dir.
+    }
+    const clone = typeof installLocation === "string" ? installLocation : join(pluginsDir, "marketplaces", marketplace);
+
+    const catalog = readJson<{ plugins?: { name?: unknown; source?: unknown }[] }>(join(clone, ".claude-plugin", "marketplace.json"));
+    const source = catalog.plugins?.find((entry) => entry.name === "warden")?.source;
+    if (typeof source !== "string" || !source.startsWith("./")) return null;
+
+    const available = readJson<{ version: string }>(join(clone, source, ".claude-plugin", "plugin.json")).version;
+    const installed = readPluginVersion(pluginRoot);
+    if (compareSemver(available, installed) <= 0) return null;
+    return `warden: version ${available} is available; this session runs ${installed}. To update, run "claude plugin update warden@${marketplace}" in a terminal (or use /plugin), then /reload-plugins.`;
   } catch {
     return null;
   }

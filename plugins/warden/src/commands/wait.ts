@@ -21,7 +21,7 @@ function maxSeconds(value: string | undefined): number {
 
 export async function run(args: string[], ctx: Ctx): Promise<void> {
   const parsed = parseArgs(args, ["--max-seconds"]);
-  const task = resolveTask(ctx, optionalTask(parsed, "warden wait [<task>] [--max-seconds <n>]"));
+  const task = resolveTask(ctx, optionalTask(parsed, "warden wait [<task>] [--max-seconds <n>]"), true);
   const deadline = Date.now() + maxSeconds(parsed.values["--max-seconds"]) * 1000;
   const main = mainRoot(ctx.cwd);
   const spawnWorker = defaultSpawnWorker(ctx);

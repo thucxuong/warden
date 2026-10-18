@@ -10,6 +10,7 @@ import { branchExists, currentBranch } from "../lib/git.ts";
 import { readPluginVersion } from "../lib/version.ts";
 import { worktreeRoot } from "../state/paths.ts";
 import type { CommandDef, Ctx, InitPayload, InitScan, StepsJson, WardenJson } from "../types.ts";
+import { RETRO_CHECK } from "./checks.ts";
 import { REPORTS_HEADER } from "./report.ts";
 import { TOOLS_HEADER } from "./tools.ts";
 
@@ -153,7 +154,7 @@ function scan(ctx: Ctx): InitScan {
 // ---------------------------------------------------------------------------
 
 interface ValidPayload {
-  warden: WardenJson;
+  warden: Omit<WardenJson, "lastRetro">;
   steps: StepsJson;
   context: Record<string, string>;
   setupScript: string;
@@ -180,8 +181,10 @@ function validatePayload(value: unknown, pluginVersion: string): ValidPayload {
     context[slug] = text;
   }
 
+  // lastRetro is legacy (spec-0.2 5.2): the retro's date lives in .warden/checks/retro.md.
+  const { lastRetro: _legacy, ...warden } = validateWardenJson({ ...payload.warden, schema: 1, wardenVersion: pluginVersion }, ".warden/warden.json");
   return {
-    warden: validateWardenJson({ ...payload.warden, schema: 1, wardenVersion: pluginVersion, lastRetro: localDate() }, ".warden/warden.json"),
+    warden,
     steps: validateStepsJson({ fix: { scope: DEFAULT_FIX_SCOPE }, ...payload.steps, schema: 1 }, ".warden/steps.json"),
     context,
     setupScript: payload.setupScript,
@@ -234,7 +237,9 @@ function indexBody(root: string, dir: string): string {
   const lines = listDir(root, `.warden/${dir}`)
     .filter((f) => f.endsWith(".md") && f !== "INDEX.md")
     .map((f) => {
-      const firstLine = readFileSync(join(root, ".warden", dir, f), "utf8").split("\n").find((l) => l.trim() !== "") ?? "";
+      const lines = readFileSync(join(root, ".warden", dir, f), "utf8").split("\n");
+      const close = lines[0]?.trim() === "---" ? lines.findIndex((l, i) => i > 0 && l.trim() === "---") : -1;
+      const firstLine = lines.slice(close + 1).find((l) => l.trim() !== "") ?? "";
       return `- ${f}: ${firstLine.replace(/^#+\s*/, "").trim()}`;
     });
   return `# ${title}\n\n${lines.map((l) => l + "\n").join("")}`;
@@ -325,6 +330,7 @@ async function write(args: string[], ctx: Ctx): Promise<{ written: string[]; not
   for (const [slug, text] of Object.entries(payload.context)) {
     out.file(`.warden/context/${slug}.md`, text.endsWith("\n") ? text : text + "\n");
   }
+  out.fileIfMissing(".warden/checks/retro.md", RETRO_CHECK(localDate()));
   for (const dir of INDEX_DIRS) out.fileIfMissing(`.warden/${dir}/INDEX.md`, indexBody(root, dir));
   out.file(SETUP_SCRIPT, payload.setupScript.endsWith("\n") ? payload.setupScript : payload.setupScript + "\n");
   if (ensureGitignoreLine(root, ".warden/state/")) out.written.push(".gitignore");

@@ -5,7 +5,7 @@ import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  PLACEHOLDER_PLAN, PLAN_OUTPUT, bashHook, cleanupAll, commitFiles, createCp, done, editHook, eventTypes, git, headOf, implement,
+  PLACEHOLDER_PLAN, PLUGIN_ROOT, PLAN_OUTPUT, bashHook, cleanupAll, commitFiles, createCp, done, editHook, eventTypes, git, headOf, implement,
   implementOutput, promptHook, put, readEvents, readRun, readState, reviewCalls, sessionStart, setReview, settle, start, stateDir,
   stopHook, untilEvent, warden, writeFlow, wtOf, type Cp,
 } from "./helpers.ts";
@@ -13,6 +13,7 @@ import {
 setDefaultTimeout(120_000);
 afterAll(cleanupAll);
 
+const VERSION: string = JSON.parse(readFileSync(join(PLUGIN_ROOT, ".claude-plugin", "plugin.json"), "utf8")).version;
 const TODAY = new Date().toISOString().slice(0, 10);
 
 // Runs start, then the plan (a placeholder one first), then the implement step of a feature run, and returns
@@ -31,7 +32,7 @@ describe("setup", () => {
     expect(git(cp.main, "show", "main:.warden/warden.json")).toContain('"projectId": "demo"');
     expect(git(cp.main, "show", "main:scripts/warden-setup.sh")).toBe("true");
     expect(git(cp.main, "show", "main:.gitignore")).toContain(".warden/state/");
-    expect(warden(cp, ["version"]).json).toEqual({ version: "0.1.1" });
+    expect(warden(cp, ["version"]).json).toEqual({ version: VERSION });
     expect(warden(cp, ["status"]).json).toEqual({ runs: [] });
   });
 });
@@ -334,7 +335,7 @@ describe("approve", () => {
 
     // The user's own prompt "approve" advances the run (the flow ends at the approve step).
     const approved = promptHook(cp, "S1", "approve");
-    expect(approved.json.hookSpecificOutput.additionalContext).toBe("warden: the user approved T-004 at approve. Run: warden next");
+    expect(approved.json.hookSpecificOutput.additionalContext).toBe("warden: the user approved T-004 at approve. Run: warden next. The checks may already have finished, so the run can be done, not only the next step.");
     expect(readRun(cp, "T-004").status).toBe("done");
     expect(eventTypes(cp, "T-004")).toContain("approve.granted");
   });

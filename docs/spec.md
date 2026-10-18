@@ -315,7 +315,7 @@ exec "$BUN" "$ROOT/src/cli.ts" "$@"
 Task resolution for commands that take an optional `[<task>]`:
 - If `<task>` is given, use it.
 - Otherwise find the one live run (status `active`, `waiting` or `blocked`) whose `worktree` equals `git rev-parse --show-toplevel` of cwd.
-- If none matches, exit 3: `no active run in this worktree`.
+- If none matches, exit 3: `no active run in this worktree`. Exception: `next` and `wait` then use the most recently updated finished run (`done` or `shipped`) of this worktree, if any, and print its normal `NextResponse` (`<task>: done.`, exit 0), so the agent sees how the run ended (for example after a typed `retry` finished it).
 - If several match, exit 2: `several runs here; pass the task id`.
 
 Names used below (all computed in `state/paths.ts`):
@@ -333,7 +333,7 @@ All machine-facing commands print **one JSON object on stdout**. Diagnostics go 
 | `warden init --scan` | — | Read-only scan of the repo (8.1). Exit 3 if not a git repo. | `InitScan` (4.11) |
 | `warden init --write` | `[--file <path>]` (default stdin) | Validates `InitPayload` (4.11) and writes `.warden/` (8.1), `scripts/warden-setup.sh`, `.gitignore` lines and INDEX.md files; with `teamInstall: true` also merges the 10.3 block into `.claude/settings.json`. Refuses if `.warden/warden.json` exists, unless `--force`. Does not commit. | `{"written":[paths...]}` |
 | `warden start <task>` | `--template do\|feature\|bugfix` or `--flow <name\|path>`; `[--text-file <p>]` `[--worktree]` `[--branch <b>]` | See "start" below. | `NextResponse` (4.9), plus `"worktree"` when created or reused |
-| `warden next` | `[<task>]` | Returns what the current step needs. Mutates only through `ensureGate` (5.4), the light ship precheck (5.6) and the approve skip (5.5). | `NextResponse` |
+| `warden next` | `[<task>]` | Returns what the current step needs. With no live run in the worktree, returns the most recent finished run's response (3.1). Mutates only through `ensureGate` (5.4), the light ship precheck (5.6) and the approve skip (5.5). | `NextResponse` |
 | `warden done` | `[<task>] [--file <path>]` (default stdin) | Only for agent steps (`analyze`, `plan`, `implement`, `ship`, `fix`). Validates the output and evidence (5.3). On accept, advances the run and, when the next step is engine work, starts the worker and **returns at once** with `status: "running_gate"`. It never waits. On a check or review step, exits 1 with `check steps are run by the engine` (or `review steps …`). Exit 4 while a gate is running. | `DoneResponse` (4.9) |
 | `warden wait` | `[<task>] [--max-seconds <n>]` (default 540, max 590) | The only blocking command. Calls `ensureGate`, then polls `run.json` every 2 s until no engine work is running or time runs out. The caller sets the Bash timeout to 600000. | `NextResponse` |
 | `warden status` | `[--all]` | Lists runs in the main checkout: active, waiting and blocked by default; with `--all`, shipped and done too. | `{"runs":[StatusLine...]}` |
@@ -815,7 +815,7 @@ Files:
 - `triage/*.json`, `review/*.json`, `review/leftover.md` (only while `run.leftovers` is set; a later clean review clears it)
 - `summary.json`
 
-Logs, raw reviewer output and the steps.json snapshot are not copied. The committed record is a snapshot taken at ship entry: it has `status: "shipping"` and ends before the ship step's own events. Live `run.json` holds the final status.
+Logs, raw reviewer output and the steps.json snapshot are not copied. The committed record is a snapshot taken at ship entry: it has `status: "shipping"` and ends before the ship step's own events. Live `run.json` holds the final status. A flow without a ship step (such as `do`) has no history folder; its data stays in `state/<task>/`. `shipping` means "written at ship entry"; it is not renamed.
 
 ```ts
 export interface StepSummary {
@@ -997,7 +997,7 @@ The worker:
 2. For a check or review job: records `startSha = HEAD` and requires porcelain to be empty, ignoring `.warden/history/<task>/**`. A dirty tree gives `routeBack(kind:"dirty", reason:"working tree is dirty at <step>: <paths>")` without running anything.
 3. Runs the gate (6.1 or 6.3), and triage too if needed. After each check command, a non-empty porcelain is the result **check left files** (5.2), and triage does not run.
 4. At the end, HEAD must still equal `startSha` and porcelain must still be empty. Otherwise the result is thrown away: write `gate.discarded`, `reruns += 1`, and run the gate again. After 2 reruns: `block("HEAD or the tree changed while <step> ran; do not edit or commit during gates, then type retry")`.
-5. Applies the transitions in 5.2 (the proof sha is `startSha`). If the next step is engine work, the same worker continues with it. Otherwise it sets `gate = null` and exits. A worker never runs an agent step.
+5. Applies the transitions in 5.2 (the proof sha is `startSha`). If the next step is engine work, the same worker continues with it. Otherwise it sets `gate = null` in the same write as the transition (so a worker killed right after never leaves a stale `gate`) and exits. A worker never runs an agent step.
 
 `wait` polls `run.json` until `gate == null` or `--max-seconds` passes. On timeout it returns `status:"running_gate"` with the message `gate still running; run: warden wait`. A busy task lock during its `ensureGate` (the worker can hold it longer than 5 s during a fetch or history) is not an error: `wait` polls again.
 
@@ -1367,7 +1367,7 @@ Also links the session (7.6).
 - The action is the same machine call as the TTY command, followed by `ensureGate`. Output on success:
 
 ```json
-{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"warden: the user approved <task> at <step>. Run: warden next"}}
+{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"warden: the user approved <task> at <step>. Run: warden next. The checks may already have finished, so the run can be done, not only the next step."}}
 ```
 
 - A wrong state gives the context `warden: <task> is not waiting for approve (status <s>).` The prompt is never blocked.

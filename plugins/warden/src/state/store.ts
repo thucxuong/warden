@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { EXIT, WardenError } from "../lib/exit.ts";
 import { appendJsonl, readJson, writeJsonAtomic } from "../lib/json.ts";
 import type { EventLine, EventType, RunJson, SessionLink, SessionRecord } from "../types.ts";
-import { SESSIONS_DIR_NAME, sessionsDir, stateRoot, taskDir } from "./paths.ts";
+import { sessionsDir, stateRoot, taskDir } from "./paths.ts";
 
 const LOCK_WAIT_MS = 5000;
 const LOCK_POLL_MS = 50;
@@ -33,12 +33,12 @@ export function writeRun(main: string, run: RunJson): void {
   writeJsonAtomic(runFile(main, run.task), run);
 }
 
-// Every task that has a state dir, in name order. The session records dir is not a task.
+// Every task that has a state dir, in name order. Dirs starting with "_" (sessions, checks) are not tasks.
 export function listTasks(main: string): string[] {
   const root = stateRoot(main);
   if (!existsSync(root)) return [];
   return readdirSync(root, { withFileTypes: true })
-    .filter((e) => e.isDirectory() && e.name !== SESSIONS_DIR_NAME)
+    .filter((e) => e.isDirectory() && !e.name.startsWith("_"))
     .map((e) => e.name)
     .sort();
 }

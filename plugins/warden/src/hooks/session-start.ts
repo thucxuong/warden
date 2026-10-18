@@ -1,16 +1,14 @@
-// SessionStart (spec 7.2): pointer files, the session record, and the status lines injected as context.
+// SessionStart (spec 7.2, spec 0.2 section 7): pointer files, the session record, and the status lines injected as context.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { reportStatusChanges } from "../commands/report.ts";
-import { upgradeNotice } from "../commands/upgrade.ts";
+import { type CheckRow, checksDueLine, checksFailedLine, listChecks, mainCheckoutBusy, startCheckInBackground } from "../commands/checks.ts";
+import { newerVersionNotice, upgradeNotice } from "../commands/upgrade.ts";
 import { ensureGate } from "../engine/machine.ts";
 import type { Ctx, RunJson } from "../types.ts";
 import {
-  type HookCall, linkSession, liveRuns, logHookError, machineCtx, recordSession, runFlow, runForSession, wardenJson,
+  type HookCall, linkSession, liveRuns, logHookError, machineCtx, recordSession, runFlow, runForSession,
 } from "./resolve.ts";
-
-const RETRO_EVERY_DAYS = 2;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 function writeIfDifferent(path: string, text: string): void {
   if (existsSync(path) && readFileSync(path, "utf8") === text) return;
@@ -44,22 +42,36 @@ function runLine(call: HookCall, run: RunJson): string {
   return `warden: ${run.task} stopped at ${run.current.id} (${run.stepIndex + 1}/${total}, ${run.flowName}). Run: warden next`;
 }
 
-function localDate(date = new Date()): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-}
-
-export function retroLine(lastRetro: string | null, today = localDate()): string | null {
-  if (lastRetro !== null && Date.parse(today) - Date.parse(lastRetro) < RETRO_EVERY_DAYS * DAY_MS) return null;
-  return `warden: retro due (last ${lastRetro ?? "never"}). When the user's current request is done, offer the retro in one short line. Do not start it unless the user says yes.`;
-}
-
-function retroDue(call: HookCall): string | null {
+// One step of the session start that must never break it: a failure is logged and the step yields null.
+function guarded<T>(call: HookCall, label: string, fn: () => T): T | null {
   try {
-    return retroLine(wardenJson(call.main).lastRetro);
-  } catch {
-    return null; // a broken warden.json must not break a session start
+    return fn();
+  } catch (err) {
+    logHookError(call.ctx.data, `hook session-start: ${label}`, err);
+    return null;
   }
+}
+
+// Checks (spec 0.2 5.4): start the due auto command checks silently, then offer the others, then report failed auto checks.
+function checkLines(call: HookCall): string[] {
+  const rows = guarded(call, "checks list", () => listChecks(call.main));
+  if (!rows) return [];
+  const valid = rows.filter((row) => !row.error);
+  const isAuto = (row: CheckRow) => row.kind === "command" && row.auto;
+
+  guarded(call, "auto checks", () => {
+    if (mainCheckoutBusy(call.main) !== null) return;
+    for (const row of valid.filter((r) => isAuto(r) && r.due && !r.running)) {
+      guarded(call, `auto check ${row.name}`, () => startCheckInBackground(machineCtx(call), call.main, row.name));
+    }
+  });
+
+  const lines: string[] = [];
+  const due = guarded(call, "checks due line", () => checksDueLine(valid.filter((r) => r.due && !isAuto(r))));
+  if (due) lines.push(due);
+  const failed = guarded(call, "checks failed line", () => checksFailedLine(valid.filter((r) => isAuto(r) && r.lastResult === "fail")));
+  if (failed) lines.push(failed);
+  return lines;
 }
 
 export async function sessionStart(call: HookCall): Promise<string | null> {
@@ -78,8 +90,9 @@ export async function sessionStart(call: HookCall): Promise<string | null> {
   // warden.json and reports.md are read from the main checkout (5.1), wherever the session started.
   const upgrade = upgradeNotice(machineCtx(call));
   if (upgrade) lines.push(upgrade);
-  const retro = retroDue(call);
-  if (retro) lines.push(retro);
+  const newer = guarded(call, "newer version", () => newerVersionNotice(call.ctx.root));
+  if (newer) lines.push(newer);
+  lines.push(...checkLines(call));
   for (const change of reportStatusChanges(machineCtx(call))) {
     const version = change.fixedIn ? ` in ${change.fixedIn}` : "";
     lines.push(`warden: report ${change.id} "${change.title}" is now ${change.status}${version}.`);

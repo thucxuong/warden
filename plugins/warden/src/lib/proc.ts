@@ -96,9 +96,13 @@ export async function run(cmd: string, options: RunOptions): Promise<{ exit: num
 }
 
 // Start time of a process as printed by `ps -o lstart=`, or null when the pid is not running.
-// Two reads are equal only for the same process, so a reused pid is told apart.
+// Two reads are equal only for the same process, so a reused pid is told apart. ps runs with a fixed
+// locale and time zone, so reads from different environments (another shell, direnv, a hook) agree.
 export function startTime(pid: number): string | null {
-  const result = spawnSync("ps", ["-o", "lstart=", "-p", String(pid)], { encoding: "utf8" });
+  const result = spawnSync("ps", ["-o", "lstart=", "-p", String(pid)], {
+    encoding: "utf8",
+    env: { ...process.env, LC_ALL: "C", TZ: "UTC" },
+  });
   if (result.status !== 0) return null;
   const text = result.stdout.trim();
   return text === "" ? null : text;

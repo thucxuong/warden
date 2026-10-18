@@ -26,3 +26,12 @@
 - Add retry hint to blocked status message to guide users on how to continue.
 - Retro skill now requires explicit user confirmation before running.
 - Improve retro-due messaging in session start to guide CPA behavior.
+
+## 0.2.0 — 2026-10-18
+
+- Doorbell: `warden report` wakes the Warden Agent on the same machine, which triages the report in a headless run. The CPA sees only `sent`.
+- `warden report --status` lists this project's reports with status, fixed-in version and note.
+- Periodic checks: `.warden/checks/<name>.md`, `warden checks`, `checks run`, `checks done`. Command checks can run in the background at session start (`auto: true`).
+- The retro is now the built-in agent check `retro`; `warden retro --done` stays as an alias. `lastRetro` in `warden.json` is legacy.
+- Session start says when a newer version is in the local marketplace clone (no network).
+- Run `/warden:upgrade` to move `lastRetro` into `.warden/checks/retro.md`.

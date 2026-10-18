@@ -239,6 +239,25 @@ describe("start", () => {
     expect(n.json.message).toContain("No task text was given");
     expect(cli(["next", "T-9"]).code).toBe(3);
   });
+
+  test("next and wait fall back to the worktree's finished run; done and status do not", () => {
+    git(main, "checkout", "-q", "-b", "t-3");
+    expect(cli(["start", "T-3", "--template", "do"]).code).toBe(0);
+    const run = readRun(main, "T-3");
+    run.status = "done";
+    run.gate = null;
+    run.waiting = null;
+    writeRun(main, run);
+
+    const n = cli(["next"]);
+    expect(n.code).toBe(0);
+    expect(n.json).toMatchObject({ task: "T-3", status: "done", message: "T-3: done." });
+    const w = cli(["wait"]);
+    expect(w.code).toBe(0);
+    expect(w.json).toMatchObject({ task: "T-3", status: "done" });
+    expect(cli(["done"]).code).toBe(3);
+    expect(cli(["status"]).json.runs).toEqual([]);
+  });
 });
 
 describe("done and wait", () => {

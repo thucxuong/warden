@@ -15,6 +15,7 @@ description: Send a bug report or an enhancement request about warden itself. Re
    <body>
    EOF
    ```
-6. Tell the user the report id it prints, for example `R-0001`.
+6. Tell the user: Report <id> sent. Use the id it prints, for example `R-0001`.
 
 Session start shows later when the status of a report changes.
+To see the status of earlier reports, run warden report --status.

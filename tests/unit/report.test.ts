@@ -1,9 +1,8 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { reportStatusChanges, run } from "../../plugins/warden/src/commands/report.ts";
-import { run as runRetro } from "../../plugins/warden/src/commands/retro.ts";
 import { WardenError } from "../../plugins/warden/src/lib/exit.ts";
 import type { Ctx, ReportRecord } from "../../plugins/warden/src/types.ts";
 
@@ -62,8 +61,8 @@ describe("warden report", () => {
   test("stamps ids in order, writes the outbox record and the table row", async () => {
     const first = await call(run, ["--kind", "bug", "--title", "Gate hangs", "--file", bodyFile()]);
     const second = await call(run, ["--kind", "enhancement", "--title", "Add a | pipe", "--file", bodyFile("More.")]);
-    expect(first.out).toEqual({ id: "R-0001" });
-    expect(second.out).toEqual({ id: "R-0002" });
+    expect(first.out).toEqual({ id: "R-0001", status: "sent" });
+    expect(second.out).toEqual({ id: "R-0002", status: "sent" });
 
     const record = readRecord("R-0001");
     expect(record).toMatchObject({ schema: 1, id: "R-0001", projectId: "demo", kind: "bug", title: "Gate hangs", body: "It broke.\nExpected: it works.", status: "sent", fixedIn: null, note: null });
@@ -78,7 +77,7 @@ describe("warden report", () => {
   test("a number that is already taken is skipped", async () => {
     mkdirSync(join(data, "reports"), { recursive: true });
     writeFileSync(join(data, "reports", "R-0001.json"), "{}");
-    expect((await call(run, ["--kind", "bug", "--title", "t", "--file", bodyFile()])).out).toEqual({ id: "R-0002" });
+    expect((await call(run, ["--kind", "bug", "--title", "t", "--file", bodyFile()])).out).toEqual({ id: "R-0002", status: "sent" });
   });
 
   test("bad kind, missing title or empty body exits 2", async () => {
@@ -165,30 +164,51 @@ describe("reportStatusChanges", () => {
   });
 });
 
-describe("warden retro --done", () => {
-  const lastRetro = () => JSON.parse(readFileSync(join(repo, ".warden/warden.json"), "utf8")).lastRetro;
+describe("warden report --status", () => {
+  const put = (id: string, fields: Record<string, unknown>) =>
+    writeFileSync(join(data, "reports", `${id}.json`), JSON.stringify({ schema: 1, id, projectId: "demo", kind: "bug", title: id, body: "secret body", createdAt: "2026-10-18T00:00:00.000Z", status: "sent", fixedIn: null, note: null, ...fields }));
 
-  test("needs the retro file, then sets lastRetro", async () => {
-    expect((await call(runRetro, ["--done", "--date", "2026-10-18"])).code).toBe(1);
-    expect(lastRetro()).toBeNull();
+  test("lists this project's reports by id with status and note, without the body", async () => {
+    mkdirSync(join(data, "reports"), { recursive: true });
+    put("R-0010", { status: "fixed", fixedIn: "0.2.0", note: "Fixed." });
+    put("R-0002", { kind: "enhancement", status: "needs-info", note: "Which command?" });
+    put("R-0003", { projectId: "other" });
+    writeFileSync(join(data, "reports", "R-0004.json"), "{ nope");
+    writeFileSync(join(data, "reports", "counter.json"), '{"last":10}');
 
-    mkdirSync(join(repo, ".warden/retros"), { recursive: true });
-    writeFileSync(join(repo, ".warden/retros/2026-10-18.md"), "# Retro");
-    expect((await call(runRetro, ["--done", "--date", "2026-10-18"])).out).toEqual({ lastRetro: "2026-10-18" });
-    expect(lastRetro()).toBe("2026-10-18");
+    const before = readdirSync(join(data, "reports")).sort();
+    const res = await call(run, ["--status"]);
+    expect(res.out).toEqual({
+      reports: [
+        { id: "R-0002", kind: "enhancement", title: "R-0002", status: "needs-info", fixedIn: null, note: "Which command?", createdAt: "2026-10-18T00:00:00.000Z" },
+        { id: "R-0010", kind: "bug", title: "R-0010", status: "fixed", fixedIn: "0.2.0", note: "Fixed.", createdAt: "2026-10-18T00:00:00.000Z" },
+      ],
+    });
+    expect(readdirSync(join(data, "reports")).sort()).toEqual(before);
+    expect(existsSync(join(repo, ".warden/reports.md"))).toBe(false);
   });
 
-  test("the date defaults to today", async () => {
-    const d = new Date();
-    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    mkdirSync(join(repo, ".warden/retros"), { recursive: true });
-    writeFileSync(join(repo, `.warden/retros/${today}.md`), "# Retro");
-    expect((await call(runRetro, ["--done"])).out).toEqual({ lastRetro: today });
+  test("no outbox gives an empty list", async () => {
+    expect((await call(run, ["--status"])).out).toEqual({ reports: [] });
   });
 
-  test("usage errors exit 2", async () => {
-    expect((await call(runRetro, [])).code).toBe(2);
-    expect((await call(runRetro, ["--done", "--date", "yesterday"])).code).toBe(2);
-    expect((await call(runRetro, ["--done", "--date", "../x"])).code).toBe(2);
+  test("--status from a linked worktree reads the main checkout's warden.json", async () => {
+    // .warden/warden.json is untracked, so the new worktree has none of its own.
+    const git = (...a: string[]) => Bun.spawnSync(["git", "-c", "user.name=t", "-c", "user.email=t@t", ...a], { cwd: repo });
+    git("commit", "-q", "--allow-empty", "-m", "init");
+    const wt = join(tempDir("warden-wt-"), "wt");
+    expect(git("worktree", "add", "-q", wt, "-b", "side").exitCode).toBe(0);
+    expect(existsSync(join(wt, ".warden"))).toBe(false);
+    mkdirSync(join(data, "reports"), { recursive: true });
+    const record = { schema: 1, id: "R-0001", projectId: "demo", kind: "bug", title: "R-0001", status: "fixed", fixedIn: "0.2.0", note: null, createdAt: "2026-10-18T00:00:00.000Z" };
+    writeFileSync(join(data, "reports", "R-0001.json"), JSON.stringify(record));
+    const res = await call(run, ["--status"], wt);
+    expect(res.out.reports.map((r: { id: string }) => r.id)).toEqual(["R-0001"]);
+  });
+
+  test("exit 3 when not set up, exit 2 with other args", async () => {
+    expect((await call(run, ["--status", "--kind", "bug"])).code).toBe(2);
+    rmSync(join(repo, ".warden"), { recursive: true });
+    expect((await call(run, ["--status"])).code).toBe(3);
   });
 });

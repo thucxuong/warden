@@ -7,7 +7,7 @@ import { EXIT, WardenError } from "./lib/exit.ts";
 // Only these names are ever imported (spec 3.1). `gate` is internal.
 export const COMMANDS = [
   "version", "init", "start", "next", "done", "wait", "status", "approve", "retry", "reset",
-  "flow", "report", "retro", "upgrade", "tools", "site", "hook", "gate",
+  "flow", "report", "retro", "upgrade", "tools", "site", "hook", "gate", "checks",
 ] as const;
 
 const USAGE = `usage: warden <command> [args]\ncommands: ${COMMANDS.join(" ")}`;

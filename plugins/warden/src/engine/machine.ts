@@ -10,6 +10,7 @@ import {
   branchExists, deleteBranch, diffNames, fetchMain, head, mergeBase, mergeNoEdit, porcelain, revParse, showFile,
   worktreeAdd, worktreeList, worktreeRemove,
 } from "../lib/git.ts";
+import { ring } from "../lib/doorbell.ts";
 import { readJson, writeJsonAtomic } from "../lib/json.ts";
 import * as proc from "../lib/proc.ts";
 import { mainRef, mainRoot, sessionsDir, taskDir, worktreesDir } from "../state/paths.ts";
@@ -392,12 +393,14 @@ export function defaultSpawnWorker(ctx: Ctx): SpawnWorker {
   };
 }
 
-// Applies a result under the lock, only while this process still owns the gate.
+// Applies a result under the lock, only while this process still owns the gate. With no engine work
+// left, gate is cleared in the same write, so a worker killed right after never leaves a stale gate.
 async function apply(ctx: Ctx, main: string, task: string, fn: (s: S) => void): Promise<boolean> {
   return withLock(main, task, () => {
     const s = load(ctx, main, task);
     if (s.run.gate?.pid !== process.pid) return false;
     fn(s);
+    if (!pendingJob(main, s.run)) s.run.gate = null;
     writeRun(main, s.run);
     return true;
   });
@@ -820,6 +823,7 @@ function fileReport(s: S, title: string, body: string): string {
     const current = existsSync(table) ? readFileSync(table, "utf8") : "| ID | Title | Status | Fixed in |\n|---|---|---|---|\n";
     const cell = title.replace(/\|/g, "/").replace(/\s+/g, " ").trim();
     writeFileSync(table, (current.endsWith("\n") ? current : current + "\n") + `| ${id} | ${cell} | sent | — |\n`);
+    ring(s.ctx);
     return id;
   }
 }
@@ -954,13 +958,18 @@ export function statusLines(ctx: Ctx, all: boolean): StatusLine[] {
   return lines;
 }
 
-// Task resolution for commands with an optional [<task>] (3.1).
-export function findRunForWorktree(ctx: Ctx, toplevel: string): RunJson {
+// Task resolution for commands with an optional [<task>] (3.1). With `orFinished` (next, wait), a worktree
+// with no live run falls back to its most recently updated finished run, so the agent sees how it ended.
+export function findRunForWorktree(ctx: Ctx, toplevel: string, orFinished = false): RunJson {
   const main = mainRoot(ctx.cwd);
-  const runs = listTasks(main)
+  const here = listTasks(main)
     .filter((task) => runExists(main, task))
     .map((task) => readRun(main, task))
-    .filter((run) => LIVE.includes(run.status) && run.worktree === toplevel);
+    .filter((run) => run.worktree === toplevel);
+  const runs = here.filter((run) => LIVE.includes(run.status));
+  if (runs.length === 0 && orFinished && here.length > 0) {
+    return here.reduce((a, b) => (b.updatedAt >= a.updatedAt ? b : a));
+  }
   if (runs.length === 0) throw new WardenError("no active run in this worktree", EXIT.NOT_FOUND);
   if (runs.length > 1) throw new WardenError("several runs here; pass the task id", EXIT.USAGE);
   return runs[0]!;

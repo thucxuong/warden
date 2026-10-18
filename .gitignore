@@ -2,3 +2,5 @@
 node_modules/
 plugins/warden/.data-dir
 triage/ledger.json
+triage/doorbell/
+triage/tmp/

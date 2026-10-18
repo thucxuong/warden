@@ -121,6 +121,21 @@ describe("startTime", () => {
     expect(first).toBe(startTime(process.pid));
   });
 
+  test("does not depend on the caller's TZ or locale", () => {
+    const saved = { TZ: process.env.TZ, LC_ALL: process.env.LC_ALL };
+    const first = startTime(process.pid);
+    try {
+      process.env.TZ = "Pacific/Auckland";
+      process.env.LC_ALL = "de_DE.UTF-8";
+      expect(startTime(process.pid)).toBe(first);
+    } finally {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
+  });
+
   test("returns null for a pid that is not running", () => {
     expect(startTime(2 ** 22 + 12345)).toBeNull();
   });

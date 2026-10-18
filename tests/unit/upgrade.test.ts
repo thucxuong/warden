@@ -2,7 +2,7 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { run, upgradeNotice } from "../../plugins/warden/src/commands/upgrade.ts";
+import { newerVersionNotice, run, upgradeNotice } from "../../plugins/warden/src/commands/upgrade.ts";
 import { WardenError } from "../../plugins/warden/src/lib/exit.ts";
 import type { Ctx } from "../../plugins/warden/src/types.ts";
 
@@ -101,7 +101,21 @@ describe("upgrade --done", () => {
     setPluginVersion("0.2.0");
     setProjectVersion("0.1.0");
     expect((await call(["--done"])).out).toEqual({ wardenVersion: "0.2.0" });
-    expect(JSON.parse(readFileSync(join(repo, ".warden/warden.json"), "utf8"))).toEqual({ schema: 1, wardenVersion: "0.2.0", projectId: "demo", taskIdPattern: "^DM-\\d+$", sitePort: 4400, lastRetro: null });
+    expect(JSON.parse(readFileSync(join(repo, ".warden/warden.json"), "utf8"))).toEqual({ schema: 1, wardenVersion: "0.2.0", projectId: "demo", taskIdPattern: "^DM-\\d+$", sitePort: 4400 });
+  });
+
+  test("removes a leftover lastRetro key and does not add one", async () => {
+    setPluginVersion("0.2.0");
+    setProjectVersion("0.1.0");
+    const path = join(repo, ".warden/warden.json");
+    const before = JSON.parse(readFileSync(path, "utf8"));
+    delete before.lastRetro;
+    writeFileSync(path, JSON.stringify(before));
+    await call(["--done"]);
+    expect("lastRetro" in JSON.parse(readFileSync(path, "utf8"))).toBe(false);
+    writeFileSync(path, JSON.stringify({ ...before, lastRetro: "2026-01-01" }));
+    await call(["--done"]);
+    expect("lastRetro" in JSON.parse(readFileSync(path, "utf8"))).toBe(false);
   });
 });
 
@@ -120,5 +134,80 @@ describe("upgradeNotice", () => {
     setProjectVersion("0.2.0");
     expect(upgradeNotice(ctx())).toBeNull();
     expect(upgradeNotice(ctx(tempDir("warden-nogit-")))).toBeNull();
+  });
+});
+
+describe("newerVersionNotice", () => {
+  let base: string;
+  let installed: string;
+
+  function writeJson(path: string, value: unknown): void {
+    mkdirSync(join(path, ".."), { recursive: true });
+    writeFileSync(path, JSON.stringify(value));
+  }
+
+  // Marketplace clone at `dir` with a warden entry whose plugin.json says `version`.
+  function makeClone(dir: string, version: string, source: unknown = "./plugins/warden"): void {
+    writeJson(join(dir, ".claude-plugin/marketplace.json"), { name: "wm", plugins: [{ name: "other", source: "./x" }, { name: "warden", source }] });
+    if (typeof source === "string") writeJson(join(dir, source, ".claude-plugin/plugin.json"), { name: "warden", version });
+  }
+
+  beforeEach(() => {
+    base = tempDir("warden-plugins-");
+    installed = join(base, "plugins/cache/wm/warden/0.2.0");
+    mkdirSync(join(installed, ".claude-plugin"), { recursive: true });
+    writeFileSync(join(installed, ".claude-plugin/plugin.json"), JSON.stringify({ name: "warden", version: "0.2.0" }));
+  });
+
+  const line = 'warden: version 0.3.0 is available; this session runs 0.2.0. To update, run "claude plugin update warden@wm" in a terminal (or use /plugin), then /reload-plugins.';
+
+  test("names both versions when the clone is newer", () => {
+    makeClone(join(base, "plugins/marketplaces/wm"), "0.3.0");
+    expect(newerVersionNotice(installed)).toBe(line);
+  });
+
+  test("null when the clone is equal or older", () => {
+    makeClone(join(base, "plugins/marketplaces/wm"), "0.2.0");
+    expect(newerVersionNotice(installed)).toBeNull();
+    makeClone(join(base, "plugins/marketplaces/wm"), "0.1.1");
+    expect(newerVersionNotice(installed)).toBeNull();
+  });
+
+  test("uses installLocation from known_marketplaces.json when it is a string", () => {
+    const elsewhere = tempDir("warden-clone-");
+    makeClone(elsewhere, "0.3.0");
+    writeJson(join(base, "plugins/known_marketplaces.json"), { wm: { installLocation: elsewhere } });
+    expect(newerVersionNotice(installed)).toBe(line);
+  });
+
+  test("falls back to the default clone dir when installLocation is not a string", () => {
+    makeClone(join(base, "plugins/marketplaces/wm"), "0.3.0");
+    writeJson(join(base, "plugins/known_marketplaces.json"), { wm: { installLocation: 7 } });
+    expect(newerVersionNotice(installed)).toBe(line);
+  });
+
+  test("null when the plugin is not in the cache layout", () => {
+    makeClone(join(base, "plugins/marketplaces/wm"), "0.3.0");
+    expect(newerVersionNotice(pluginRoot)).toBeNull();
+    const other = join(base, "plugins/cache/wm/other/0.2.0");
+    mkdirSync(join(other, ".claude-plugin"), { recursive: true });
+    writeFileSync(join(other, ".claude-plugin/plugin.json"), JSON.stringify({ version: "0.2.0" }));
+    expect(newerVersionNotice(other)).toBeNull();
+    expect(newerVersionNotice(join(base, "missing"))).toBeNull();
+  });
+
+  test("null for broken or unusable files", () => {
+    const clone = join(base, "plugins/marketplaces/wm");
+    expect(newerVersionNotice(installed)).toBeNull(); // no clone
+    makeClone(clone, "0.3.0", "plugins/warden"); // source without ./
+    expect(newerVersionNotice(installed)).toBeNull();
+    makeClone(clone, "0.3.0", { source: "github" }); // non-string source
+    expect(newerVersionNotice(installed)).toBeNull();
+    makeClone(clone, "not-a-version");
+    expect(newerVersionNotice(installed)).toBeNull();
+    writeFileSync(join(clone, ".claude-plugin/marketplace.json"), "{ broken");
+    expect(newerVersionNotice(installed)).toBeNull();
+    writeJson(join(base, "plugins/known_marketplaces.json"), "nope");
+    expect(newerVersionNotice(installed)).toBeNull();
   });
 });

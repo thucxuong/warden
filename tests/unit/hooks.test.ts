@@ -1,13 +1,12 @@
 import { afterAll, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { done, runWorker, start, type SpawnWorker } from "../../plugins/warden/src/engine/machine.ts";
 import { HANDLERS, handleHook, NOT_SET_UP } from "../../plugins/warden/src/commands/hook.ts";
 import { stripHeredocs } from "../../plugins/warden/src/hooks/pre-tool-use.ts";
 import type { HookInput } from "../../plugins/warden/src/hooks/resolve.ts";
-import { retroLine } from "../../plugins/warden/src/hooks/session-start.ts";
 import { parsePrompt } from "../../plugins/warden/src/hooks/user-prompt.ts";
 import { startTime } from "../../plugins/warden/src/lib/proc.ts";
 import { taskDir, worktreesDir } from "../../plugins/warden/src/state/paths.ts";
@@ -17,6 +16,7 @@ import type { Ctx, FlowStep, Gates, RunJson } from "../../plugins/warden/src/typ
 setDefaultTimeout(60_000);
 
 const PLUGIN_ROOT = resolve(import.meta.dir, "../../plugins/warden");
+const VERSION: string = JSON.parse(readFileSync(join(PLUGIN_ROOT, ".claude-plugin", "plugin.json"), "utf8")).version;
 const T = "T-1";
 const PLAN: FlowStep = { id: "plan", type: "plan", brainstorm: false };
 const IMPL: FlowStep = { id: "implement", type: "implement" };
@@ -55,7 +55,7 @@ function commit(dir: string, files: Record<string, string>, message = "change"):
 }
 
 function wardenJson(extra: Record<string, unknown> = {}): string {
-  return JSON.stringify({ schema: 1, wardenVersion: "0.1.1", projectId: "demo", taskIdPattern: "^T-\\d+$", sitePort: 4400, lastRetro: "2999-01-01", ...extra });
+  return JSON.stringify({ schema: 1, wardenVersion: VERSION, projectId: "demo", taskIdPattern: "^T-\\d+$", sitePort: 4400, lastRetro: "2999-01-01", ...extra });
 }
 
 const spawn: SpawnWorker = () => {
@@ -159,6 +159,47 @@ function atFix(): string {
 function hook(event: string, input: HookInput = {}, env: Record<string, string> = {}): Promise<string | null> {
   const full: HookInput = { session_id: "S1", transcript_path: "/tmp/S1.jsonl", cwd: main, hook_event_name: event, ...input };
   return handleHook(event, full, { ...ctx, env: { ...ctx.env, ...env } }, spawn);
+}
+
+function localDate(date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+// A check file in the main checkout (spec 0.2 5.1).
+function check(name: string, frontmatter: string, results = ""): void {
+  write(main, `.warden/checks/${name}.md`, `---\n${frontmatter}\n---\n# ${name}\n\n## Results\n${results ? `${results}\n` : ""}`);
+}
+
+async function waitFor(fn: () => boolean, ms = 15_000): Promise<void> {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    try {
+      if (fn()) return;
+    } catch {
+      // not there yet
+    }
+    await Bun.sleep(50);
+  }
+  throw new Error("timed out waiting");
+}
+
+// An installed plugin under <base>/plugins/cache/wm/warden/<version> whose marketplace clone holds `available`.
+// It reuses the real src so a background check can start from it.
+function fakeCachePlugin(available: string): string {
+  const root = join(base, "plugins", "cache", "wm", "warden", VERSION);
+  mkdirSync(join(root, ".claude-plugin"), { recursive: true });
+  writeFileSync(join(root, ".claude-plugin", "plugin.json"), JSON.stringify({ name: "warden", version: VERSION }));
+  if (!existsSync(join(root, "src"))) symlinkSync(join(PLUGIN_ROOT, "src"), join(root, "src"));
+  const clone = join(base, "plugins", "marketplaces", "wm");
+  write(clone, ".claude-plugin/marketplace.json", JSON.stringify({ name: "wm", plugins: [{ name: "warden", source: "./plugins/warden" }] }));
+  write(clone, "plugins/warden/.claude-plugin/plugin.json", JSON.stringify({ name: "warden", version: available }));
+  return root;
+}
+
+function hookWithRoot(root: string, event: string, input: HookInput = {}): Promise<string | null> {
+  const full: HookInput = { session_id: "S1", transcript_path: "/tmp/S1.jsonl", cwd: main, hook_event_name: event, ...input };
+  return handleHook(event, full, { ...ctx, root }, spawn);
 }
 
 function bash(command: string, input: HookInput = {}, env: Record<string, string> = {}) {
@@ -628,7 +669,7 @@ describe("SessionStart", () => {
     expect(readFileSync(join(root, ".data-dir"), "utf8")).toBe(join(base, "other-data"));
   });
 
-  test("status, upgrade, retro and report lines, in order; a dead worker is restarted", async () => {
+  test("lines come in the order of spec 0.2 section 7; a dead worker is restarted", async () => {
     await startFlow(FEATURE);
     const wt2 = addWorktree("T-2");
     await startFlow([APPROVE, IMPL, CHECK], "T-2", wt2);
@@ -647,40 +688,89 @@ describe("SessionStart", () => {
     }, "T-4");
 
     write(main, ".warden/warden.json", wardenJson({ wardenVersion: "0.0.9", lastRetro: null }));
+    check("docs-review", "every: 7d\nkind: agent\nlast: never");
+    check("lint", "every: 1d\nkind: command\nrun: touch lint-ran\nauto: true\nlast: never");
+    check("audit", `every: 1d\nkind: command\nrun: false\nauto: true\nlast: ${localDate()}`, `- ${localDate()} fail (exit 1, 2s)`);
     write(main, ".warden/reports.md", "| ID | Title | Status | Fixed in |\n|---|---|---|---|\n| R-0001 | Flaky login | sent | — |\n");
     write(ctx.data, "reports/R-0001.json", JSON.stringify({
       schema: 1, id: "R-0001", projectId: "demo", kind: "bug", title: "Flaky login", body: "b", createdAt: "2026-10-01T00:00:00Z",
-      status: "fixed", fixedIn: "0.1.1", note: null,
+      status: "fixed", fixedIn: VERSION, note: null,
     }));
+    const root = fakeCachePlugin("99.0.0");
 
-    const out = await hook("session-start", { session_id: "S9", cwd: wt });
+    const out = await hookWithRoot(root, "session-start", { session_id: "S9", cwd: wt });
     expect(out!.split("\n")).toEqual([
       `warden: ${T} stopped at plan (1/5, test). Run: warden next`,
       'warden: T-2 is waiting for you: Looks right?. Type "approve" or "reject: <why>".',
       "warden: T-3 stopped at check (2/2, test). Run: warden next",
       'warden: T-4 is blocked: check left files: coverage/x. Fix it, then type "retry".',
-      "warden: updated to 0.1.1; this project is on 0.0.9. Run /warden:upgrade.",
-      "warden: retro due (last never). When the user's current request is done, offer the retro in one short line. Do not start it unless the user says yes.",
-      'warden: report R-0001 "Flaky login" is now fixed in 0.1.1.',
+      `warden: updated to ${VERSION}; this project is on 0.0.9. Run /warden:upgrade.`,
+      `warden: version 99.0.0 is available; this session runs ${VERSION}. To update, run "claude plugin update warden@wm" in a terminal (or use /plugin), then /reload-plugins.`,
+      "warden: checks due: docs-review (last never), retro (last never). When the user's current request is done, offer them in one short line. Do not start one unless the user says yes. To run one: warden checks run <name>.",
+      `warden: auto checks failed on their last run: audit (${localDate()}). Tell the user in one short line; details: warden checks.`,
+      `warden: report R-0001 "Flaky login" is now fixed in ${VERSION}.`,
     ]);
     expect(spawns).toBe(2);
     expect(eventTypes("T-3")).toContain("gate.restarted");
-    expect(readFileSync(join(main, ".warden/reports.md"), "utf8")).toContain("| R-0001 | Flaky login | fixed | 0.1.1 |");
+    expect(readFileSync(join(main, ".warden/reports.md"), "utf8")).toContain(`| R-0001 | Flaky login | fixed | ${VERSION} |`);
     expect(readSessionRecord(main, "S9")).toMatchObject({ sessionId: "S9", projectAgent: false, task: null });
     expect(readSessionLinks(main, T).map((l) => l.sessionId)).toEqual(["S9"]);
+    await waitFor(() => readFileSync(join(main, ".warden/checks/lint.md"), "utf8").includes("pass"));
+  });
+
+  test("a due auto command check is started, not offered", async () => {
+    check("lint", "every: 1d\nkind: command\nrun: touch lint-ran\nauto: true\nlast: never");
+    expect(await hook("session-start")).toBeNull();
+    await waitFor(() => existsSync(join(main, "lint-ran")) && readFileSync(join(main, ".warden/checks/lint.md"), "utf8").includes(" pass "));
+    expect(readFileSync(join(main, ".warden/checks/lint.md"), "utf8")).toContain(`last: ${localDate()}`);
+  });
+
+  test("an agent check and a non-auto command check are offered, never started", async () => {
+    check("docs-review", "every: 7d\nkind: agent\nlast: 2026-01-01");
+    check("slow", "every: 1d\nkind: command\nrun: touch slow-ran\nlast: never");
+    check("fresh", `every: 3d\nkind: agent\nlast: ${localDate()}`);
+    const out = await hook("session-start");
+    expect(out).toBe(
+      "warden: checks due: docs-review (last 2026-01-01), slow (last never). When the user's current request is done, offer them in one short line. Do not start one unless the user says yes. To run one: warden checks run <name>.",
+    );
+    await Bun.sleep(500);
+    expect(existsSync(join(main, "slow-ran"))).toBe(false);
+  });
+
+  test("an auto check whose last run failed gets the failure line, and an invalid check file is ignored", async () => {
+    check("audit", `every: 30d\nkind: command\nrun: false\nauto: true\nlast: ${localDate()}`, `- 2026-10-01 pass (exit 0, 1s)\n- ${localDate()} fail (exit 1, 2s)`);
+    write(main, ".warden/checks/broken.md", "---\nevery: soon\nkind: agent\nlast: never\n---\n");
+    expect(await hook("session-start")).toBe(
+      `warden: auto checks failed on their last run: audit (${localDate()}). Tell the user in one short line; details: warden checks.`,
+    );
+  });
+
+  test("no auto check starts while a run is live in the main checkout", async () => {
+    const flow = { schema: 1 as const, name: "test", description: "test flow", steps: [IMPL, CHECK] };
+    await start({ ...ctx, cwd: main }, "T-5", flow, { worktree: main, branch: "main", mainRef: "main", taskText: "Make it work\n", spawnWorker: spawn });
+    check("lint", "every: 1d\nkind: command\nrun: touch lint-ran\nauto: true\nlast: never");
+    expect(await hook("session-start")).toBe(`warden: T-5 stopped at implement (1/2, test). Run: warden next`);
+    await Bun.sleep(800);
+    expect(existsSync(join(main, "lint-ran"))).toBe(false);
+    expect(readFileSync(join(main, ".warden/checks/lint.md"), "utf8")).toContain("last: never");
+  });
+
+  test("a newer version in the marketplace clone shows as a line; an equal one does not", async () => {
+    const newer = fakeCachePlugin("99.0.0");
+    expect(await hookWithRoot(newer, "session-start")).toBe(
+      `warden: version 99.0.0 is available; this session runs ${VERSION}. To update, run "claude plugin update warden@wm" in a terminal (or use /plugin), then /reload-plugins.`,
+    );
+    const same = fakeCachePlugin(VERSION);
+    expect(await hookWithRoot(same, "session-start")).toBeNull();
   });
 
   test("nothing to say prints nothing", async () => {
     expect(await hook("session-start")).toBeNull();
   });
 
-  test("retro is due when never run or 2 or more days ago", () => {
-    expect(retroLine(null, "2026-10-18")).toContain("retro due (last never)");
-    expect(retroLine("2026-10-16", "2026-10-18")).toBe(
-      "warden: retro due (last 2026-10-16). When the user's current request is done, offer the retro in one short line. Do not start it unless the user says yes.",
-    );
-    expect(retroLine("2026-10-17", "2026-10-18")).toBeNull();
-    expect(retroLine("2026-10-18", "2026-10-18")).toBeNull();
+  test("session start no longer exports retroLine", async () => {
+    const mod = await import("../../plugins/warden/src/hooks/session-start.ts");
+    expect("retroLine" in mod).toBe(false);
   });
 });
 
@@ -715,7 +805,7 @@ describe("UserPromptSubmit", () => {
   });
 
   test("approve with a numeric id advances; a second approve is the wrong state", async () => {
-    expect(context(await prompt(`approve ${ID}`, { cwd: main }))).toBe(`warden: the user approved ${ID} at approve. Run: warden next`);
+    expect(context(await prompt(`approve ${ID}`, { cwd: main }))).toBe(`warden: the user approved ${ID} at approve. Run: warden next. The checks may already have finished, so the run can be done, not only the next step.`);
     expect(run(ID).current.id).toBe("implement");
     expect(readEvents(main, ID).map((e) => e.type)).toContain("approve.granted");
     expect(context(await prompt("approve"))).toBe(`warden: ${ID} is not waiting for approve (status active).`);
@@ -725,7 +815,7 @@ describe("UserPromptSubmit", () => {
     expect(context(await prompt("reject"))).toContain("reject needs a reason");
     expect(run(ID).status).toBe("waiting");
     expect(context(await prompt(`reject ${ID}: the plan misses the API`))).toBe(
-      `warden: the user rejected ${ID} at approve: the plan misses the API. Run: warden next`,
+      `warden: the user rejected ${ID} at approve: the plan misses the API. Run: warden next. The checks may already have finished, so the run can be done, not only the next step.`,
     );
     const r = run(ID);
     expect(r.current.id).toBe("plan");
@@ -738,14 +828,14 @@ describe("UserPromptSubmit", () => {
       r.status = "blocked";
       r.waiting = { kind: "human", reason: "x", since: r.updatedAt };
     }, ID);
-    expect(context(await prompt("retry"))).toBe(`warden: the user retried ${ID} at approve. Run: warden next`);
+    expect(context(await prompt("retry"))).toBe(`warden: the user retried ${ID} at approve. Run: warden next. The checks may already have finished, so the run can be done, not only the next step.`);
     expect(run(ID).status).toBe("waiting"); // the approve step was entered again
     expect(readEvents(main, ID).map((e) => e.type)).toContain("run.retry");
   });
 
   test("a new session in the main checkout resolves the only live run and links to it", async () => {
     const fresh = { session_id: "S7", cwd: main };
-    expect(context(await prompt("approve", fresh))).toBe(`warden: the user approved ${ID} at approve. Run: warden next`);
+    expect(context(await prompt("approve", fresh))).toBe(`warden: the user approved ${ID} at approve. Run: warden next. The checks may already have finished, so the run can be done, not only the next step.`);
     expect(readSessionRecord(main, "S7")?.task).toBe(ID);
     expect(readSessionLinks(main, ID).map((l) => l.sessionId)).toContain("S7");
   });

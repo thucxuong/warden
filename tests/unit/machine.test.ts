@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, setDefaultTimeout, spyOn, test } from "bun:test";
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -7,6 +7,7 @@ import { EXIT, WardenError } from "../../plugins/warden/src/lib/exit.ts";
 import { writeJsonAtomic } from "../../plugins/warden/src/lib/json.ts";
 import { startTime } from "../../plugins/warden/src/lib/proc.ts";
 import { taskDir, worktreesDir } from "../../plugins/warden/src/state/paths.ts";
+import * as store from "../../plugins/warden/src/state/store.ts";
 import { readEvents, readRun, withLock, writeRun, writeSessionRecord } from "../../plugins/warden/src/state/store.ts";
 import {
   approve, done, ensureGate, findRunForWorktree, next, projectAgent, reject, reset, retry, runWorker, start, statusLines,
@@ -240,6 +241,23 @@ describe("start, check and done", () => {
     expect(eventTypes()).toContain("run.done");
     expect(eventTypes()).toContain("gate.passed");
     expect(existsSync(join(wt, ".warden", "history"))).toBe(false);
+  });
+
+  test("the write that ends engine work also clears gate, so a worker killed right after leaves no stale gate", async () => {
+    await startFlow([IMPL, CHECK]);
+    await implement();
+    const original = store.writeRun;
+    const written: { status: string; gate: unknown }[] = [];
+    const spy = spyOn(store, "writeRun").mockImplementation((m, r) => {
+      written.push({ status: r.status, gate: r.gate });
+      original(m, r);
+    });
+    try {
+      await drive();
+    } finally {
+      spy.mockRestore();
+    }
+    expect(written.find((w) => w.status === "done")).toEqual({ status: "done", gate: null });
   });
 
   test("a rejected output stays on the step and is stored", async () => {
@@ -802,6 +820,12 @@ describe("views and reset", () => {
     expect(statusLines(ctx, false)).toEqual([expect.objectContaining({ task: T, flow: "test", status: "active", step: "fix-1", total: 2, worktree: wt })]);
     expect(findRunForWorktree(ctx, wt).task).toBe(T);
     expect(() => findRunForWorktree(ctx, main)).toThrow("no active run in this worktree");
+    expect(() => findRunForWorktree(ctx, main, true)).toThrow("no active run in this worktree");
+    const live = readRun(main, T);
+    writeRun(main, { ...live, status: "done" });
+    expect(() => findRunForWorktree(ctx, wt)).toThrow("no active run in this worktree");
+    expect(findRunForWorktree(ctx, wt, true).task).toBe(T);
+    writeRun(main, live);
 
     expect(await reset(ctx, T)).toEqual({ reset: T });
     expect(existsSync(taskDir(main, T))).toBe(false);

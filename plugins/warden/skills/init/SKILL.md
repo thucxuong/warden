@@ -47,7 +47,8 @@ Do these steps in order. Ask one question per message. Prefer multiple choice.
    Also suggest branch protection on the main branch: a pull request is required and direct pushes are off.
 
 What `warden init --write` creates:
-- `.warden/warden.json` (with `lastRetro` set to today, so no retro is due right after setup), `.warden/steps.json` and `.warden/triage-rules.json`
+- `.warden/warden.json`, `.warden/steps.json` and `.warden/triage-rules.json`
+- `.warden/checks/retro.md`, the built-in retro check, with `last` set to today so no retro is due right after setup
 - `.warden/reports.md` and `.warden/tools.md`
 - `.warden/context/<topic>.md` for each topic
 - an `INDEX.md` in each of `context/`, `rules/`, `decisions/`, `knowledge/`, `checks/`, `retros/`, `fixes/` and `flows/`
