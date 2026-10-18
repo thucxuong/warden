@@ -281,7 +281,16 @@
           </tbody>
         </table>
       </div>
-      <p class="mt-2 text-sm">Run in the CP, <code class="bg-slate-100 dark:bg-slate-800 rounded px-1.5">warden site</code> builds one HTML page of that CP: ticket table → click for timeline, tokens, findings; plus its docs, ticket DAG and code graph. Replaces the Next.js docs site and Pipeline Studio. Committed history makes it cover the whole CP team.</p>
+      <div class="mt-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 text-sm">
+        <h3 class="font-semibold"><code>warden site --port &lt;n&gt;</code> — a small local server</h3>
+        <ul class="mt-2 list-disc pl-5 space-y-1">
+          <li>Run in the CP. Starts a Bun server on the given port (default in <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">warden.json</code>).</li>
+          <li>Reads the JSON in <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">state/</code> and <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">history/</code> on each request — nothing is generated or written.</li>
+          <li>One fixed page that fetches the data and refreshes live, so running tasks update on screen.</li>
+          <li>Shows: ticket table → click for timeline, tokens, findings; plus the CP's docs, ticket DAG and code graph.</li>
+          <li>Replaces the Next.js docs site and Pipeline Studio. Committed history makes it cover the whole CP team.</li>
+        </ul>
+      </div>
     </section>
 
     <!-- REPORTING -->
