@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1 — 2026-10-19
+
+- Report ids include the machine, so reports from several machines in one project never clash.
+
 ## 0.4.0 — 2026-10-19
 
 - Reports from other machines: `warden report` now also sends the report to the warden maintainers through a background git transport, and fetches its status back. `warden report sync` runs it now; session start tells you once when reports can only stay on this machine.

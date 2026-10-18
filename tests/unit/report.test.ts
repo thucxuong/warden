@@ -37,6 +37,11 @@ async function call(fn: typeof run, args: string[], cwd = repo): Promise<{ out: 
   }
 }
 
+// R-<first 4 chars of this test's machine id>-NNNN
+function rid(n: number, dir = data): string {
+  return `R-${machineId(dir).slice(0, 4)}-${String(n).padStart(4, "0")}`;
+}
+
 function bodyFile(text = "It broke.\nExpected: it works."): string {
   const path = join(tempDir("warden-body-"), "body.md");
   writeFileSync(path, text);
@@ -62,30 +67,30 @@ describe("warden report", () => {
   test("stamps ids in order, writes the outbox record and the table row", async () => {
     const first = await call(run, ["--kind", "bug", "--title", "Gate hangs", "--file", bodyFile()]);
     const second = await call(run, ["--kind", "enhancement", "--title", "Add a | pipe", "--file", bodyFile("More.")]);
-    expect(first.out).toEqual({ id: "R-0001", status: "sent" });
-    expect(second.out).toEqual({ id: "R-0002", status: "sent" });
+    expect(first.out).toEqual({ id: rid(1), status: "sent" });
+    expect(second.out).toEqual({ id: rid(2), status: "sent" });
 
-    const record = readRecord("R-0001");
-    expect(record).toMatchObject({ schema: 1, id: "R-0001", projectId: "demo", kind: "bug", title: "Gate hangs", body: "It broke.\nExpected: it works.", status: "sent", fixedIn: null, note: null });
+    const record = readRecord(rid(1));
+    expect(record).toMatchObject({ schema: 1, id: rid(1), projectId: "demo", kind: "bug", title: "Gate hangs", body: "It broke.\nExpected: it works.", status: "sent", fixedIn: null, note: null });
     expect(Number.isNaN(Date.parse(record.createdAt))).toBe(false);
 
     const table = readFileSync(join(repo, ".warden/reports.md"), "utf8").split("\n");
     expect(table[0]).toBe("| ID | Title | Status | Fixed in |");
-    expect(table).toContain("| R-0001 | Gate hangs | sent | — |");
-    expect(table).toContain("| R-0002 | Add a / pipe | sent | — |");
+    expect(table).toContain(`| ${rid(1)} | Gate hangs | sent | — |`);
+    expect(table).toContain(`| ${rid(2)} | Add a / pipe | sent | — |`);
   });
 
   test("--body takes the text as one argument and wins over --file", async () => {
     const r = await call(run, ["--kind", "bug", "--title", "Inline", "--body", "  It broke.\nExpected: it works.\n", "--file", bodyFile("ignored")]);
-    expect(r.out).toEqual({ id: "R-0001", status: "sent" });
-    expect(readRecord("R-0001").body).toBe("It broke.\nExpected: it works.");
+    expect(r.out).toEqual({ id: rid(1), status: "sent" });
+    expect(readRecord(rid(1)).body).toBe("It broke.\nExpected: it works.");
     expect((await call(run, ["--kind", "bug", "--title", "t", "--body", "  "])).code).toBe(2);
   });
 
   test("a number that is already taken is skipped", async () => {
     mkdirSync(join(data, "reports"), { recursive: true });
-    writeFileSync(join(data, "reports", "R-0001.json"), "{}");
-    expect((await call(run, ["--kind", "bug", "--title", "t", "--file", bodyFile()])).out).toEqual({ id: "R-0002", status: "sent" });
+    writeFileSync(join(data, "reports", `${rid(1)}.json`), "{}");
+    expect((await call(run, ["--kind", "bug", "--title", "t", "--file", bodyFile()])).out).toEqual({ id: rid(2), status: "sent" });
   });
 
   test("bad kind, missing title or empty body exits 2", async () => {
@@ -102,21 +107,21 @@ describe("warden report", () => {
 });
 
 describe("warden report set", () => {
-  const recordPath = (id = "R-0001") => join(data, "reports", `${id}.json`);
+  const recordPath = (id = rid(1)) => join(data, "reports", `${id}.json`);
   async function fileOne(): Promise<void> {
     await call(run, ["--kind", "bug", "--title", "One", "--file", bodyFile()]);
   }
 
   test("rewrites status, note and fixedIn and keeps the rest", async () => {
     await fileOne();
-    const before = readRecord("R-0001");
+    const before = readRecord(rid(1));
     const res = await call(run, ["set", recordPath(), "--status", "accepted", "--note", "Accepted. Planned for a coming release."]);
-    expect(res.out).toEqual({ id: "R-0001", status: "accepted" });
-    expect(readRecord("R-0001")).toEqual({ ...before, status: "accepted", note: "Accepted. Planned for a coming release." });
+    expect(res.out).toEqual({ id: rid(1), status: "accepted" });
+    expect(readRecord(rid(1))).toEqual({ ...before, status: "accepted", note: "Accepted. Planned for a coming release." });
 
     await call(run, ["set", recordPath(), "--status", "fixed", "--fixed-in", "0.2.0"]);
-    expect(readRecord("R-0001")).toMatchObject({ status: "fixed", fixedIn: "0.2.0", note: "Accepted. Planned for a coming release." });
-    expect(reportStatusChanges(ctx())).toEqual([{ id: "R-0001", title: "One", status: "fixed", fixedIn: "0.2.0" }]);
+    expect(readRecord(rid(1))).toMatchObject({ status: "fixed", fixedIn: "0.2.0", note: "Accepted. Planned for a coming release." });
+    expect(reportStatusChanges(ctx())).toEqual([{ id: rid(1), key: `${machineId(data)}/${rid(1)}`, title: "One", status: "fixed", fixedIn: "0.2.0" }]);
   });
 
   test("a bad status, missing file argument or unreadable record exits 2", async () => {
@@ -124,8 +129,8 @@ describe("warden report set", () => {
     expect((await call(run, ["set", recordPath(), "--status", "done"])).code).toBe(2);
     expect((await call(run, ["set", recordPath()])).code).toBe(2);
     expect((await call(run, ["set", "--status", "fixed"])).code).toBe(2);
-    expect((await call(run, ["set", recordPath("R-0009"), "--status", "fixed"])).code).toBe(2);
-    expect(readRecord("R-0001").status).toBe("sent");
+    expect((await call(run, ["set", recordPath(rid(9)), "--status", "fixed"])).code).toBe(2);
+    expect(readRecord(rid(1)).status).toBe("sent");
   });
 
   test("a note with a link, github or an issue number exits 2 and changes nothing", async () => {
@@ -133,7 +138,7 @@ describe("warden report set", () => {
     for (const note of ["see https://x.test/1", "tracked on GitHub", "issue #12", "http", "tracked as thucxuong/warden issue 1", "gitlab.com/x", "www.example.com", "see issues/1", "issue 1"]) {
       expect((await call(run, ["set", recordPath(), "--status", "accepted", "--note", note])).code).toBe(2);
     }
-    expect(readRecord("R-0001")).toMatchObject({ status: "sent", note: null });
+    expect(readRecord(rid(1))).toMatchObject({ status: "sent", note: null });
   });
 });
 
@@ -153,15 +158,15 @@ describe("reportStatusChanges", () => {
   test("reports a changed row once, remembers it in state and never edits reports.md", async () => {
     await fileTwo();
     const before = readFileSync(join(repo, ".warden/reports.md"), "utf8");
-    writeFileSync(join(data, "reports/R-0002.json"), JSON.stringify({ ...readRecord("R-0002"), status: "fixed", fixedIn: "0.2.0" }));
+    writeFileSync(join(data, `reports/${rid(2)}.json`), JSON.stringify({ ...readRecord(rid(2)), status: "fixed", fixedIn: "0.2.0" }));
 
-    expect(reportStatusChanges(ctx())).toEqual([{ id: "R-0002", title: "Two", status: "fixed", fixedIn: "0.2.0" }]);
+    expect(reportStatusChanges(ctx())).toEqual([{ id: rid(2), key: `${machineId(data)}/${rid(2)}`, title: "Two", status: "fixed", fixedIn: "0.2.0" }]);
     expect(readFileSync(join(repo, ".warden/reports.md"), "utf8")).toBe(before);
-    expect(JSON.parse(readFileSync(join(repo, ".warden/state/_reports.json"), "utf8"))).toEqual({ "R-0002": "fixed" });
+    expect(JSON.parse(readFileSync(join(repo, ".warden/state/_reports.json"), "utf8"))).toEqual({ [`${machineId(data)}/${rid(2)}`]: "fixed" });
     expect(reportStatusChanges(ctx())).toEqual([]);
 
-    writeFileSync(join(data, "reports/R-0002.json"), JSON.stringify({ ...readRecord("R-0002"), status: "wontfix" }));
-    expect(reportStatusChanges(ctx())).toEqual([{ id: "R-0002", title: "Two", status: "wontfix", fixedIn: "0.2.0" }]);
+    writeFileSync(join(data, `reports/${rid(2)}.json`), JSON.stringify({ ...readRecord(rid(2)), status: "wontfix" }));
+    expect(reportStatusChanges(ctx())).toEqual([{ id: rid(2), key: `${machineId(data)}/${rid(2)}`, title: "Two", status: "wontfix", fixedIn: "0.2.0" }]);
   });
 
   test("a row without an outbox record, or no table, is ignored", async () => {
@@ -175,18 +180,93 @@ describe("reportStatusChanges", () => {
   });
 });
 
+describe("one reports.md shared by two machines", () => {
+  const TABLE = "| ID | Title | Status | Fixed in |\n|---|---|---|---|\n";
+  let dataB: string;
+  const ctxFor = (dir: string): Ctx => ({ root: pluginRoot, data: dir, cwd: repo, env: {}, stdinIsTTY: false });
+  const put = (dir: string, id: string, title: string, status: string) => {
+    mkdirSync(join(dir, "reports"), { recursive: true });
+    writeFileSync(join(dir, "reports", `${id}.json`), JSON.stringify({
+      schema: 1, id, projectId: "demo", kind: "bug", title, body: "b", createdAt: "2026-10-01T00:00:00Z", status, fixedIn: null, note: null,
+    }));
+  };
+  beforeEach(() => {
+    dataB = tempDir("warden-data-b-");
+  });
+
+  test("new ids carry the first 4 chars of the machine id and differ between machines", async () => {
+    const a = await call(run, ["--kind", "bug", "--title", "From A", "--file", bodyFile()]);
+    const lines: string[] = [];
+    const realLog = console.log;
+    console.log = (...x: unknown[]) => void lines.push(x.join(" "));
+    try {
+      await run(["--kind", "bug", "--title", "From B", "--file", bodyFile()], ctxFor(dataB));
+    } finally {
+      console.log = realLog;
+    }
+    const b = JSON.parse(lines.join("\n"));
+    expect(a.out.id).toMatch(/^R-[0-9a-f]{4}-0001$/);
+    expect(a.out.id).toBe(rid(1));
+    expect(b.id).toBe(rid(1, dataB));
+    expect(a.out.id === b.id).toBe(machineId(data).slice(0, 4) === machineId(dataB).slice(0, 4));
+    const table = readFileSync(join(repo, ".warden/reports.md"), "utf8");
+    expect(table).toContain(`| ${a.out.id} | From A | sent | — |`);
+    expect(table).toContain(`| ${b.id} | From B | sent | — |`);
+  });
+
+  test("a row of the other machine never matches, a legacy row matches only this machine's record with that id", () => {
+    const idA = rid(1);
+    const idB = rid(1, dataB);
+    put(data, idA, "A title", "sent");
+    put(dataB, idB, "B title", "wontfix");
+    put(dataB, "R-0001", "B legacy", "wontfix");
+    writeFileSync(join(repo, ".warden/reports.md"), `${TABLE}| ${idA} | A title | sent | — |\n| ${idB} | B title | sent | — |\n| R-0001 | Old | sent | — |\n`);
+
+    // Machine A: its own row agrees, B's row has no record here, the legacy row has no local R-0001.
+    expect(reportStatusChanges(ctx())).toEqual([]);
+
+    // Machine B: only its own row and the legacy row (its R-0001 is wontfix) change; A's row is ignored.
+    const keyB = machineId(dataB);
+    expect(reportStatusChanges(ctxFor(dataB))).toEqual([
+      { id: idB, key: `${keyB}/${idB}`, title: "B title", status: "wontfix", fixedIn: null },
+      { id: "R-0001", key: `${keyB}/R-0001`, title: "Old", status: "wontfix", fixedIn: null },
+    ]);
+    expect(reportStatusChanges(ctxFor(dataB))).toEqual([]); // told once, under the full key
+  });
+
+  test("--status --write rewrites only the rows this machine owns", async () => {
+    const idA = rid(1);
+    const idB = rid(1, dataB);
+    put(data, idA, "A title", "sent");
+    put(dataB, idB, "B title", "fixed");
+    writeFileSync(join(repo, ".warden/reports.md"), `${TABLE}| ${idA} | A title | sent | — |\n| ${idB} | B title | sent | — |\n`);
+    const lines: string[] = [];
+    const realLog = console.log;
+    console.log = (...x: unknown[]) => void lines.push(x.join(" "));
+    try {
+      await run(["--status", "--write"], ctxFor(dataB));
+    } finally {
+      console.log = realLog;
+    }
+    expect(JSON.parse(lines.join("\n")).rowsUpdated).toBe(1);
+    const table = readFileSync(join(repo, ".warden/reports.md"), "utf8");
+    expect(table).toContain(`| ${idA} | A title | sent | — |`);
+    expect(table).toContain(`| ${idB} | B title | fixed | — |`);
+  });
+});
+
 describe("warden report --status --write", () => {
   test("rewrites the changed rows of reports.md from the outbox", async () => {
     await call(run, ["--kind", "bug", "--title", "One", "--file", bodyFile()]);
     await call(run, ["--kind", "bug", "--title", "Two", "--file", bodyFile()]);
-    writeFileSync(join(data, "reports/R-0002.json"), JSON.stringify({ ...readRecord("R-0002"), status: "fixed", fixedIn: "0.2.0" }));
+    writeFileSync(join(data, `reports/${rid(2)}.json`), JSON.stringify({ ...readRecord(rid(2)), status: "fixed", fixedIn: "0.2.0" }));
 
     const res = await call(run, ["--status", "--write"]);
     expect(res.out.rowsUpdated).toBe(1);
     expect(res.out.reports).toHaveLength(2);
     const table = readFileSync(join(repo, ".warden/reports.md"), "utf8");
-    expect(table).toContain("| R-0002 | Two | fixed | 0.2.0 |");
-    expect(table).toContain("| R-0001 | One | sent | — |");
+    expect(table).toContain(`| ${rid(2)} | Two | fixed | 0.2.0 |`);
+    expect(table).toContain(`| ${rid(1)} | One | sent | — |`);
     expect(reportStatusChanges(ctx())).toEqual([]);
     expect((await call(run, ["--status", "--write"])).out.rowsUpdated).toBe(0);
   });
@@ -195,18 +275,18 @@ describe("warden report --status --write", () => {
     await call(run, ["--kind", "bug", "--title", "One", "--file", bodyFile()]);
     await call(run, ["--kind", "bug", "--title", "Two", "--file", bodyFile()]);
     rmSync(join(repo, ".warden/reports.md"));
-    writeFileSync(join(data, "reports/R-0002.json"), JSON.stringify({ ...readRecord("R-0002"), status: "accepted" }));
+    writeFileSync(join(data, `reports/${rid(2)}.json`), JSON.stringify({ ...readRecord(rid(2)), status: "accepted" }));
 
     expect((await call(run, ["--status", "--write"])).out.rowsUpdated).toBe(2);
     expect(readFileSync(join(repo, ".warden/reports.md"), "utf8")).toBe(
-      "| ID | Title | Status | Fixed in |\n|---|---|---|---|\n| R-0001 | One | sent | — |\n| R-0002 | Two | accepted | — |\n",
+      `| ID | Title | Status | Fixed in |\n|---|---|---|---|\n| ${rid(1)} | One | sent | — |\n| ${rid(2)} | Two | accepted | — |\n`,
     );
     expect((await call(run, ["--status", "--write"])).out.rowsUpdated).toBe(0);
   });
 
   test("--status alone leaves reports.md alone, and stray arguments exit 2", async () => {
     await call(run, ["--kind", "bug", "--title", "One", "--file", bodyFile()]);
-    writeFileSync(join(data, "reports/R-0001.json"), JSON.stringify({ ...readRecord("R-0001"), status: "fixed" }));
+    writeFileSync(join(data, `reports/${rid(1)}.json`), JSON.stringify({ ...readRecord(rid(1)), status: "fixed" }));
     const before = readFileSync(join(repo, ".warden/reports.md"), "utf8");
     expect((await call(run, ["--status"])).out.rowsUpdated).toBeUndefined();
     expect(readFileSync(join(repo, ".warden/reports.md"), "utf8")).toBe(before);
@@ -342,11 +422,11 @@ describe("report transport commands", () => {
 
   test("warden report still prints {id,status} and the record reaches the bare repo in the background", async () => {
     const res = await callAt(dirB, ["--kind", "bug", "--title", "Over the wire", "--file", bodyFile()], bare, repo);
-    expect(res.out).toEqual({ id: "R-0001", status: "sent" });
+    expect(res.out).toEqual({ id: rid(1, dirB), status: "sent" });
     await waitFor(() => branchFiles().length > 0);
     await idle(dirB);
-    expect(branchFiles()).toEqual([`reports/demo/${machineId(dirB)}-R-0001.json`]);
-    expect(gitShow(branchFiles()[0]!)).toMatchObject({ id: "R-0001", title: "Over the wire", status: "sent", machineId: machineId(dirB) });
+    expect(branchFiles()).toEqual([`reports/demo/${machineId(dirB)}-${rid(1, dirB)}.json`]);
+    expect(gitShow(branchFiles()[0]!)).toMatchObject({ id: rid(1, dirB), title: "Over the wire", status: "sent", machineId: machineId(dirB) });
     expect(res.raw).not.toContain(bare);
   });
 

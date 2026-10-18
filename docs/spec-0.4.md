@@ -2,7 +2,7 @@
 
 Status: build spec, 2026-10-19. Base: warden 0.3.3 as built from [spec.md](spec.md), [spec-0.2.md](spec-0.2.md) and [spec-0.3.md](spec-0.3.md), which stay authoritative for everything this file does not change. "spec 4.13" points to spec.md, "0.2 §5" to spec-0.2.md, "0.3 §10" to spec-0.3.md, "§3" to this file.
 
-Terms as in spec.md: **WA**, **CP**, **CPA**. New: **source repo** (the warden git repo a machine installed warden from), **branch** (the orphan branch `reports` in the source repo), **mirror** (this data dir's private git repo that holds a copy of the branch), **key** (`<machineId>/<R-id>`, the global id of a report).
+Terms as in spec.md: **WA**, **CP**, **CPA**. New: **source repo** (the warden git repo a machine installed warden from), **branch** (the orphan branch `reports` in the source repo), **mirror** (this data dir's private git repo that holds a copy of the branch), **key** (`<machineId>/<R-id>`, e.g. `eb85c0de/R-eb85-0001`, the global id of a report).
 
 Checked locally on 2026-10-19 (git 2.50.1):
 - `git fetch <url> refs/heads/reports` for a missing branch exits 128 with `fatal: couldn't find remote ref refs/heads/reports`.
@@ -58,7 +58,7 @@ Types for §3 live in `reports-git.ts` (exported); `types.ts` does not change. H
 | Path | Content |
 |---|---|
 | `machine.json` | `{"schema":1,"id":"<8 lowercase hex>"}`. Created on first need with `open(…, "wx")` from `crypto.randomBytes(4)`; on `EEXIST` read the winner's. Never changes. `id` must match `/^[0-9a-f]{8}$/` (else treated as missing and rewritten) |
-| `reports/` | The outbox, unchanged: `R-NNNN.json` per report, `counter.json`. R-ids stay per data dir |
+| `reports/` | The outbox: `R-xxxx-NNNN.json` per report, `counter.json`. `xxxx` = first 4 chars of `machine.json`'s id; NNNN counts per data dir (the counter keeps going from legacy files). Legacy bare `R-NNNN` (before 0.4.1) is still read everywhere. See 3.11 |
 | `reports-git/` | The mirror: a normal git repo, branch `reports` checked out. Only warden touches it |
 | `reports-sync.json` | Sync state, `ReportSyncState` below, written with `writeJsonAtomic` |
 | `reports-sync.lock` | `{pid, pidStart, at}` with `open(…, "wx")`; stale when the pid is dead or has another start time (as the checks lock) |
@@ -231,6 +231,15 @@ Else null.
 
 ---
 
+### 3.11 Report ids and shared `reports.md` (0.4.1)
+
+`.warden/reports.md` is committed in the consumer project, so rows of several machines meet in one file, and bare `R-0001` ids of two machines collide.
+
+- New ids are `R-<first 4 chars of machineId>-NNNN`. `REPORT_ID = /^R-(?:[0-9a-f]{4}-)?\d{4,}$/`, `KEY_PATTERN = /^[0-9a-f]{8}\/R-(?:[0-9a-f]{4}-)?\d{4,}$/`; outbox files, `set <file>`, branch records and inbox keys accept both forms.
+- Matching always uses the key (machine id + id), never the bare id. A `reports.md` row is looked up only in this data dir's outbox, so `reportStatusChanges` and `report --status --write` ignore rows of other machines. A row id with a machine part must equal this machine's first 4 chars; a legacy bare row matches only this machine's record with that id (it can still match a row another machine filed with the same bare id; that is why new ids are qualified).
+- The session-start "already told" state `.warden/state/_reports.json` is keyed `<machineId>/<id>` (a legacy bare entry still counts for a legacy bare row).
+- `ReportChange` gains `key`. The `report` skill shows `R-eb85-0001` as the example id.
+
 ## 4. `warden-docs` check
 
 ### 4.1 `warden docs check` (`src/commands/docs.ts`)
@@ -336,7 +345,7 @@ A temp bare repo (`git init --bare`) stands in for GitHub; each "machine" is its
 | Test file | Covers |
 |---|---|
 | `reports-git.test.ts` | machine id created once and stable; transport off without env and with data outside plugins/data; first sync makes a root commit on `reports` with `reports/<pid>/<mid>-R-0001.json` = record + machineId; second sync with nothing new does not commit; two machines → both files, a forced race (`beforePush` makes machine B push first) → A's second pass succeeds, and three forced rejections → `remote-busy`; offline (remote path missing) → `offline`, unsent kept, push succeeds once the bare repo exists; no access (bare repo with a `pre-receive` hook that exits 1) → `pushAccess:false`, `NO_ACCESS_LINE` once, not again, again after access came back and was lost; status pull copies only status/note/fixedIn, ignores a bad note, bad fixedIn and invalid files; pending edit applied and cleared, kept when offline, dropped when the file is missing; WA edit and CP add at once → no conflict, both on the branch; `newSent` once per key; `reportsRemote` from a fake cache layout (`<tmp>/plugins/cache/mk/warden/0.4.0` + `<tmp>/plugins/marketplaces/mk` cloned from the bare repo): the clone's HEAD, index, refs and status are unchanged after a sync; `reportSyncLine` start rules (no state, 1 h, unsent + 60 s) with `lastAttemptAt` set; no stdout, state file or pending file contains the remote |
-| `report.test.ts` | `warden report` still prints `{"id","status":"sent"}` and the record reaches the bare repo (poll ≤ 10 s); `report sync` output shape and no URL; `report sync --background`; `inbox` lists sent records of two machines plus a local-only one, `--all`, branch copy wins, pending overlay; `set <key>`: local copy and branch both updated, `shared` true, offline → `shared:false` then applied by the next sync, unknown key → 3, bad `--fixed-in` → 2; `set <file>` 0.3 form: local file only, plus a pending edit when the file is `<data dir>/reports/R-NNNN.json` with a `machine.json`; unknown flag → 2 |
+| `report.test.ts` | 0.4.1: new ids are `R-<mid4>-NNNN`; two machines on one `reports.md` (own row, other machine's row, legacy row) change and rewrite only what this machine owns, and the told-state is keyed by key; `warden report` still prints `{"id","status":"sent"}` and the record reaches the bare repo (poll ≤ 10 s); `report sync` output shape and no URL; `report sync --background`; `inbox` lists sent records of two machines plus a local-only one, `--all`, branch copy wins, pending overlay; `set <key>`: local copy and branch both updated, `shared` true, offline → `shared:false` then applied by the next sync, unknown key → 3, bad `--fixed-in` → 2; `set <file>` 0.3 form: local file only, plus a pending edit when the file is `<data dir>/reports/R-NNNN.json` with a `machine.json`; unknown flag → 2 |
 | `upgrade.test.ts` | `newerVersionNotice` unchanged through `marketplaceClone` |
 | `hooks.test.ts` | Session start order with step 8; the no-access line once; no line when transport is off |
 | `docs.test.ts` | Each problem row of §4.1; link, backtick and bare entries; `#anchor`; non-`.md` list lines ignored; `outside the folder`; INDEX line cap not applied; ok case exit 0; exit 1; exit 3; via the CLI (`bin/warden docs check`) |

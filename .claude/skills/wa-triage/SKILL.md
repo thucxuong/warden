@@ -9,7 +9,7 @@ allowed-tools: Bash(plugins/warden/bin/warden report inbox*) Bash(plugins/warden
 
 This skill is only for the Warden Agent, in the warden repo. It is not part of the plugin.
 
-Each report is a `ReportRecord` (spec 4.13). Reports come from every machine that can push to the warden repo, plus this machine's own outboxes. A report's key is `<machineId>/<R-id>`. Never run git yourself; the warden commands do.
+Each report is a `ReportRecord` (spec 4.13). Reports come from every machine that can push to the warden repo, plus this machine's own outboxes. A report's key is `<machineId>/<R-id>`, for example `eb85c0de/R-eb85-0001` (older ids are a bare `R-0001`). Always use the full key, never the bare id. Never run git yourself; the warden commands do.
 
 ## 0. No one to ask
 

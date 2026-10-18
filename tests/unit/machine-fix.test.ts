@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { machineId } from "../../plugins/warden/src/lib/reports-git.ts";
 import { taskDir, worktreesDir } from "../../plugins/warden/src/state/paths.ts";
 import { readEvents, readRun, withLock, writeRun } from "../../plugins/warden/src/state/store.ts";
 import { done, ensureGate, findRunForWorktree, next, reset, retry, start, statusLines } from "../../plugins/warden/src/engine/machine.ts";
@@ -94,10 +95,11 @@ describe("fix results and landing", () => {
     await atFix();
     const bug = JSON.stringify({ result: "WARDEN_BUG", reason: "triage ran the wrong command", rootCauseChain: [], report: { title: "Wrong command", body: "details" } });
     await done(ctx, T, bug, spawn);
-    expect(run().waiting?.reason).toBe("warden bug reported as R-0001");
-    const record = JSON.parse(readFileSync(join(ctx.data, "reports", "R-0001.json"), "utf8"));
-    expect(record).toMatchObject({ id: "R-0001", projectId: "demo", kind: "bug", title: "Wrong command", status: "sent" });
-    expect(readFileSync(join(main, ".warden", "reports.md"), "utf8")).toContain("| R-0001 | Wrong command | sent | — |");
+    const id = `R-${machineId(ctx.data).slice(0, 4)}-0001`;
+    expect(run().waiting?.reason).toBe(`warden bug reported as ${id}`);
+    const record = JSON.parse(readFileSync(join(ctx.data, "reports", `${id}.json`), "utf8"));
+    expect(record).toMatchObject({ id, projectId: "demo", kind: "bug", title: "Wrong command", status: "sent" });
+    expect(readFileSync(join(main, ".warden", "reports.md"), "utf8")).toContain(`| ${id} | Wrong command | sent | — |`);
   });
 });
 

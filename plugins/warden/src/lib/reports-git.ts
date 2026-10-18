@@ -53,12 +53,14 @@ export const STATUSES: ReportRecord["status"][] = ["sent", "accepted", "fixed", 
 // a domain followed by a slash, "#<digits>", "issue(s) <digits>", "/issue(s)", and two words joined by a slash (owner/repo).
 export const NOTE_FORBIDDEN = /http|github|gitlab|www\.|\.[a-z]{2,}\/|#\d|\bissues?\W{0,2}\d|\/issues?\b|[\w.-]\/[\w.-]/i;
 export const FIXED_IN = /^\d+\.\d+\.\d+$/;
-export const KEY_PATTERN = /^[0-9a-f]{8}\/R-\d{4,}$/;
+// A report id is R-<first 4 chars of the machine id>-NNNN; before 0.4.1 it was a bare R-NNNN, still accepted.
+export const REPORT_ID = /^R-(?:[0-9a-f]{4}-)?\d{4,}$/;
+export const OUTBOX_FILE = /^R-(?:[0-9a-f]{4}-)?\d{4,}\.json$/;
+export const KEY_PATTERN = /^[0-9a-f]{8}\/R-(?:[0-9a-f]{4}-)?\d{4,}$/;
 export const NO_ACCESS_LINE =
   "warden: reports from this machine reach warden only on this machine. When the user's current request is done, tell them in one short line.";
 
 const MACHINE_ID = /^[0-9a-f]{8}$/;
-const REPORT_ID = /^R-\d{4,}$/;
 const PROJECT_ID = /^[a-z][a-z0-9-]{1,40}$/;
 const NOTE_MAX = 500;
 const GIT_TIMEOUT_MS = 60_000;
@@ -95,6 +97,11 @@ function readOr<T>(path: string, fallback: T): T {
   }
 }
 
+// The id of the n-th report of the machine that owns this data dir.
+export function newReportId(dataDir: string, n: number): string {
+  return `R-${machineId(dataDir).slice(0, 4)}-${String(n).padStart(4, "0")}`;
+}
+
 function keyOf(machineId: string, id: string): string {
   return `${machineId}/${id}`;
 }
@@ -105,7 +112,7 @@ function outboxDir(dataDir: string): string {
 
 function outboxFiles(dataDir: string): string[] {
   try {
-    return readdirSync(outboxDir(dataDir)).filter((f) => /^R-\d{4,}\.json$/.test(f)).sort();
+    return readdirSync(outboxDir(dataDir)).filter((f) => OUTBOX_FILE.test(f)).sort();
   } catch {
     return [];
   }
@@ -787,7 +794,7 @@ export function queuePendingEdit(ctx: Ctx, key: string, fields: Partial<ReportRe
   writePending(ctx, pending);
 }
 
-// The key of an outbox record file (<data dir>/reports/R-NNNN.json) whose data dir has a machine id, else null.
+// The key of an outbox record file (<data dir>/reports/R-xxxx-NNNN.json) whose data dir has a machine id, else null.
 export function keyOfOutboxFile(file: string): string | null {
   const path = resolve(file);
   const id = basename(path, ".json");

@@ -11,7 +11,7 @@ import {
   worktreeAdd, worktreeList, worktreeRemove,
 } from "../lib/git.ts";
 import { ring } from "../lib/doorbell.ts";
-import { startReportSync } from "../lib/reports-git.ts";
+import { newReportId, startReportSync } from "../lib/reports-git.ts";
 import { readJson, writeJsonAtomic } from "../lib/json.ts";
 import * as proc from "../lib/proc.ts";
 import { mainRef, mainRoot, sessionsDir, taskDir, worktreesDir } from "../state/paths.ts";
@@ -860,7 +860,7 @@ function fileReport(s: S, title: string, body: string): string {
   }
   for (;;) {
     n += 1;
-    const id = `R-${String(n).padStart(4, "0")}`;
+    const id = newReportId(s.ctx.data, n);
     const record: ReportRecord = {
       schema: 1, id, projectId, kind: "bug", title, body, createdAt: now(), status: "sent", fixedIn: null, note: null,
     };

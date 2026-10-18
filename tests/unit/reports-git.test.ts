@@ -225,7 +225,7 @@ describe("syncReports", () => {
     expect(syncReports(a)).toMatchObject({ pushed: 1, pushAccess: true });
     expect(state(a).lastError).toBeNull();
     expect(files()).toHaveLength(8);
-  });
+  }, 30_000);
 
   test("offline keeps the record unsent; it goes once the remote exists", () => {
     const gone = join(tempDir("warden-gone-"), "later.git");

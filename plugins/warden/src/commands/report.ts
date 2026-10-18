@@ -6,7 +6,7 @@ import { ring } from "../lib/doorbell.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
 import { readJson, writeJsonAtomic } from "../lib/json.ts";
 import {
-  FIXED_IN, KEY_PATTERN, keyOfOutboxFile, listInbox, NOTE_FORBIDDEN, queuePendingEdit, setReportStatus, startReportSync, STATUSES, syncReports,
+  FIXED_IN, KEY_PATTERN, keyOfOutboxFile, listInbox, machineId, newReportId, NOTE_FORBIDDEN, OUTBOX_FILE, queuePendingEdit, REPORT_ID, setReportStatus, startReportSync, STATUSES, syncReports,
   transportOn,
 } from "../lib/reports-git.ts";
 import { mainRoot, stateRoot, worktreeRoot } from "../state/paths.ts";
@@ -33,7 +33,7 @@ function cell(text: string): string {
   return text.replace(/\|/g, "/").replace(/\s+/g, " ").trim();
 }
 
-// Creates R-NNNN.json without overwriting: if two reports race for one number, the loser takes the next.
+// Creates R-xxxx-NNNN.json without overwriting: if two reports race for one number, the loser takes the next.
 function writeNewRecord(ctx: Ctx, build: (id: string) => ReportRecord): ReportRecord {
   const dir = reportsDir(ctx);
   mkdirSync(dir, { recursive: true });
@@ -42,7 +42,7 @@ function writeNewRecord(ctx: Ctx, build: (id: string) => ReportRecord): ReportRe
 
   for (;;) {
     n += 1;
-    const record = build(`R-${String(n).padStart(4, "0")}`);
+    const record = build(newReportId(ctx.data, n));
     try {
       writeFileSync(join(dir, `${record.id}.json`), JSON.stringify(record, null, 2) + "\n", { flag: "wx" });
     } catch (err) {
@@ -89,7 +89,7 @@ function setStatus(args: string[], ctx: Ctx): void {
   } catch {
     throw new WardenError(`cannot read a report record at ${file}`, EXIT.USAGE);
   }
-  if (record.schema !== 1 || !/^R-\d{4,}$/.test(String(record.id))) throw new WardenError(`${file} is not a report record`, EXIT.USAGE);
+  if (record.schema !== 1 || !REPORT_ID.test(String(record.id))) throw new WardenError(`${file} is not a report record`, EXIT.USAGE);
 
   record.status = status;
   if (note !== undefined) record.note = note;
@@ -145,7 +145,7 @@ function printStatus(args: string[], ctx: Ctx): void {
   if (args.length !== (write ? 2 : 1)) throw new WardenError("usage: warden report --status [--write]", EXIT.USAGE);
   const { projectId } = loadWardenJson(join(mainRoot(ctx.cwd), ".warden", "warden.json"));
   const dir = reportsDir(ctx);
-  const names = existsSync(dir) ? readdirSync(dir).filter((f) => /^R-\d{4,}\.json$/.test(f)).sort() : [];
+  const names = existsSync(dir) ? readdirSync(dir).filter((f) => OUTBOX_FILE.test(f)).sort() : [];
   const reports: object[] = [];
   for (const name of names) {
     try {
@@ -199,6 +199,7 @@ export async function run(args: string[], ctx: Ctx): Promise<void> {
 
 export interface ReportChange {
   id: string;
+  key: string; // <machine id>/<id>
   title: string;
   status: string;
   fixedIn: string | null;
@@ -213,12 +214,19 @@ function changeForRow(ctx: Ctx, line: string, seen: Record<string, string> = {})
   const cells = line.split("|").map((c) => c.trim());
   // A row splits into ["", id, title, status, fixedIn, ""].
   const [, id, title, status] = cells;
-  if (cells.length !== 6 || !id || !/^R-\d{4,}$/.test(id) || title === undefined) return null;
+  if (cells.length !== 6 || !id || !REPORT_ID.test(id) || title === undefined) return null;
 
+  // A row matches by key (machine id + id), and only a record of this machine's outbox can match. An id that names
+  // a machine (R-xxxx-NNNN) must name this one; a legacy bare R-NNNN matches this machine's record with that id.
+  const mid = machineId(ctx.data);
+  const named = id.match(/^R-([0-9a-f]{4})-/)?.[1];
+  if (named !== undefined && named !== mid.slice(0, 4)) return null;
   const recordPath = join(reportsDir(ctx), `${id}.json`);
   if (!existsSync(recordPath)) return null;
   const record = readJson<ReportRecord>(recordPath);
-  return record.status === (seen[id] ?? status) ? null : { id, title, status: record.status, fixedIn: record.fixedIn };
+  const key = `${mid}/${id}`;
+  return record.status === (seen[key] ?? (named === undefined ? seen[id] : undefined) ?? status)
+    ? null : { id, key, title, status: record.status, fixedIn: record.fixedIn };
 }
 
 // What changed since the agent was last told. Read-only for the project: it never touches reports.md, it only notes
@@ -234,7 +242,7 @@ export function reportStatusChanges(ctx: Ctx): ReportChange[] {
       return change ? [change] : [];
     });
     if (changes.length > 0) {
-      for (const c of changes) seen[c.id] = c.status;
+      for (const c of changes) seen[c.key] = c.status;
       mkdirSync(dirname(file), { recursive: true });
       writeJsonAtomic(file, seen);
     }
@@ -259,7 +267,7 @@ function writeReportsTable(ctx: Ctx, projectId: string): number {
     return `| ${change.id} | ${change.title} | ${change.status} | ${change.fixedIn ?? NO_VERSION} |`;
   });
   const dir = reportsDir(ctx);
-  const names = existsSync(dir) ? readdirSync(dir).filter((f) => /^R-\d{4,}\.json$/.test(f)).sort() : [];
+  const names = existsSync(dir) ? readdirSync(dir).filter((f) => OUTBOX_FILE.test(f)).sort() : [];
   const added: string[] = [];
   for (const name of names) {
     try {

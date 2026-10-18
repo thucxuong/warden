@@ -69,13 +69,13 @@ describe("reports from other machines", () => {
 
     const ra = file(a, "Gate output is cut");
     const rb = file(b, "Add a dry run");
-    expect(ra).toEqual({ id: "R-0001", status: "sent" });
-    expect(rb).toEqual({ id: "R-0001", status: "sent" });
+    expect(ra).toEqual({ id: expect.stringMatching(/^R-[0-9a-f]{4}-0001$/), status: "sent" });
+    expect(rb).toEqual({ id: expect.stringMatching(/^R-[0-9a-f]{4}-0001$/), status: "sent" });
 
     // The background sync after `warden report` puts both records on the branch.
     await until(() => branchFiles().length === 2);
     const files = branchFiles();
-    expect(files.every((f) => /^reports\/demo\/[0-9a-f]{8}-R-0001\.json$/.test(f))).toBe(true);
+    expect(files.every((f) => /^reports\/demo\/[0-9a-f]{8}-R-[0-9a-f]{4}-0001\.json$/.test(f))).toBe(true);
     expect(new Set(files).size).toBe(2);
 
     // The WA sees both, with keys <machineId>/<R-id>.
@@ -85,7 +85,7 @@ describe("reports from other machines", () => {
     expect(inbox.json.fetched).toBe(true);
     const items = inbox.json.reports as { key: string; title: string; status: string }[];
     expect(items.map((i) => i.title).sort()).toEqual(["Add a dry run", "Gate output is cut"]);
-    for (const item of items) expect(item.key).toMatch(/^[0-9a-f]{8}\/R-\d{4,}$/);
+    for (const item of items) expect(item.key).toMatch(/^[0-9a-f]{8}\/R-[0-9a-f]{4}-\d{4,}$/);
     expect(new Set(items.map((i) => i.key)).size).toBe(2);
     const keyA = items.find((i) => i.title === "Gate output is cut")!.key;
 
@@ -100,7 +100,7 @@ describe("reports from other machines", () => {
     expect(syncA.updated).toBe(1);
     const statusA = warden(a, ["report", "--status"]);
     expect(statusA.json.reports).toHaveLength(1);
-    expect(statusA.json.reports[0]).toMatchObject({ id: "R-0001", status: "accepted", note: "Thanks, will do" });
+    expect(statusA.json.reports[0]).toMatchObject({ id: ra.id, status: "accepted", note: "Thanks, will do" });
 
     await sync(b);
     expect(warden(b, ["report", "--status"]).json.reports[0].status).toBe("sent");
