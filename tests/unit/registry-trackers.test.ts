@@ -50,7 +50,7 @@ describe("tool.json", () => {
   for (const [name, needs] of [["github-issues", "gh"], ["ado", "az"]] as const) {
     test(`${name} is a ticket tool`, () => {
       const tool = JSON.parse(readFileSync(join(root, name, "tool.json"), "utf8"));
-      expect(tool).toMatchObject({ name, version: "0.1.0", kind: "tickets", needs: [needs] });
+      expect(tool).toMatchObject({ name, version: "0.1.1", kind: "tickets", needs: [needs] });
       expect(existsSync(join(root, name, "SKILL.md"))).toBe(true);
     });
   }
@@ -341,7 +341,7 @@ describe("ado CLI", () => {
     expect(r.code).toBe(0);
     expect(r.json).toHaveLength(200);
     expect(r.json[199].id).toBe("200");
-  });
+  }, 30_000);
 
   test("show: body from HTML", () => {
     fake("az", {

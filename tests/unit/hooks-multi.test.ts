@@ -196,6 +196,23 @@ describe("orchestrating session", () => {
     await bash(`warden next ${T}`, { session_id: "S2", cwd: main });
     expect(await hook("stop", { session_id: "S2", cwd: main })).not.toBeNull();
   });
+
+  test("Stop does not block an orchestrating session whose cwd is inside a ticket worktree", async () => {
+    await twoRuns();
+    await bash("warden orchestrate plan EP-1", { cwd: main });
+    expect(await hook("stop", { cwd: wt })).toBeNull();
+    expect(eventTypes()).not.toContain("stop.blocked");
+  });
+
+  test("Stop does not block at a fix step until a warden:fixer transcript is linked", async () => {
+    await startFlow(FEATURE);
+    atFix();
+    await bash(`warden next ${T}`, { cwd: main }); // links the main thread to the run
+    expect(await hook("stop", { cwd: main })).toBeNull(); // the fixer is still working
+    expect(eventTypes()).not.toContain("stop.blocked");
+    await hook("subagent-stop", { cwd: main, agent_id: "F1", agent_type: "warden:fixer", agent_transcript_path: "/tmp/f1.jsonl" });
+    expect(await hook("stop", { cwd: main })).not.toBeNull(); // the fixer returned: the turn must go on
+  });
 });
 
 describe("UserPromptSubmit with several runs", () => {

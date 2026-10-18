@@ -174,6 +174,7 @@ describe("buildInstructions", () => {
     const text = buildInstructions({ main, run, flow, steps, fix, fixNoteText: "# Fix 2026-01-01 T-0\nold note" });
     expect(headings(text)).toEqual(["## Task", "## Step: fix-1 (fix)", "## How this project does it", "## Fix context", "## Hand back"]);
     expect(text).toContain("Delegate this step to the warden:fixer subagent");
+    expect(text).toContain("in the foreground, never with run_in_background");
     expect(text).toContain("- branch: warden-fix/T-1-1\n- verdict: UNCLEAR");
     expect(text).toContain("- mayMerge: false");
     expect(text).toContain("old note");

@@ -2,13 +2,17 @@
 // Pull request helper: create, merge and view through git and gh.
 import { spawnSync } from "node:child_process";
 
+// Output helpers, not the console object: copies in .claude/ are often linted with a no-console rule
+const writeOut = (s: string): void => void process.stdout.write(s + "\n");
+const writeErr = (s: string): void => void process.stderr.write(s + "\n");
+
 const USAGE = `usage:
   pr.ts create --title <t> --body-file <f> [--base <b>]
   pr.ts merge <pr>
   pr.ts view <pr>`;
 
 function fail(message: string, code = 2): never {
-  console.error(message);
+  writeErr(message);
   process.exit(code);
 }
 
@@ -42,7 +46,7 @@ function create(args: string[]): void {
   const ghArgs = ["pr", "create", "--title", title, "--body-file", bodyFile];
   if (base) ghArgs.push("--base", base);
   const out = runCapture("gh", ghArgs).trim();
-  console.log(out.split("\n").pop() ?? "");
+  writeOut(out.split("\n").pop() ?? "");
 }
 
 function merge(pr: string): void {
@@ -50,7 +54,7 @@ function merge(pr: string): void {
   const json = runCapture("gh", ["pr", "view", pr, "--json", "mergeCommit"]);
   const oid = (JSON.parse(json) as { mergeCommit?: { oid?: string } | null }).mergeCommit?.oid;
   if (!oid) fail(`merged, but gh reports no merge commit yet; run: pr.ts view ${pr}`, 1);
-  console.log(oid);
+  writeOut(oid);
 }
 
 const [command, ...rest] = process.argv.slice(2);

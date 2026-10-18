@@ -3,6 +3,10 @@
 // Stdout is one JSON value. Exit: 0 ok, 1 tool or data error, 2 usage, 3 unknown ticket or epic.
 import { spawnSync } from "node:child_process";
 
+// Output helpers, not the console object: copies in .claude/ are often linted with a no-console rule
+const writeOut = (s: string): void => void process.stdout.write(s + "\n");
+const writeErr = (s: string): void => void process.stderr.write(s + "\n");
+
 // Work item state -> status. Anything else is "todo". Edit for your process template.
 const STATE_TO_STATUS: Partial<Record<string, TicketStatus>> = {
   New: "todo", "To Do": "todo", Proposed: "todo", Approved: "todo",
@@ -151,13 +155,13 @@ export function run(argv: string[]): unknown {
 
 if (import.meta.main) {
   try {
-    console.log(JSON.stringify(run(process.argv.slice(2))));
+    writeOut(JSON.stringify(run(process.argv.slice(2))));
   } catch (e) {
     if (e instanceof ToolError) {
-      console.error(e.message);
+      writeErr(e.message);
       process.exit(e.code);
     }
-    console.error(e instanceof Error ? e.message : String(e));
+    writeErr(e instanceof Error ? e.message : String(e));
     process.exit(1);
   }
 }

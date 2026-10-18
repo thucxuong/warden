@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1 — 2026-10-18
+
+- Orchestrate, the work skill and the fix step now require foreground agents, never `run_in_background`.
+- Registry tool scripts no longer use `console.*`; tools are at 0.1.1 with fix notes.
+- `warden tools add` and the tools skill say to exclude copied tools from lint and format checks.
+- The Stop hook no longer blocks an orchestrating session, and allows a stop at a fix step until the fixer returns.
+
 ## 0.3.0 — 2026-10-18
 
 - Ticket tools `backlog`, `github-issues` and `ado` with one command set (`dag`, `show`, `set-status`).

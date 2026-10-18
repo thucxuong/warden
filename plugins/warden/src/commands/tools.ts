@@ -83,6 +83,8 @@ function add(name: string | undefined, ctx: Ctx): void {
 
   appendRow(join(root, ".warden", "tools.md"), TOOLS_HEADER, `| ${name} | ${manifest.version} | no | — |`);
   console.log(JSON.stringify({ added: name, path: `.claude/skills/${name}`, kind: info.kind }));
+  // stderr, so stdout stays one JSON value.
+  console.error(`If your lint or format checks scan .claude/, exclude .claude/skills/${name} or keep the copy formatted`);
 }
 
 // ---------------------------------------------------------------------------

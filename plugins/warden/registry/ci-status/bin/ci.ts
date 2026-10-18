@@ -2,6 +2,10 @@
 // CI state of the current commit and the failed jobs of a run, through git and gh.
 import { spawnSync } from "node:child_process";
 
+// Output helpers, not the console object: copies in .claude/ are often linted with a no-console rule
+const writeOut = (s: string): void => void process.stdout.write(s + "\n");
+const writeErr = (s: string): void => void process.stderr.write(s + "\n");
+
 const USAGE = `usage:
   ci.ts status [--branch <b>]
   ci.ts view <run-id>`;
@@ -70,7 +74,7 @@ export function formatView(id: string, jobs: GhJob[], log: string): string {
 }
 
 function fail(message: string, code: number): never {
-  console.error(message);
+  writeErr(message);
   process.exit(code);
 }
 
@@ -96,7 +100,7 @@ function status(args: string[]): void {
   } catch {
     return fail("gh printed no JSON", 1);
   }
-  console.log(JSON.stringify(buildStatus(branch, sha, runs)));
+  writeOut(JSON.stringify(buildStatus(branch, sha, runs)));
 }
 
 function view(args: string[]): void {
@@ -109,7 +113,7 @@ function view(args: string[]): void {
     return fail("gh printed no JSON", 1);
   }
   const log = capture("gh", ["run", "view", id, "--log-failed"]);
-  console.log(formatView(id, parsed.jobs ?? [], log));
+  writeOut(formatView(id, parsed.jobs ?? [], log));
 }
 
 if (import.meta.main) {

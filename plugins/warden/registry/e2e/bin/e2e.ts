@@ -5,6 +5,10 @@ import { existsSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+// Output helpers, not the console object: copies in .claude/ are often linted with a no-console rule
+const writeOut = (s: string): void => void process.stdout.write(s + "\n");
+const writeErr = (s: string): void => void process.stderr.write(s + "\n");
+
 // Change these in your copy.
 export const COMMAND = "npx playwright test";
 export const PORT_ENVS = ["WEB_PORT"];
@@ -101,14 +105,14 @@ async function run(args: string[]): Promise<number> {
   const code = res.status ?? 1;
   const report = readReport(jsonFile);
   rmSync(jsonFile, { force: true });
-  console.log(summarize(report, port, code));
+  writeOut(summarize(report, port, code));
   return code;
 }
 
 if (import.meta.main) {
   const [cmd, ...rest] = process.argv.slice(2);
   if (cmd !== "run") {
-    console.error(USAGE);
+    writeErr(USAGE);
     process.exit(2);
   }
   process.exit(await run(rest[0] === "--" ? rest.slice(1) : rest));

@@ -13,6 +13,8 @@ After you add a tool, this project owns the copy. If you change the copy, set `c
 
 If the tool has the kind `tickets`, offer to set `"tickets": {"tool": "<name>"}` in `.warden/steps.json`. Do it only when no run is live, and commit it to the main branch, like the files `init` writes. It lets the user run `/warden:orchestrate <epic>`.
 
+If the project's lint or format checks scan `.claude/`, tell the user to exclude `.claude/skills/<name>` or keep the copy formatted.
+
 Fix notes: when session start says tool fixes are available, offer `/warden:fix`.
 
 Tell the user what the tool does and how to use it. Read `.claude/skills/<name>/SKILL.md` for that.

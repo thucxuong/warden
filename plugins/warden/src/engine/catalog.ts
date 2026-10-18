@@ -34,7 +34,7 @@ const TEXT: Record<string, string> = {
   ship:
     "Deliver the proven commit without changing it. 1) Commit the run record: `git add .warden/history/<task> && git commit -m 'chore(<task>): run record'`. 2) Open the PR or merge as the project how-to says. 3) If there are leftovers, put the file text in the description under `## Unresolved review findings`. 4) Hand in the ship output with `warden done` BEFORE you remove the worktree or the branch. Any other change sends the run back to the gates.",
   fix:
-    "A check failed and triage says it is not (only) the change. Delegate this step to the warden:fixer subagent (Agent tool, subagent_type 'warden:fixer') with the context below, then pass its JSON to `warden done`. Do not fix it yourself and do not touch the ticket worktree.",
+    "A check failed and triage says it is not (only) the change. Delegate this step to the warden:fixer subagent (Agent tool, subagent_type 'warden:fixer') in the foreground, never with run_in_background, with the context below. Wait for it to return, then pass its JSON to `warden done`. Do not fix it yourself and do not touch the ticket worktree.",
 };
 
 function textKey(type: CatalogType, variant?: AnalyzeVariant): string {

@@ -6,6 +6,10 @@ import { existsSync, readdirSync, readFileSync, realpathSync, writeFileSync } fr
 import { basename, join } from "node:path";
 import { spawnSync } from "node:child_process";
 
+// Output helpers, not the console object: copies in .claude/ are often linted with a no-console rule
+const writeOut = (s: string): void => void process.stdout.write(s + "\n");
+const writeErr = (s: string): void => void process.stderr.write(s + "\n");
+
 export const STATUSES = ["todo", "doing", "review", "done"] as const;
 export type TicketStatus = (typeof STATUSES)[number];
 
@@ -226,10 +230,10 @@ export function main(args: string[], cwd: string): unknown {
 
 if (import.meta.main) {
   try {
-    console.log(JSON.stringify(main(process.argv.slice(2), process.cwd())));
+    writeOut(JSON.stringify(main(process.argv.slice(2), process.cwd())));
   } catch (err) {
     if (!(err instanceof ToolError)) throw err;
-    console.error(err.message);
+    writeErr(err.message);
     process.exit(err.code);
   }
 }

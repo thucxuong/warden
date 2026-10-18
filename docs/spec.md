@@ -505,7 +505,7 @@ Step catalog (`src/engine/catalog.ts`):
 - **plan:** "Turn the task into a plan that someone else could build without asking you. Follow the warden:plan skill. Write a decision file for each real choice. When the step says brainstorm, first compare 2–3 options with trade-offs and pick one, and put them in the `brainstorm` object of the output (see the example in `output`)."
 - **implement:** "Make the change the task and plan ask for, with tests. Commit all of it in one or more commits and leave nothing uncommitted. When you are back from a gate, fix exactly what it reports, nothing else. Do not change gate files. Do not run the checks to prove the step; the engine runs them. `filesChanged` must be exactly the files that differ from the start of this step; check with `git diff --name-only <step start> HEAD`."
 - **ship:** "Deliver the proven commit without changing it. 1) Commit the run record: `git add .warden/history/<task> && git commit -m 'chore(<task>): run record'`. 2) Open the PR or merge as the project how-to says. 3) If there are leftovers, put the file text in the description under `## Unresolved review findings`. 4) Hand in the ship output with `warden done` BEFORE you remove the worktree or the branch. Any other change sends the run back to the gates."
-- **fix:** "A check failed and triage says it is not (only) the change. Delegate this step to the warden:fixer subagent (Agent tool, subagent_type 'warden:fixer') with the context below, then pass its JSON to `warden done`. Do not fix it yourself and do not touch the ticket worktree."
+- **fix:** "A check failed and triage says it is not (only) the change. Delegate this step to the warden:fixer subagent (Agent tool, subagent_type 'warden:fixer') in the foreground, never with run_in_background, with the context below. Wait for it to return, then pass its JSON to `warden done`. Do not fix it yourself and do not touch the ticket worktree."
 
 Template files:
 
@@ -1535,7 +1535,7 @@ Loop until the status is `shipped`, `done`, `waiting` or `blocked`:
 1. Run `warden next`. Read `message`, `instructions`, `output` and `context`.
 2. Status `agent`: do the step as the instructions say.
    - plan step → follow `/warden:plan`.
-   - fix step → delegate to `warden:fixer`.
+   - fix step → delegate to `warden:fixer` in the foreground and wait for it.
    - analyze reproduce → write a failing test first, record expected vs actual.
    - analyze diagnose → root cause first, then diagnose before prescribing.
    - feature plan with brainstorm → compare 2–3 options with trade-offs and pick one.

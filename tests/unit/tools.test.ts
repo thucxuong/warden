@@ -22,10 +22,15 @@ function ctx(): Ctx {
   return { root: pluginRoot, data: tempDir("warden-data-"), cwd: repo, env: {}, stdinIsTTY: false };
 }
 
+let errLines: string[] = [];
+
 async function call(args: string[]): Promise<{ out: any; code: number | null }> {
   const lines: string[] = [];
+  errLines = [];
   const realLog = console.log;
+  const realErr = console.error;
   console.log = (...a: unknown[]) => void lines.push(a.join(" "));
+  console.error = (...a: unknown[]) => void errLines.push(a.join(" "));
   try {
     await run(args, ctx());
     return { out: lines.length ? JSON.parse(lines.join("\n")) : null, code: null };
@@ -34,6 +39,7 @@ async function call(args: string[]): Promise<{ out: any; code: number | null }> 
     throw err;
   } finally {
     console.log = realLog;
+    console.error = realErr;
   }
 }
 
@@ -82,7 +88,7 @@ describe("tools list", () => {
   test("the shipped registry lists git-pr", async () => {
     pluginRoot = resolve(realRegistry, "..");
     const tools = (await call(["list"])).out.tools;
-    expect(tools.find((t: any) => t.name === "git-pr")).toMatchObject({ version: "0.1.0", needs: ["git", "gh"], kind: null });
+    expect(tools.find((t: any) => t.name === "git-pr")).toMatchObject({ version: "0.1.1", needs: ["git", "gh"], kind: null });
   });
 });
 
@@ -91,6 +97,9 @@ describe("tools add", () => {
     addTool("alpha", ["git"]);
     const { out } = await call(["add", "alpha"]);
     expect(out).toEqual({ added: "alpha", path: ".claude/skills/alpha", kind: null });
+    expect(errLines).toEqual([
+      "If your lint or format checks scan .claude/, exclude .claude/skills/alpha or keep the copy formatted",
+    ]);
     expect(existsSync(join(repo, ".claude/skills/alpha/SKILL.md"))).toBe(true);
     expect(existsSync(join(repo, ".claude/skills/alpha/bin/run.ts"))).toBe(true);
     expect(existsSync(join(repo, ".claude/skills/alpha/tool.json"))).toBe(false);
@@ -242,6 +251,19 @@ describe("pendingToolFixes and toolFixesLine", () => {
 
 describe("shipped registry", () => {
   const tools = readdirSync(realRegistry, { withFileTypes: true }).filter((e) => e.isDirectory());
+
+  test("no tool script uses console.*; each has a v0.1.1 fix note in the fix-note format", () => {
+    for (const { name } of tools) {
+      const dir = join(realRegistry, name);
+      for (const f of readdirSync(join(dir, "bin")).filter((f) => f.endsWith(".ts"))) {
+        expect(readFileSync(join(dir, "bin", f), "utf8")).not.toMatch(/\bconsole\./);
+      }
+      expect(JSON.parse(readFileSync(join(dir, "tool.json"), "utf8")).version).toBe("0.1.1");
+      const note = readFileSync(join(dir, "fixes", "v0.1.1.md"), "utf8");
+      expect(note.startsWith(`# ${name} v0.1.1\n## What changed\n`)).toBe(true);
+      for (const h of ["## Why", "## Apply to your copy", "## Check"]) expect(note).toContain(h);
+    }
+  });
 
   test("every tool has tool.json, SKILL.md and a bin script; no fix note is above its tool version", () => {
     expect(tools.length).toBeGreaterThan(0);

@@ -2,9 +2,9 @@
 import { closeSync, fstatSync, openSync, readSync } from "node:fs";
 import { isAgentStep } from "../engine/catalog.ts";
 import { ensureGate, pendingJob } from "../engine/machine.ts";
-import { readEvents, readRun } from "../state/store.ts";
+import { readEvents, readRun, readSessionLinks } from "../state/store.ts";
 import type { RunJson } from "../types.ts";
-import { type HookCall, type HookInput, linkSession, logHookError, machineCtx, runEvent, runForSession } from "./resolve.ts";
+import { type HookCall, type HookInput, linkSession, logHookError, machineCtx, orchestrating, runEvent, runForSession } from "./resolve.ts";
 
 const LOOP_GUARD = 3;
 const TRANSCRIPT_TAIL_BYTES = 256 * 1024;
@@ -54,6 +54,13 @@ function asksUser(call: HookCall, run: RunJson): boolean {
   return /\?[\s*_`"')\]]*$/.test(lastAssistantText(call.input).trim());
 }
 
+// A fix step is handed to a warden:fixer agent that works in the background. Until a fixer transcript is linked
+// (SubagentStop) after the step began, the agent has not returned, so the main thread may end its turn.
+function fixerOut(main: string, run: RunJson): boolean {
+  if (run.current.type !== "fix") return false;
+  return !readSessionLinks(main, run.task).some((l) => l.agentType === "warden:fixer" && l.ts >= run.current.startedAt);
+}
+
 // stop.blocked events in a row at the end of the log.
 function stopBlocksInARow(main: string, task: string): number {
   const events = readEvents(main, task);
@@ -63,13 +70,14 @@ function stopBlocksInARow(main: string, task: string): number {
 }
 
 export async function stop(call: HookCall): Promise<string | null> {
+  if (orchestrating(call) !== null) return null; // the orchestrator's cwd may sit in a ticket worktree (spec 0.3 7.3)
   const resolved = runForSession(call);
   if (!resolved) return null;
   await linkSession(call, resolved.task);
 
   const run = readRun(call.main, resolved.task);
   if (run.status !== "active") return null;
-  if (asksUser(call, run)) return null;
+  if (asksUser(call, run) || fixerOut(call.main, run)) return null;
 
   if (call.input.stop_hook_active === true && stopBlocksInARow(call.main, run.task) >= LOOP_GUARD) {
     return JSON.stringify({ systemMessage: `warden: stopping although ${run.task} is active; type "continue" to resume.` });

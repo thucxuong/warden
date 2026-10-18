@@ -4,6 +4,10 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 
+// Output helpers, not the console object: copies in .claude/ are often linted with a no-console rule
+const writeOut = (s: string): void => void process.stdout.write(s + "\n");
+const writeErr = (s: string): void => void process.stderr.write(s + "\n");
+
 const USAGE = `usage:
   graph.ts build
   graph.ts query "<question>" [--budget <n>]
@@ -63,7 +67,7 @@ export function graphifyArgs(cmd: string, rest: string[], file: string): string[
 }
 
 function fail(message: string, code: number): never {
-  console.error(message);
+  writeErr(message);
   process.exit(code);
 }
 
@@ -77,7 +81,7 @@ function build(main: string): number {
   if (res.status !== 0) return res.status ?? 1;
   const st = graphStatus(main);
   if (!st.graph) fail("graphify wrote no graph.json", 1);
-  console.log(JSON.stringify({ graph: st.graph, nodes: st.nodes, edges: st.edges }));
+  writeOut(JSON.stringify({ graph: st.graph, nodes: st.nodes, edges: st.edges }));
   return 0;
 }
 
@@ -91,7 +95,7 @@ if (import.meta.main) {
     fail((e as Error).message, 1);
   }
   if (cmd === "build") process.exit(build(main));
-  if (cmd === "status") console.log(JSON.stringify(graphStatus(main)));
+  if (cmd === "status") writeOut(JSON.stringify(graphStatus(main)));
   else {
     const file = graphFile(main);
     const args = graphifyArgs(cmd!, rest, file);

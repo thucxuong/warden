@@ -14,7 +14,7 @@ Warden chooses the task's worktree and branch (`warden start` prints them). Use 
 1. Run `warden next`. Read `message`, `instructions`, `output` and `context`.
 2. If the status is `agent`, do the step as the instructions say.
    - plan step: follow the plan skill.
-   - fix step: hand it to the `warden:fixer` agent.
+   - fix step: hand it to the `warden:fixer` agent in the foreground (never `run_in_background`) and wait for it to return.
    - analyze, reproduce: write a failing test first. Record what you expected and what happened.
    - analyze, diagnose: find the root cause first. Diagnose before you prescribe.
    - feature plan with brainstorm: compare 2 or 3 options with their trade-offs. Pick one.
