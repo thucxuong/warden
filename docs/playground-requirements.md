@@ -1,5 +1,7 @@
 # Warden playground: requirements
 
+> **How this is used (2026-10-18):** the playground is not built up front. It grows one real ticket at a time, built by the consumer-project agent through warden, so each warden feature is verified on real work. This document is a menu of features, defects and scenarios to pick from when a warden feature needs them.
+
 Status: draft for review, revision 2 (review findings applied). Date: 2026-10-18. Nothing is built yet.
 
 **Base concept: "Tallyboard" (concept 2, harness-coverage).** It was designed backlog-first around the warden checklist. It has concrete ticket IDs, a real DAG, a checked TypeScript pin and a local bare remote. Grafted in:
