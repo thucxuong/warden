@@ -87,7 +87,7 @@ describe("wa-triage", () => {
   test("covers the outbox, the verdicts, issue creation and write-back", () => {
     expect(text).toContain("${HOME}/.claude/plugins/data/warden-*/reports/");
     for (const verdict of ["Real bug", "Snowflake", "Needs info"]) expect(text).toContain(verdict);
-    expect(text).toContain("gh issue create -R chrisluuz/warden");
+    expect(text).toContain("gh issue create -R thucxuong/warden");
     expect(text).toContain("status");
     expect(text).toContain("note");
   });

@@ -1644,17 +1644,17 @@ Body (key text, kept from the asset):
 
 1. Install Bun ≥1.4: `curl -fsSL https://bun.sh/install | bash` (or `bun upgrade`). The wrapper checks the version and says so at session start if it is too old.
 2. Make sure git can read the private repo with your own credentials. Claude Code runs plain `git` **non-interactively**, which tries SSH first, then HTTPS. Pick one:
-   - **SSH:** a GitHub key that works without a prompt: loaded in `ssh-agent` (or no passphrase), and `github.com` already in `~/.ssh/known_hosts`. Check with `ssh -T git@github.com` and `GIT_TERMINAL_PROMPT=0 git ls-remote git@github.com:chrisluuz/warden.git` (the second one proves the non-interactive path).
+   - **SSH:** a GitHub key that works without a prompt: loaded in `ssh-agent` (or no passphrase), and `github.com` already in `~/.ssh/known_hosts`. Check with `ssh -T git@github.com` and `GIT_TERMINAL_PROMPT=0 git ls-remote git@github.com:thucxuong/warden.git` (the second one proves the non-interactive path).
    - **HTTPS via gh:** `gh auth login`, then `gh auth setup-git`, and add `export CLAUDE_CODE_PLUGIN_PREFER_HTTPS=1` to your shell profile. Without an SSH key this is **required**, not optional: installs from `/plugin` and plugin updates do not fall back to HTTPS.
 
 ### 10.2 Install, option A: per developer (2 commands)
 
 ```bash
-claude plugin marketplace add chrisluuz/warden#stable
+claude plugin marketplace add thucxuong/warden#stable
 claude plugin install warden@warden-marketplace
 ```
 
-Or inside Claude Code: `/plugin marketplace add chrisluuz/warden#stable`, then `/plugin install warden@warden-marketplace`, then `/reload-plugins`.
+Or inside Claude Code: `/plugin marketplace add thucxuong/warden#stable`, then `/plugin install warden@warden-marketplace`, then `/reload-plugins`.
 
 `#stable` pins the release branch (10.6), so a CP never gets unreleased commits from `main`.
 
@@ -1666,7 +1666,7 @@ Or inside Claude Code: `/plugin marketplace add chrisluuz/warden#stable`, then `
 {
   "extraKnownMarketplaces": {
     "warden-marketplace": {
-      "source": { "source": "github", "repo": "chrisluuz/warden", "ref": "stable" },
+      "source": { "source": "github", "repo": "thucxuong/warden", "ref": "stable" },
       "autoUpdate": true
     }
   },
@@ -1676,8 +1676,8 @@ Or inside Claude Code: `/plugin marketplace add chrisluuz/warden#stable`, then `
 
 - Each teammate opens the project in Claude Code and accepts the workspace trust dialog. Claude Code then clones the marketplace in the background **after the session has started**, so the first session does not have warden yet. Run `/reload-plugins` (Claude Code prints `Plugins changed. Run /reload-plugins`) or restart; from then on warden loads at session start.
 - `autoUpdate: true` turns on updates for this third-party marketplace, which is off by default.
-- Shell alternative that writes the same project settings: `claude plugin marketplace add chrisluuz/warden#stable --scope project && claude plugin install warden@warden-marketplace --scope project` **[U-8]**.
-- In CI or `-p`: set `CLAUDE_CODE_SYNC_PLUGIN_INSTALL=1`. The CI job's default `GITHUB_TOKEN` cannot read a different private repo, so use a PAT or a GitHub App token with read access to `chrisluuz/warden`, export it as `GH_TOKEN`, and run `gh auth setup-git`. A bare `GH_TOKEN` works only through the gh credential helper, so `gh auth setup-git` is needed.
+- Shell alternative that writes the same project settings: `claude plugin marketplace add thucxuong/warden#stable --scope project && claude plugin install warden@warden-marketplace --scope project` **[U-8]**.
+- In CI or `-p`: set `CLAUDE_CODE_SYNC_PLUGIN_INSTALL=1`. The CI job's default `GITHUB_TOKEN` cannot read a different private repo, so use a PAT or a GitHub App token with read access to `thucxuong/warden`, export it as `GH_TOKEN`, and run `gh auth setup-git`. A bare `GH_TOKEN` works only through the gh credential helper, so `gh auth setup-git` is needed.
 
 ### 10.4 Onboard the CP
 
@@ -1722,7 +1722,7 @@ CPs track the `stable` branch, never `main`. A commit on `main` reaches nobody u
 | `cli.test.ts` | Unknown command → 2; `version` JSON; dynamic import allowlist |
 | `manifest.test.ts` | `plugin.json` / `package.json` versions equal; marketplace entry name == plugin name and source `./plugins/warden`; `plugin.json` has no `repository`; `git ls-files -s` shows mode `100755` for `plugins/warden/bin/warden` and `tests/fixtures/bin/claude` |
 | `wrapper.test.ts` | `bin/warden` uses `CLAUDE_PLUGIN_DATA`, then `WARDEN_DATA`, then the `.data-dir` pointer (dev mode), then the default; a fake `bun` printing `1.3.0` makes `hook session-start` print the upgrade line and exit 0 |
-| `hidden.test.ts` | `plugins/warden/{skills,agents,registry,src}/` contain none of `github.com/chrisluuz`, `chrisluuz/warden`, `WD-`, `issue #` |
+| `hidden.test.ts` | `plugins/warden/{skills,agents,registry,src}/` contain none of `github.com/thucxuong`, `thucxuong/warden`, `WD-`, `issue #` |
 | `paths.test.ts` | mainRoot from the main checkout and from a linked worktree (real temp repo + `git worktree add`); unsupported layout → 3; `worktreesDir` is outside the repo; `mainRef` with and without an `origin` remote |
 | `store.test.ts` | Atomic write; lock busy → 4; stale lock reclaimed; event `seq` increments; session records read and write |
 | `config.test.ts` | Valid and invalid warden.json / steps.json (missing default check, branchReruns 0 or 4); triage-rules loading and invalid-regex rejection |
@@ -1805,8 +1805,8 @@ CI (created in WD-0001): `.github/workflows/ci.yml` on push and PR runs `oven-sh
   - CI is green on GitHub on the first push.
   - `claude --plugin-dir plugins/warden -p "run: warden version" --model haiku --allowedTools "Bash(warden *)" --permission-mode dontAsk` returns the version.
   - **U-1 / U-2 install check (pass/fail, real private-repo path):**
-    1. Push the scaffold to branch `wd-0001-install` of `chrisluuz/warden`.
-    2. In a scratch HOME (`HOME=$(mktemp -d)` with a copy of the auth files, or a spare machine), with only SSH and then only HTTPS (`CLAUDE_CODE_PLUGIN_PREFER_HTTPS=1`) credentials: `claude plugin marketplace add chrisluuz/warden#wd-0001-install`, then `claude plugin install warden@warden-marketplace`.
+    1. Push the scaffold to branch `wd-0001-install` of `thucxuong/warden`.
+    2. In a scratch HOME (`HOME=$(mktemp -d)` with a copy of the auth files, or a spare machine), with only SSH and then only HTTPS (`CLAUDE_CODE_PLUGIN_PREFER_HTTPS=1`) credentials: `claude plugin marketplace add thucxuong/warden#wd-0001-install`, then `claude plugin install warden@warden-marketplace`.
     3. In a temp git repo: `claude -p "run: warden version" --allowedTools "Bash(warden *)" --permission-mode dontAsk` prints the version (Bash PATH works).
     4. `~/.claude/plugins/data/warden-warden-marketplace/hook-errors.log` has a `hook session-start` line (a hook fired, and the data dir name is the one 2.3 assumes).
     5. The installed plugin root (the `installPath` in `~/.claude/plugins/installed_plugins.json`) has an executable `bin/warden`, no `node_modules/`, no `docs/` and no `tests/`.
@@ -1867,7 +1867,7 @@ CI (created in WD-0001): `.github/workflows/ci.yml` on push and PR runs `oven-sh
   - `wa-triage` covers:
     - reading every `${HOME}/.claude/plugins/data/warden-*/reports/*.json` with status `sent`
     - verdicts real bug / snowflake / needs info, each with a reason
-    - `gh issue create -R chrisluuz/warden` for real bugs
+    - `gh issue create -R thucxuong/warden` for real bugs
     - writing `status`/`note` back
 
 ### Wave 3

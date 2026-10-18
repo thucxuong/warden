@@ -8,15 +8,15 @@ A delivery harness for Claude Code: composed workflows, engine-run gates, code r
 
 - Bun >= 1.4: Install from [bun.sh](https://bun.sh), or run `bun upgrade` if you have an older version.
 - Git access to this private repo. Choose one:
-  - **SSH:** Test with `ssh -T git@github.com` and `GIT_TERMINAL_PROMPT=0 git ls-remote git@github.com:chrisluuz/warden.git`.
-  - **HTTPS via `gh`:** Run `gh auth login`, then `gh auth setup-git`, then add `export CLAUDE_CODE_PLUGIN_PREFER_HTTPS=1` to your shell profile. Required if you don't have an SSH key, or if your default SSH key logs in as a GitHub account without access to this repo (`ssh -T git@github.com` shows which account).
+  - **SSH:** Test with `ssh -T git@github.com` and `GIT_TERMINAL_PROMPT=0 git ls-remote git@github.com:thucxuong/warden.git`.
+  - **HTTPS via `gh`:** Run `gh auth login`, then `gh auth setup-git`, then add `export CLAUDE_CODE_PLUGIN_PREFER_HTTPS=1` to your shell profile. Required if you don't have an SSH key.
 
 ### Option A: Two commands (one person)
 
 In a terminal or inside Claude Code (`/plugin`):
 
 ```bash
-claude plugin marketplace add chrisluuz/warden#stable
+claude plugin marketplace add thucxuong/warden#stable
 claude plugin install warden@warden-marketplace
 ```
 
@@ -30,7 +30,7 @@ Commit this to `.claude/settings.json` in your project (merge with any existing 
 {
   "extraKnownMarketplaces": {
     "warden-marketplace": {
-      "source": { "source": "github", "repo": "chrisluuz/warden", "ref": "stable" },
+      "source": { "source": "github", "repo": "thucxuong/warden", "ref": "stable" },
       "autoUpdate": true
     }
   },

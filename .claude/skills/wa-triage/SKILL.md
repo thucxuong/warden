@@ -30,9 +30,9 @@ Pick one verdict. Always give a reason in one or two sentences.
 ## 3. Act on the verdict
 
 - **Real bug**
-  1. Look for a duplicate: `gh issue list -R chrisluuz/warden --state all --search "<keywords>"`. If one exists, use it and do not open a new one.
+  1. Look for a duplicate: `gh issue list -R thucxuong/warden --state all --search "<keywords>"`. If one exists, use it and do not open a new one.
   2. Otherwise write the body to a scratch file. Include the report id, the project id, what happened, what was expected, the steps, and your reading of the cause.
-  3. Run `gh issue create -R chrisluuz/warden --title "<title>" --body-file <file> --label <bug or enhancement>`. Use the report's `kind` for the label. If the label does not exist, run the command again without `--label`.
+  3. Run `gh issue create -R thucxuong/warden --title "<title>" --body-file <file> --label <bug or enhancement>`. Use the report's `kind` for the label. If the label does not exist, run the command again without `--label`.
   4. Write back `status: "accepted"` and `note: "<issue url>"`.
 - **Snowflake**: write back `status: "wontfix"` and `note: "<reason>"`.
 - **Needs info**: write back `status: "needs-info"` and `note: "<the question>"`.

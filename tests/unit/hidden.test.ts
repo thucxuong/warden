@@ -6,7 +6,7 @@ const pluginRoot = resolve(import.meta.dir, "../../plugins/warden");
 const scannedDirs = ["skills", "agents", "registry", "src"];
 
 // What the CPA must never read in the shipped plugin (spec 2, notes).
-const forbidden = ["github.com/chrisluuz", "chrisluuz/warden", "WD-", "issue #"];
+const forbidden = ["github.com/thucxuong", "thucxuong/warden", "WD-", "issue #"];
 
 function listFiles(dir: string): string[] {
   if (!existsSync(dir)) return [];
