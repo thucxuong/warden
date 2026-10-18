@@ -6,8 +6,8 @@
   "title": "Machine B test: report from a second machine",
   "body": "Filed from a second machine to test the reports branch. Please mark it wontfix.",
   "createdAt": "2026-10-18T18:02:19.423Z",
-  "status": "sent",
+  "status": "wontfix",
   "fixedIn": null,
-  "note": null,
+  "note": "This was a test report from a second machine. Nothing to fix.",
   "machineId": "eb850d27"
 }
