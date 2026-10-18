@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "id": "R-eb85-0002",
+  "projectId": "pg",
+  "kind": "enhancement",
+  "title": "Machine B test 2: second report after 0.4.1",
+  "body": "Second cross-machine test. Please mark wontfix.",
+  "createdAt": "2026-10-18T18:15:06.223Z",
+  "status": "sent",
+  "fixedIn": null,
+  "note": null,
+  "machineId": "eb850d27"
+}
