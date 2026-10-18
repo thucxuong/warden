@@ -51,7 +51,7 @@ function localDate(date = new Date()): string {
 
 export function retroLine(lastRetro: string | null, today = localDate()): string | null {
   if (lastRetro !== null && Date.parse(today) - Date.parse(lastRetro) < RETRO_EVERY_DAYS * DAY_MS) return null;
-  return `warden: retro due (last ${lastRetro ?? "never"}). When the user's current request is done, invoke the warden:retro skill.`;
+  return `warden: retro due (last ${lastRetro ?? "never"}). When the user's current request is done, offer the retro in one short line. Do not start it unless the user says yes.`;
 }
 
 function retroDue(call: HookCall): string | null {

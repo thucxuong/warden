@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 — unreleased
+## 0.1.0 — 2026-10-18
 
 - Install via marketplace (option A, option B with team settings.json).
 - `/warden:init` onboarding: scan stack, draft context, steps, checks, setup script.
@@ -18,3 +18,11 @@
 - Site: local Bun server with task timeline, tokens, findings, verdicts as plain text.
 - `/warden:report` (outbox one machine only), `/warden:retro` (session start offers every 2 days), `/warden:upgrade` with notes.
 - Tool registry with `git-pr` tool: `warden tools list`, `warden tools add`.
+
+## 0.1.1 — 2026-10-18
+
+- Init sets lastRetro to today so retro is not immediately due after setup.
+- Add `warden report set` command to update report status and metadata with validation.
+- Add retry hint to blocked status message to guide users on how to continue.
+- Retro skill now requires explicit user confirmation before running.
+- Improve retro-due messaging in session start to guide CPA behavior.

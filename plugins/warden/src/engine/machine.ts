@@ -975,6 +975,10 @@ const BACK_LABEL: Record<RouteBack["kind"], string> = {
   code: "CODE", review: "blocking review findings", "fixer-code": "CODE (fixer)", rejected: "rejected", dirty: "dirty tree",
 };
 
+function retryHint(task: string): string {
+  return `To continue after fixing the cause, the user types "retry" in this chat, or runs: warden retry ${task}`;
+}
+
 function message(s: S, status: NextResponse["status"], position: string): string {
   const { run } = s;
   switch (status) {
@@ -991,7 +995,7 @@ function message(s: S, status: NextResponse["status"], position: string): string
     case "waiting":
       return `${run.task} is waiting for you: ${run.waiting?.reason ?? ""}`;
     case "blocked":
-      return `${run.task} is blocked: ${run.waiting?.reason ?? ""}`;
+      return `${run.task} is blocked: ${run.waiting?.reason ?? ""}\n${retryHint(run.task)}`;
     default:
       return `${run.task}: ${status}.`;
   }

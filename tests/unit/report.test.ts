@@ -94,6 +94,42 @@ describe("warden report", () => {
   });
 });
 
+describe("warden report set", () => {
+  const recordPath = (id = "R-0001") => join(data, "reports", `${id}.json`);
+  async function fileOne(): Promise<void> {
+    await call(run, ["--kind", "bug", "--title", "One", "--file", bodyFile()]);
+  }
+
+  test("rewrites status, note and fixedIn and keeps the rest", async () => {
+    await fileOne();
+    const before = readRecord("R-0001");
+    const res = await call(run, ["set", recordPath(), "--status", "accepted", "--note", "Accepted. Planned for a coming release."]);
+    expect(res.out).toEqual({ id: "R-0001", status: "accepted" });
+    expect(readRecord("R-0001")).toEqual({ ...before, status: "accepted", note: "Accepted. Planned for a coming release." });
+
+    await call(run, ["set", recordPath(), "--status", "fixed", "--fixed-in", "0.2.0"]);
+    expect(readRecord("R-0001")).toMatchObject({ status: "fixed", fixedIn: "0.2.0", note: "Accepted. Planned for a coming release." });
+    expect(reportStatusChanges(ctx())).toEqual([{ id: "R-0001", title: "One", status: "fixed", fixedIn: "0.2.0" }]);
+  });
+
+  test("a bad status, missing file argument or unreadable record exits 2", async () => {
+    await fileOne();
+    expect((await call(run, ["set", recordPath(), "--status", "done"])).code).toBe(2);
+    expect((await call(run, ["set", recordPath()])).code).toBe(2);
+    expect((await call(run, ["set", "--status", "fixed"])).code).toBe(2);
+    expect((await call(run, ["set", recordPath("R-0009"), "--status", "fixed"])).code).toBe(2);
+    expect(readRecord("R-0001").status).toBe("sent");
+  });
+
+  test("a note with a link, github or an issue number exits 2 and changes nothing", async () => {
+    await fileOne();
+    for (const note of ["see https://x.test/1", "tracked on GitHub", "issue #12", "http", "tracked as thucxuong/warden issue 1", "gitlab.com/x", "www.example.com", "see issues/1", "issue 1"]) {
+      expect((await call(run, ["set", recordPath(), "--status", "accepted", "--note", note])).code).toBe(2);
+    }
+    expect(readRecord("R-0001")).toMatchObject({ status: "sent", note: null });
+  });
+});
+
 describe("reportStatusChanges", () => {
   async function fileTwo(): Promise<void> {
     await call(run, ["--kind", "bug", "--title", "One", "--file", bodyFile()]);

@@ -50,7 +50,7 @@ Verified locally on 2026-10-18 with Claude Code 2.1.302 and Bun 1.4.2:
 |---|---|
 | `/warden:orchestrate`, ticket DAG, multi-ticket waves | Heavy. v0.1 runs one task per worktree, and `warden start --worktree` creates the worktree. |
 | Registry tools other than `git-pr` (`ado`, `github-issues`, `e2e`, `ci-status`, `graph`) and `/warden:fix` tool fix notes | Only one example tool proves the copy flow. |
-| WA headless triage that turns reports into GitHub issues automatically | v0.1 queues reports in an outbox file. A repo-local WA skill (`.claude/skills/wa-triage/`, not part of the plugin) turns them into issues by hand. |
+| WA headless triage that turns reports into GitHub issues automatically | v0.1 queues reports in an outbox file. A repo-local WA skill (`.claude/skills/wa-triage/`, not part of the plugin) turns them into issues by hand. It writes verdicts back with `warden report set`, keeps the report-to-issue mapping in its own ledger (`triage/ledger.json`), and never puts a link, issue number or repo name in a report. |
 | Reports from other machines | The outbox is `${WARDEN_DATA}` on the machine that filed the report, and wa-triage reads only the WA machine's copy. In v0.1 reports work on one machine only (the WA's own test CPs). R-ids are unique per machine, not globally. |
 | Site: ticket DAG view, code graph, rendered markdown | The site shows tasks, timeline, tokens, findings, verdicts, and docs as plain text. |
 | Checking the marketplace for a newer warden version | Plugin auto-update handles it. Session start only compares the installed plugin version with `warden.json`. |
@@ -343,6 +343,7 @@ All machine-facing commands print **one JSON object on stdout**. Diagnostics go 
 | `warden flow check` | `<file\|name>...` | Lints each flow (5.8). It is a template name if it matches `do\|feature\|bugfix`, a saved flow if `.warden/flows/<name>.json` exists, otherwise a path. Uses steps.json check names when run inside an initialised CP. | `{"ok":bool,"results":[{"flow":..,"errors":[{code,message,step?}]}]}` |
 | `warden flow save` | `<path> --name <name>` | Lints, then writes `.warden/flows/<name>.json` and adds a line to `.warden/flows/INDEX.md`. Refuses to overwrite unless `--force`. | `{"saved":".warden/flows/<name>.json"}` |
 | `warden report` | `--kind bug\|enhancement --title <t> [--file <path>]` (body default stdin) | Stamps `R-NNNN` from `${WARDEN_DATA}/reports/counter.json`, writes `${WARDEN_DATA}/reports/R-NNNN.json` (4.13), and appends a row to `.warden/reports.md`. | `{"id":"R-0001"}` |
+| `warden report set` | `<file> --status sent\|accepted\|wontfix\|needs-info\|fixed [--note <t>] [--fixed-in <v>]` | Meant for the WA; not enforced (the record is a plain file on this machine). Validates, then rewrites the record at `<file>` atomically (`writeJsonAtomic`). Exit 2 for a bad status, an unreadable record, or a note containing `http`, `github`, `gitlab`, `www.`, a domain followed by `/`, `#<digits>`, `issue(s) <digits>`, `/issue(s)`, or two words joined by `/` such as owner/repo (case-insensitive). Without `--note` / `--fixed-in` those fields stay as they are. | `{"id":"R-0001","status":"accepted"}` |
 | `warden retro --done` | `[--date YYYY-MM-DD]` | Requires `.warden/retros/<date>.md`. Sets `warden.json.lastRetro`. | `{"lastRetro":"…"}` |
 | `warden upgrade --notes` | — | Prints the concatenated `upgrades/v*.md` notes for versions above `warden.json.wardenVersion` and up to the plugin version, in ascending order. | `{"from":"…","to":"…","notes":"markdown"}` |
 | `warden upgrade --done` | — | Sets `wardenVersion` to the plugin version. | `{"wardenVersion":"…"}` |
@@ -801,6 +802,8 @@ export interface ReportRecord {
 }
 ```
 
+`note` is plain text for the consumer project: never a link, issue number or repo name. `warden report set` rejects the patterns listed in 3.2. `warden report set` is how the WA writes `status`, `note` and `fixedIn` (3.2). The report-to-issue mapping lives in the WA ledger `triage/ledger.json`, not in the record.
+
 `.warden/reports.md` rows look like `| R-0001 | <title> | sent | — |`. The columns are ID, title, status and fixed-in version.
 
 ### 4.14 History (`.warden/history/<task>/`, committed)
@@ -941,7 +944,7 @@ Fix `done` (6.4 validation). Every result first writes `step.ended` for `fix-<n>
 
 The merge in step 2 is what makes the fix reach the ticket branch: without it the branch and the next clean copy would still sit on the old base and fail the same way.
 
-`block(reason)` sets `status = blocked` and `waiting = {kind:"human", reason}`, and writes `run.blocked`.
+`block(reason)` sets `status = blocked` and `waiting = {kind:"human", reason}`, and writes `run.blocked`. The `NextResponse.message` of a blocked run is `<task> is blocked: <reason>` and a second line: `To continue after fixing the cause, the user types "retry" in this chat, or runs: warden retry <task>`.
 
 `retry` (human):
 - If `fix` is set (a FIXED fix not landed yet, from `merge-fix` or from a landing block): clear `waiting` and run the fix landing again.
@@ -1348,7 +1351,7 @@ Prints plain lines (stdout is injected as context), and nothing when there is no
    - `warden: <task> is blocked: <reason>. Fix it, then type "retry".`
    - Also calls `ensureGate` for the run (5.4), which restarts a dead worker.
 2. When the plugin version is newer than `warden.json.wardenVersion`: `warden: updated to <v>; this project is on <old>. Run /warden:upgrade.`
-3. When `lastRetro` is null or ≥2 days before today: `warden: retro due (last <date|never>). When the user's current request is done, invoke the warden:retro skill.` This is how the retro runs "automatically at most every 2 days" (design §12): the CPA starts it, and the skill still waits for the user's OK before writing.
+3. When `lastRetro` is null or ≥2 days before today: `warden: retro due (last <date|never>). When the user's current request is done, offer the retro in one short line. Do not start it unless the user says yes.` This is how the retro is offered "at most every 2 days" (design §12): the CPA only offers it, and the retro skill runs only when the user asked or agreed, and still waits for the user's OK before writing. `init --write` sets `lastRetro` to today, so a fresh project is not due.
 4. For each `reports.md` row whose outbox record has a different status: update the row, then print `warden: report <id> "<title>" is now <status>[ in <fixedIn>].`
 5. If Bun is missing or too old (from the wrapper): the Bun line in 2.3.
 
@@ -1492,7 +1495,7 @@ There is no site skill: the lead runs `warden site` in a terminal (README, 10.4)
 7. Tell the user to commit and push to the main branch, because `warden start` reads `.warden/` from there: `git add .warden .gitignore scripts/warden-setup.sh && git commit -m "chore: set up warden" && git push`, with `.claude/settings.json` added only when it is in the `written` array that `init --write` printed. Also suggest branch protection on the main branch (1.3).
 
 `init --write` creates:
-- `.warden/warden.json` (`wardenVersion` = plugin version, `lastRetro: null`) and `.warden/steps.json`
+- `.warden/warden.json` (`wardenVersion` = plugin version, `lastRetro` = today, `YYYY-MM-DD`) and `.warden/steps.json`
 - `.warden/triage-rules.json` `{"schema":1,"rules":[]}`
 - `.warden/reports.md` (a table header) and `.warden/tools.md` (a table header: name, version, customized, fixes applied)
 - `.warden/context/<topic>.md`
@@ -1586,7 +1589,8 @@ Body (key text, kept from the asset):
     - code fact → `knowledge/<area>.md`
     - missing tool → `.claude/skills/<tool>/`
     - choice → `decisions/`
-  - Wait for the user's OK before writing. Save `.warden/retros/<date>.md`, then run `warden retro --done`.
+  - Run only when the user asked for it or agreed to an offer. Wait for the user's OK before writing. Save `.warden/retros/<date>.md`, then run `warden retro --done`.
+  - Last step: on the main branch in the main checkout, `git add` exactly the files the retro wrote (retro note, routed `decisions/`, `knowledge/`, `rules/` files, touched `INDEX.md` files) plus `.warden/warden.json`, and commit `chore: retro <date>`. No `git add .`, no push.
 - **report:**
   - Write a title and a body (what happened, expected, steps, evidence). Never include repo names or links.
   - Run `warden report --kind <k> --title "<t>" <<'EOF' … EOF` and tell the user the R-id.
@@ -1988,7 +1992,7 @@ Points where this spec is deliberate and `design.html` must be updated to match 
 | §6 table "CP customization (its steps, tools, scripts) → its own PR" | The fixer never edits `steps.json`. Setup lives in `scripts/warden-setup.sh`, which is in `fix.scope`. A needed change to check commands is `GAVE_UP` for a person (6.4) | `steps.json` holds the gates; a fixer that can edit them can pass any gate |
 | §6 "Each fix adds an error pattern to triage-rules.json — triage gets smarter" | Rules label failures and attach the earlier fix note; they never skip the clean copy and must be narrow (6.2, 6.4) | A broad rule would turn later real code failures into OPS |
 | §6 "OPS / UNCLEAR … → fixer" | A flaky branch failure goes straight to `block` (5.2) | The fixer may not change app or test code, so a fixer round would always end in GAVE_UP |
-| §12 "Retro … automatically at most every 2 days" | Session start asks the CPA to run the retro skill when due; the skill still waits for the user's OK (7.2) | Nothing runs between sessions; the CPA is the only actor |
+| §12 "Retro … automatically at most every 2 days" | Session start tells the CPA the retro is due; the CPA only offers it, and the retro skill runs only on the user's yes (7.2) | Nothing runs between sessions; the CPA is the only actor |
 | §12 reports | v0.1 reports work on one machine only (1.2) | The outbox is per machine |
 
 ---

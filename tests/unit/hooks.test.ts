@@ -55,7 +55,7 @@ function commit(dir: string, files: Record<string, string>, message = "change"):
 }
 
 function wardenJson(extra: Record<string, unknown> = {}): string {
-  return JSON.stringify({ schema: 1, wardenVersion: "0.1.0", projectId: "demo", taskIdPattern: "^T-\\d+$", sitePort: 4400, lastRetro: "2999-01-01", ...extra });
+  return JSON.stringify({ schema: 1, wardenVersion: "0.1.1", projectId: "demo", taskIdPattern: "^T-\\d+$", sitePort: 4400, lastRetro: "2999-01-01", ...extra });
 }
 
 const spawn: SpawnWorker = () => {
@@ -659,8 +659,8 @@ describe("SessionStart", () => {
       'warden: T-2 is waiting for you: Looks right?. Type "approve" or "reject: <why>".',
       "warden: T-3 stopped at check (2/2, test). Run: warden next",
       'warden: T-4 is blocked: check left files: coverage/x. Fix it, then type "retry".',
-      "warden: updated to 0.1.0; this project is on 0.0.9. Run /warden:upgrade.",
-      "warden: retro due (last never). When the user's current request is done, invoke the warden:retro skill.",
+      "warden: updated to 0.1.1; this project is on 0.0.9. Run /warden:upgrade.",
+      "warden: retro due (last never). When the user's current request is done, offer the retro in one short line. Do not start it unless the user says yes.",
       'warden: report R-0001 "Flaky login" is now fixed in 0.1.1.',
     ]);
     expect(spawns).toBe(2);
@@ -677,7 +677,7 @@ describe("SessionStart", () => {
   test("retro is due when never run or 2 or more days ago", () => {
     expect(retroLine(null, "2026-10-18")).toContain("retro due (last never)");
     expect(retroLine("2026-10-16", "2026-10-18")).toBe(
-      "warden: retro due (last 2026-10-16). When the user's current request is done, invoke the warden:retro skill.",
+      "warden: retro due (last 2026-10-16). When the user's current request is done, offer the retro in one short line. Do not start it unless the user says yes.",
     );
     expect(retroLine("2026-10-17", "2026-10-18")).toBeNull();
     expect(retroLine("2026-10-18", "2026-10-18")).toBeNull();

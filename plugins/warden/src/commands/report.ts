@@ -56,7 +56,40 @@ export function appendRow(path: string, header: string, row: string): void {
   writeFileSync(path, withNewline + row + "\n");
 }
 
+const STATUSES: ReportRecord["status"][] = ["sent", "accepted", "fixed", "wontfix", "needs-info"];
+// The consumer project can read the note, so it must stay plain text. This blocks: "http", "github", "gitlab", "www.",
+// a domain followed by a slash, "#<digits>", "issue(s) <digits>", "/issue(s)", and two words joined by a slash (owner/repo).
+const NOTE_FORBIDDEN = /http|github|gitlab|www\.|\.[a-z]{2,}\/|#\d|\bissues?\W{0,2}\d|\/issues?\b|[\w.-]\/[\w.-]/i;
+
+// warden report set <file> --status <s> [--note <t>] [--fixed-in <v>]: the WA writes its verdict into a record (spec 4.13).
+function setStatus(args: string[]): void {
+  const file = args[1];
+  if (!file || file.startsWith("--")) throw new WardenError("usage: warden report set <file> --status <s> [--note <t>] [--fixed-in <v>]", EXIT.USAGE);
+  const status = flagValue(args, "--status") as ReportRecord["status"] | undefined;
+  if (!status || !STATUSES.includes(status)) throw new WardenError(`--status must be one of ${STATUSES.join(", ")}`, EXIT.USAGE);
+  const note = flagValue(args, "--note");
+  if (note !== undefined && NOTE_FORBIDDEN.test(note)) {
+    throw new WardenError("--note must be plain text: no link, owner/repo name, slash-joined words or issue number", EXIT.USAGE);
+  }
+  const fixedIn = flagValue(args, "--fixed-in");
+
+  let record: ReportRecord;
+  try {
+    record = readJson<ReportRecord>(file);
+  } catch {
+    throw new WardenError(`cannot read a report record at ${file}`, EXIT.USAGE);
+  }
+  if (record.schema !== 1 || !/^R-\d{4,}$/.test(String(record.id))) throw new WardenError(`${file} is not a report record`, EXIT.USAGE);
+
+  record.status = status;
+  if (note !== undefined) record.note = note;
+  if (fixedIn !== undefined) record.fixedIn = fixedIn;
+  writeJsonAtomic(file, record);
+  console.log(JSON.stringify({ id: record.id, status: record.status }));
+}
+
 export async function run(args: string[], ctx: Ctx): Promise<void> {
+  if (args[0] === "set") return setStatus(args);
   const kind = flagValue(args, "--kind");
   const title = flagValue(args, "--title")?.trim();
   if (kind !== "bug" && kind !== "enhancement") throw new WardenError("--kind must be bug or enhancement", EXIT.USAGE);

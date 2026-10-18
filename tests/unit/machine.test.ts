@@ -387,6 +387,19 @@ describe("triage routing", () => {
     expect(run().status).toBe("done");
   });
 
+  test("a blocked run's message ends with how to continue", async () => {
+    await startFlow([IMPL, CHECK]);
+    checks.push({ passed: true, left: ["coverage/out.json"] });
+    await implement();
+    await drive();
+    const nx = await next(ctx, T, spawn);
+    expect(nx.status).toBe("blocked");
+    expect(nx.message).toBe(
+      "T-1 is blocked: check left files: coverage/out.json. Add them to .gitignore on main, merge main into t-1, then type retry\n" +
+        'To continue after fixing the cause, the user types "retry" in this chat, or runs: warden retry T-1',
+    );
+  });
+
   test("check left files -> the advice in the block text works: ignore them on main, merge main, retry", async () => {
     await startFlow([IMPL, CHECK]);
     checks.push({ passed: true, left: ["out.txt"] });

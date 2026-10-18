@@ -42,7 +42,7 @@ describe("cli", () => {
   test("version prints the plugin version as JSON", () => {
     const r = runCli(["version"]);
     expect(r.code).toBe(0);
-    expect(JSON.parse(r.out)).toEqual({ version: "0.1.0" });
+    expect(JSON.parse(r.out)).toEqual({ version: "0.1.1" });
   });
 
   test("allowlist is exactly the spec list", () => {

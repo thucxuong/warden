@@ -31,7 +31,7 @@ describe("setup", () => {
     expect(git(cp.main, "show", "main:.warden/warden.json")).toContain('"projectId": "demo"');
     expect(git(cp.main, "show", "main:scripts/warden-setup.sh")).toBe("true");
     expect(git(cp.main, "show", "main:.gitignore")).toContain(".warden/state/");
-    expect(warden(cp, ["version"]).json).toEqual({ version: "0.1.0" });
+    expect(warden(cp, ["version"]).json).toEqual({ version: "0.1.1" });
     expect(warden(cp, ["status"]).json).toEqual({ runs: [] });
   });
 });

@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync,
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { run } from "../../plugins/warden/src/commands/init.ts";
+import { retroLine } from "../../plugins/warden/src/hooks/session-start.ts";
 import { WardenError } from "../../plugins/warden/src/lib/exit.ts";
 import type { Ctx, InitScan } from "../../plugins/warden/src/types.ts";
 
@@ -140,7 +141,10 @@ describe("init --write", () => {
     ]));
 
     const warden = JSON.parse(readFileSync(join(repo, ".warden/warden.json"), "utf8"));
-    expect(warden).toEqual({ schema: 1, wardenVersion: "0.1.0", projectId: "demo", taskIdPattern: "^DM-\\d{3}$", sitePort: 4400, lastRetro: null });
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    expect(warden).toEqual({ schema: 1, wardenVersion: "0.1.1", projectId: "demo", taskIdPattern: "^DM-\\d{3}$", sitePort: 4400, lastRetro: today });
+    expect(retroLine(warden.lastRetro)).toBeNull(); // a fresh project is not due for a retro
     const steps = JSON.parse(readFileSync(join(repo, ".warden/steps.json"), "utf8"));
     expect(steps.review.model).toBe("sonnet"); // defaults filled
     expect(JSON.parse(readFileSync(join(repo, ".warden/triage-rules.json"), "utf8"))).toEqual({ schema: 1, rules: [] });

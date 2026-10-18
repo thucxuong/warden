@@ -32,6 +32,11 @@ const SHAREABLE_SOURCES = ["github", "git"];
 // Script names to suggest, in order. The first existing, non-watch name of a group is used.
 const CHECK_GROUPS = [["lint"], ["typecheck", "type-check", "tsc"], ["test", "test:unit"], ["build"], ["test:e2e", "e2e"]];
 
+function localDate(now = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
 function isObject(value: unknown): value is Obj {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -176,7 +181,7 @@ function validatePayload(value: unknown, pluginVersion: string): ValidPayload {
   }
 
   return {
-    warden: validateWardenJson({ ...payload.warden, schema: 1, wardenVersion: pluginVersion, lastRetro: null }, ".warden/warden.json"),
+    warden: validateWardenJson({ ...payload.warden, schema: 1, wardenVersion: pluginVersion, lastRetro: localDate() }, ".warden/warden.json"),
     steps: validateStepsJson({ fix: { scope: DEFAULT_FIX_SCOPE }, ...payload.steps, schema: 1 }, ".warden/steps.json"),
     context,
     setupScript: payload.setupScript,
