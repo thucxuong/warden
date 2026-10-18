@@ -21,6 +21,7 @@
       <a href="#start">Session start</a>
       <a href="#report">Reporting</a>
       <a href="#maintainer">Maintainer</a>
+      <a href="#tools">Tools</a>
       <a href="#open">Open questions</a>
     </div>
   </nav>
@@ -113,6 +114,7 @@
             <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">checks/&lt;name&gt;.md</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">One periodic check: interval, how to run, past results</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Anything else</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">When the check runs</td></tr>
             <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">retros/&lt;date&gt;.md</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">One retro: findings, and where each was sent</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">The fixes themselves</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Retro</td></tr>
             <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">reports.md</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Reports sent to warden: report ID, title, status, fixed-in version</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Issue links, repo names</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Report, session start</td></tr>
+            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">tools.md</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Tools copied from warden: name, version, customized yes/no, fixes applied</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Tools the CPA built itself</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Add tool, apply fix</td></tr>
             <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">.claude/skills/&lt;tool&gt;/</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">The CP's own tools (snowflakes): repo, e2e, azure…</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Warden workflows</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">When the CPA builds a tool</td></tr>
           </tbody>
         </table>
@@ -155,11 +157,13 @@
           <li>Gets the status of this CP's reports and compares it with <code class="font-mono bg-slate-100 dark:bg-slate-800 rounded px-1.5">reports.md</code>.</li>
           <li>Checks whether the retro is due (2 days).</li>
           <li>Checks whether a newer warden version exists.</li>
+          <li>Checks whether fix notes exist for tools listed in <code class="font-mono bg-slate-100 dark:bg-slate-800 rounded px-1.5">tools.md</code>.</li>
         </ol>
         <p class="mt-3 text-sm">The CPA then gives the user a short heads-up:</p>
         <pre class="mt-2 font-mono text-sm bg-slate-100 dark:bg-slate-800 rounded p-4 overflow-x-auto">R-0012 fixed in v0.4.0 — upgrade recommended
 R-0015 marked project-specific — build it as a local tool
-Retro due (last run 2 days ago)</pre>
+Retro due (last run 2 days ago)
+Tool e2e: 1 fix note available (v1.2.1)</pre>
       </div>
     </section>
 
@@ -242,9 +246,68 @@ Retro due (last run 2 days ago)</pre>
       </div>
     </section>
 
+    <!-- TOOLS -->
+    <section id="tools">
+      <h2 class="text-xl font-semibold mt-10 mb-3">9. Tool registry (shadcn-style)</h2>
+      <p class="text-sm mb-3">Warden offers ready-made, general Node CLI tools. The CP copies a tool in and then <b>owns</b> it — the CPA can customize it freely instead of writing it from scratch.</p>
+      <div class="grid gap-3 sm:grid-cols-2">
+        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <h3 class="font-semibold">In the warden repo</h3>
+          <pre class="mt-2 font-mono text-sm bg-slate-100 dark:bg-slate-800 rounded p-4 overflow-x-auto">registry/&lt;tool&gt;/
+  tool.json       name, version, needs (e.g. az, gh)
+  SKILL.md        how the CPA uses it
+  bin/*.mjs       Node scripts
+  fixes/
+    vX.Y.Z.md     fix note per release</pre>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <h3 class="font-semibold">Commands in the CP</h3>
+          <ul class="mt-2 text-sm list-disc pl-5 space-y-1.5">
+            <li><code class="font-mono bg-slate-100 dark:bg-slate-800 rounded px-1.5">/warden:tools</code> — list available tools. The CPA checks here <i>before</i> writing a tool itself.</li>
+            <li><code class="font-mono bg-slate-100 dark:bg-slate-800 rounded px-1.5">/warden:add &lt;tool&gt;</code> — copy into <code class="font-mono bg-slate-100 dark:bg-slate-800 rounded px-1.5">.claude/skills/&lt;tool&gt;/</code>, record in <code class="font-mono bg-slate-100 dark:bg-slate-800 rounded px-1.5">.warden/tools.md</code>.</li>
+            <li><code class="font-mono bg-slate-100 dark:bg-slate-800 rounded px-1.5">/warden:fix &lt;tool&gt;</code> — read pending fix notes and apply them to the CP's copy.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="mt-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <h3 class="font-semibold">Tool fixes — a note, not a patch</h3>
+        <p class="mt-2 text-sm">Tool code is never overwritten. Each fix ships as a markdown note so the CPA can adapt it onto its customized copy — like an engineer applying a fix by hand.</p>
+        <pre class="mt-3 font-mono text-sm bg-slate-100 dark:bg-slate-800 rounded p-4 overflow-x-auto"># e2e v1.2.1 — fix
+
+## What was wrong
+Retries ignored the timeout flag; flaky tests hung CI.
+
+## How it was fixed
+`bin/run.mjs`: pass `--timeout` into the retry loop.
+
+## How to apply to a customized copy
+Find where retries are run. Make each retry honour the timeout.
+Check: `node bin/run.mjs --timeout 1000` stops within ~1s.</pre>
+        <p class="mt-3 text-sm">After applying, the CPA updates the tool's version and fixes-applied list in <code class="font-mono bg-slate-100 dark:bg-slate-800 rounded px-1.5">tools.md</code>.</p>
+      </div>
+
+      <div class="mt-3 grid gap-3 sm:grid-cols-2">
+        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <h3 class="font-semibold">Promotion loop</h3>
+          <p class="mt-2 text-sm">A retro finds a CPA-built tool that any project could use → report <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-800">enhancement</span> → WA generalizes it into the registry. Project-only tools stay local.</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <h3 class="font-semibold">Starter tools (proposed)</h3>
+          <div class="mt-2 flex flex-wrap gap-2 text-sm">
+            <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700">git-pr</span>
+            <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700">ado</span>
+            <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700">e2e</span>
+            <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700">ci-status</span>
+          </div>
+          <p class="mt-2 text-sm text-slate-500">Copied tools carry no warden repo link.</p>
+        </div>
+      </div>
+    </section>
+
     <!-- OPEN -->
     <section id="open">
-      <h2 class="text-xl font-semibold mt-10 mb-3">9. Open questions</h2>
+      <h2 class="text-xl font-semibold mt-10 mb-3">10. Open questions</h2>
       <div class="space-y-2">
         <details class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900" open>
           <summary class="cursor-pointer font-medium">Task IDs — ticket ID (e.g. ADO-1022), short slug when there is no ticket?</summary>
