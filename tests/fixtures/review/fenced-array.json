@@ -1,0 +1,1 @@
+{"type":"result","subtype":"success","is_error":false,"total_cost_usd":0.03,"result":"```json\n[{\"file\":\"src/b.ts\",\"severity\":\"minor\",\"summary\":\"Whole-file note.\"}]\n```"}

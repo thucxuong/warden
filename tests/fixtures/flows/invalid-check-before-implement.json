@@ -1,0 +1,4 @@
+{ "schema": 1, "name": "check-before-implement", "description": "F005a: the first check has no implement step before it.",
+  "steps": [ { "id": "early-check", "type": "check", "check": "default" },
+             { "id": "implement", "type": "implement" },
+             { "id": "check", "type": "check", "check": "default" } ] }

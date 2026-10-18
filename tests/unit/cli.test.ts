@@ -1,0 +1,71 @@
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { COMMANDS } from "../../plugins/warden/src/cli.ts";
+
+const pluginRoot = resolve(import.meta.dir, "../../plugins/warden");
+const cliPath = join(pluginRoot, "src/cli.ts");
+
+let dataDir: string;
+beforeAll(() => {
+  dataDir = realpathSync(mkdtempSync(join(tmpdir(), "warden-cli-")));
+});
+afterAll(() => rmSync(dataDir, { recursive: true, force: true }));
+
+function runCli(args: string[]) {
+  const proc = Bun.spawnSync([process.execPath, cliPath, ...args], {
+    env: { PATH: process.env.PATH ?? "", HOME: dataDir, WARDEN_ROOT: pluginRoot, WARDEN_DATA: dataDir },
+    stdin: "ignore",
+  });
+  return { code: proc.exitCode, out: proc.stdout.toString(), err: proc.stderr.toString() };
+}
+
+describe("cli", () => {
+  test("no command exits 2 with usage", () => {
+    const r = runCli([]);
+    expect(r.code).toBe(2);
+    expect(r.err).toContain("usage: warden");
+  });
+
+  test("unknown command exits 2 with usage", () => {
+    const r = runCli(["bogus"]);
+    expect(r.code).toBe(2);
+    expect(r.err).toContain("usage: warden");
+  });
+
+  test("a path is not a command, so nothing outside the allowlist is imported", () => {
+    expect(runCli(["../cli"]).code).toBe(2);
+    expect(runCli(["../lib/json"]).code).toBe(2);
+  });
+
+  test("version prints the plugin version as JSON", () => {
+    const r = runCli(["version"]);
+    expect(r.code).toBe(0);
+    expect(JSON.parse(r.out)).toEqual({ version: "0.1.0" });
+  });
+
+  test("allowlist is exactly the spec list", () => {
+    expect([...COMMANDS]).toEqual([
+      "version", "init", "start", "next", "done", "wait", "status", "approve", "retry", "reset",
+      "flow", "report", "retro", "upgrade", "tools", "site", "hook", "gate",
+    ]);
+  });
+
+  test("a command without a file yet exits 1 and says so", () => {
+    if (existsSync(join(pluginRoot, "src/commands/init.ts"))) return; // already implemented
+    const r = runCli(["init"]);
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("not available yet");
+  });
+
+  test.skipIf(existsSync(join(pluginRoot, "src/commands/hook.ts")))(
+    "hook without a handler exits 0 and logs the call",
+    () => {
+      const r = runCli(["hook", "session-start"]);
+      expect(r.code).toBe(0);
+      expect(r.out).toBe("");
+      expect(readFileSync(join(dataDir, "hook-errors.log"), "utf8")).toContain("hook session-start: no handler");
+    },
+  );
+});

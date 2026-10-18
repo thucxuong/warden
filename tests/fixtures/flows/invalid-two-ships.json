@@ -1,0 +1,5 @@
+{ "schema": 1, "name": "two-ships", "description": "F005d: more than one ship step.",
+  "steps": [ { "id": "implement", "type": "implement" },
+             { "id": "check", "type": "check", "check": "default" },
+             { "id": "ship-one", "type": "ship" },
+             { "id": "ship-two", "type": "ship" } ] }

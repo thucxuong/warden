@@ -1,0 +1,5 @@
+{ "schema": 1, "name": "review-before-implement", "description": "F005a: the first review has no implement step before it.",
+  "steps": [ { "id": "early-review", "type": "review" },
+             { "id": "implement", "type": "implement" },
+             { "id": "check", "type": "check", "check": "default" },
+             { "id": "review", "type": "review" } ] }

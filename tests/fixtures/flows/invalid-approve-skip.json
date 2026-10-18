@@ -1,0 +1,4 @@
+{ "schema": 1, "name": "approve-skip", "description": "F010: an approve step cannot configure skipping.",
+  "steps": [ { "id": "implement", "type": "implement" },
+             { "id": "check", "type": "check", "check": "default" },
+             { "id": "approve", "type": "approve", "prompt": "Ship it?", "skipForAgent": true } ] }

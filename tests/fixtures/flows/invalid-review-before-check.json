@@ -1,0 +1,4 @@
+{ "schema": 1, "name": "review-before-check", "description": "F005c: the only review comes before the check.",
+  "steps": [ { "id": "implement", "type": "implement" },
+             { "id": "review", "type": "review" },
+             { "id": "check", "type": "check", "check": "default" } ] }

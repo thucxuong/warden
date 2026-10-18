@@ -1,0 +1,6 @@
+Running 3 tests
+✓ login works (210ms)
+✓ logout works (95ms)
+✘ checkout works
+Timeout: test timed out after 5000ms (waited 5003ms)
+  at 2026-10-18T09:31:44.901Z in /var/folders/zz/abcd/T/warden-clean-p1-T-001-1/tests/checkout.test.ts

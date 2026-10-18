@@ -1,0 +1,7 @@
+$ npm run dev:test
+[2026-10-18 09:20:11] booting server
+Error: listen EADDRINUSE: address already in use :::4173
+    at Server.setupListenHandle [as _listen2] (node:net:1817:16)
+    at /Users/dev/proj/.worktrees/T-001/server.js:22:5
+npm ERR! code ELIFECYCLE
+npm ERR! errno 1

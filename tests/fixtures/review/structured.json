@@ -1,0 +1,1 @@
+{"type":"result","subtype":"success","is_error":false,"total_cost_usd":0.0421,"result":"Reviewed the diff.","structured_output":{"findings":[{"file":"src/a.ts","line":12,"severity":"blocking","summary":"Off-by-one in the loop bound."},{"file":"src/a.ts","line":30,"severity":"minor","summary":"Name is unclear."}]}}

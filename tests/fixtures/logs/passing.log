@@ -1,0 +1,6 @@
+Running 3 tests
+✓ login works (200ms)
+✓ logout works (91ms)
+✓ checkout works (480ms)
+
+3 passed

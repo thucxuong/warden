@@ -1,0 +1,96 @@
+{
+  "schema": 1,
+  "name": "too-many-steps",
+  "description": "F002: 22 steps.",
+  "steps": [
+    {
+      "id": "implement-0",
+      "type": "implement"
+    },
+    {
+      "id": "implement-1",
+      "type": "implement"
+    },
+    {
+      "id": "implement-2",
+      "type": "implement"
+    },
+    {
+      "id": "implement-3",
+      "type": "implement"
+    },
+    {
+      "id": "implement-4",
+      "type": "implement"
+    },
+    {
+      "id": "implement-5",
+      "type": "implement"
+    },
+    {
+      "id": "implement-6",
+      "type": "implement"
+    },
+    {
+      "id": "implement-7",
+      "type": "implement"
+    },
+    {
+      "id": "implement-8",
+      "type": "implement"
+    },
+    {
+      "id": "implement-9",
+      "type": "implement"
+    },
+    {
+      "id": "implement-10",
+      "type": "implement"
+    },
+    {
+      "id": "implement-11",
+      "type": "implement"
+    },
+    {
+      "id": "implement-12",
+      "type": "implement"
+    },
+    {
+      "id": "implement-13",
+      "type": "implement"
+    },
+    {
+      "id": "implement-14",
+      "type": "implement"
+    },
+    {
+      "id": "implement-15",
+      "type": "implement"
+    },
+    {
+      "id": "implement-16",
+      "type": "implement"
+    },
+    {
+      "id": "implement-17",
+      "type": "implement"
+    },
+    {
+      "id": "implement-18",
+      "type": "implement"
+    },
+    {
+      "id": "implement-19",
+      "type": "implement"
+    },
+    {
+      "id": "implement-20",
+      "type": "implement"
+    },
+    {
+      "id": "check",
+      "type": "check",
+      "check": "default"
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+{"type":"result","subtype":"success","is_error":false,"total_cost_usd":0.04,"result":"done","structured_output":{"findings":[{"file":"src/a.ts","line":12,"severity":"blocking","summary":"Inside the diff."},{"file":"src/unrelated.ts","line":5,"severity":"blocking","summary":"File is not in the diff."}]}}

@@ -1,0 +1,6 @@
+{ "schema": 1, "name": "feature", "description": "Brainstorm and plan, implement, check, review, ship.",
+  "steps": [ { "id": "plan", "type": "plan", "brainstorm": true },
+             { "id": "implement", "type": "implement" },
+             { "id": "check", "type": "check", "check": "default" },
+             { "id": "review", "type": "review" },
+             { "id": "ship", "type": "ship" } ] }

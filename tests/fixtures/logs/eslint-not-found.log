@@ -1,0 +1,6 @@
+> lint
+> eslint . --max-warnings 0
+
+sh: eslint: command not found
+npm ERR! Lifecycle script `lint` failed with error:
+npm ERR! code 127

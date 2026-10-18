@@ -1,0 +1,2 @@
+{ "schema": 1, "name": "unbound-reproduce", "description": "F005b: a reproduce step is a code step and needs a check after it.",
+  "steps": [ { "id": "reproduce", "type": "analyze", "variant": "reproduce" } ] }

@@ -1,0 +1,5 @@
+{ "schema": 1, "name": "raised-review-limit", "description": "F009: reviewRounds raised above the default of 3.",
+  "limits": { "reviewRounds": 5 },
+  "steps": [ { "id": "implement", "type": "implement" },
+             { "id": "check", "type": "check", "check": "default" },
+             { "id": "review", "type": "review" } ] }

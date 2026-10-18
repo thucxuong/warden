@@ -1,0 +1,14 @@
+{
+  "name": "warden",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "check": "bun run typecheck && bun test",
+    "validate": "claude plugin validate . --strict && claude plugin validate plugins/warden --strict"
+  },
+  "devDependencies": { "typescript": "7.0.2", "@types/bun": "1.4.3" },
+  "engines": { "bun": ">=1.4.0" }
+}

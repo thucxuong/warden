@@ -1,0 +1,7 @@
+{ "schema": 1, "name": "step-fields", "description": "F003: bad variant, brainstorm, check and prompt values.",
+  "steps": [ { "id": "analyze", "type": "analyze", "variant": "wander" },
+             { "id": "plan", "type": "plan", "brainstorm": "yes" },
+             { "id": "implement", "type": "implement" },
+             { "id": "check", "type": "check" },
+             { "id": "approve", "type": "approve", "prompt": "" },
+             { "id": "mystery", "type": "teleport" } ] }

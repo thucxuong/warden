@@ -1,0 +1,2 @@
+{ "schema": 1, "name": "spike", "description": "Investigate a question and write a note.",
+  "steps": [ { "id": "spike", "type": "analyze", "variant": "spike" } ] }

@@ -1,0 +1,10 @@
+[31m$ bun test[0m
+bun test v1.4.0 (abc1234)
+[2026-10-18T09:15:02.123Z] starting suite in /Users/dev/proj/.worktrees/T-001
+[32m✓[0m config loads (12ms)
+error: Environment variable DATABASE_URL is missing
+    at loadEnv (/Users/dev/proj/.worktrees/T-001/src/env.ts:14:9)
+error: Environment variable DATABASE_URL is missing
+
+ 1 pass
+ 1 fail

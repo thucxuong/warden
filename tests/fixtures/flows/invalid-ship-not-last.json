@@ -1,0 +1,5 @@
+{ "schema": 1, "name": "ship-not-last", "description": "F005d: ship is followed by another step.",
+  "steps": [ { "id": "implement", "type": "implement" },
+             { "id": "check", "type": "check", "check": "default" },
+             { "id": "ship", "type": "ship" },
+             { "id": "review", "type": "review" } ] }

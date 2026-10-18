@@ -1,0 +1,5 @@
+{ "schema": 1, "name": "duplicate-id", "description": "F002: two steps share an id, and one id is not valid.",
+  "steps": [ { "id": "implement", "type": "implement" },
+             { "id": "check", "type": "check", "check": "default" },
+             { "id": "check", "type": "check", "check": "default" },
+             { "id": "Bad_Id", "type": "review" } ] }

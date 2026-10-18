@@ -1,0 +1,8 @@
+{ "schema": 1, "name": "bugfix", "description": "Reproduce with a failing test, find the root cause, then the feature flow without brainstorm.",
+  "steps": [ { "id": "reproduce", "type": "analyze", "variant": "reproduce" },
+             { "id": "diagnose", "type": "analyze", "variant": "diagnose" },
+             { "id": "plan", "type": "plan", "brainstorm": false },
+             { "id": "implement", "type": "implement" },
+             { "id": "check", "type": "check", "check": "default" },
+             { "id": "review", "type": "review" },
+             { "id": "ship", "type": "ship" } ] }

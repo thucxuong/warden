@@ -1,0 +1,8 @@
+{
+  "name": "warden-marketplace",
+  "owner": { "name": "Chris Luu" },
+  "description": "Private marketplace for the warden plugin.",
+  "plugins": [
+    { "name": "warden", "source": "./plugins/warden", "description": "Delivery harness: engine-run gates, composed workflows, self-healing checks, code review." }
+  ]
+}

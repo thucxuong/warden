@@ -1,0 +1,4 @@
+{ "schema": 1, "name": "fix-step", "description": "F003: fix is an internal step and not allowed in flows.",
+  "steps": [ { "id": "implement", "type": "implement" },
+             { "id": "check", "type": "check", "check": "default" },
+             { "id": "fix", "type": "fix" } ] }

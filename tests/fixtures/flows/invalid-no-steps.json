@@ -1,0 +1,2 @@
+{ "schema": 1, "name": "no-steps", "description": "F002: a flow needs at least one step.",
+  "steps": [] }

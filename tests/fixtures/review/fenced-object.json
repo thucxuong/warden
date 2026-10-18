@@ -1,0 +1,1 @@
+{"type":"result","subtype":"success","is_error":false,"total_cost_usd":0.05,"result":"Draft:\n```json\n{\"findings\":[]}\n```\nFinal:\n```json\n{\"findings\":[{\"file\":\"src/a.ts\",\"line\":5,\"severity\":\"blocking\",\"summary\":\"Null deref.\"}]}\n```\n"}

@@ -1,0 +1,4 @@
+{ "schema": 1, "name": "unknown-top-key", "description": "F007: unknown keys at the top level and in limits.", "owner": "me",
+  "limits": { "reviewRounds": 2, "extra": 1 },
+  "steps": [ { "id": "implement", "type": "implement" },
+             { "id": "check", "type": "check", "check": "default" } ] }

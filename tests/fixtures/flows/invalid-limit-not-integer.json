@@ -1,0 +1,4 @@
+{ "schema": 1, "name": "limit-not-integer", "description": "F009: a limit that is not an integer of at least 1.",
+  "limits": { "fixerRounds": 0, "codeStrikes": 1.5 },
+  "steps": [ { "id": "implement", "type": "implement" },
+             { "id": "check", "type": "check", "check": "default" } ] }

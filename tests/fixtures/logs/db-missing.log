@@ -1,0 +1,5 @@
+Running migrations in /Users/dev/proj/.worktrees/T-001
+FATAL: error: database "app_test_8841" not found
+error: connection refused to 127.0.0.1:5432
+   ok  seeds skipped
+1 test failed
