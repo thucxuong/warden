@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "id": "R-0001",
+  "projectId": "demo",
+  "kind": "bug",
+  "title": "Gate hangs",
+  "body": "It hangs.",
+  "createdAt": "2026-10-01T00:00:00Z",
+  "status": "sent",
+  "fixedIn": null,
+  "note": "Which pnpm version does the project use?",
+  "projectDir": "/private/var/folders/7b/s_s22ngn1mqdxxvl5hpdg41c0000gq/T/warden-project-13rGuZ",
+  "thread": [
+    {
+      "from": "wa",
+      "at": "2026-10-18T23:58:40.509Z",
+      "text": "Which pnpm version does the project use?"
+    },
+    {
+      "from": "project",
+      "at": "2026-10-18T23:58:41.725Z",
+      "text": "We use pnpm 11 and Node 26."
+    }
+  ],
+  "machineId": "3f56986c"
+}
