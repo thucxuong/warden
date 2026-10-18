@@ -45,7 +45,7 @@ export function upgradeNotice(ctx: Ctx): string | null {
     const warden = loadWardenJson(join(worktreeRoot(ctx.cwd), ".warden", "warden.json"));
     const plugin = readPluginVersion(ctx.root);
     if (compareSemver(plugin, warden.wardenVersion) <= 0) return null;
-    return `warden: updated to ${plugin}; this project is on ${warden.wardenVersion}. Run /warden:upgrade.`;
+    return `warden: updated to ${plugin}; this project is on ${warden.wardenVersion}. When the user's current request is done, offer the upgrade; with their OK, run /warden:upgrade.`;
   } catch {
     return null;
   }

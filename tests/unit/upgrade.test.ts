@@ -123,7 +123,7 @@ describe("upgradeNotice", () => {
   test("names both versions when the plugin is newer", () => {
     setPluginVersion("0.2.0");
     setProjectVersion("0.1.0");
-    expect(upgradeNotice(ctx())).toBe("warden: updated to 0.2.0; this project is on 0.1.0. Run /warden:upgrade.");
+    expect(upgradeNotice(ctx())).toBe("warden: updated to 0.2.0; this project is on 0.1.0. When the user's current request is done, offer the upgrade; with their OK, run /warden:upgrade.");
   });
 
   test("null when equal, older, uninitialised or outside a repo", () => {

@@ -12,7 +12,7 @@ const expectedExtras: Record<string, Record<string, string>> = {
   init: { "disable-model-invocation": "true", "allowed-tools": "Bash(warden *) Read Glob Grep Write" },
   compose: { "argument-hint": "<task-id> [what to do]" },
   work: { "argument-hint": "[task-id]", "allowed-tools": "Bash(warden *)" },
-  upgrade: { "disable-model-invocation": "true" },
+  upgrade: {},
   tools: { "argument-hint": "list | add <name>" },
 };
 

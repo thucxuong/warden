@@ -1,7 +1,6 @@
 ---
 name: upgrade
 description: Apply the upgrade notes for a newer warden version to this project's .warden folder.
-disable-model-invocation: true
 ---
 
 # Upgrade the project to the installed warden version

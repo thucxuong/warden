@@ -70,3 +70,14 @@ describe("cli", () => {
     },
   );
 });
+
+describe("help", () => {
+  test("warden --help and warden <command> --help print usage and exit 0", async () => {
+    const { main, HELP } = await import("../../plugins/warden/src/cli.ts");
+    const ctx = { root: "", data: "", cwd: process.cwd(), env: process.env, stdinIsTTY: false };
+    expect(await main(["bun", "cli.ts", "--help"], ctx)).toBe(0);
+    expect(await main(["bun", "cli.ts", "report", "--help"], ctx)).toBe(0);
+    expect(HELP.report).toContain("warden report --status");
+  });
+});
+

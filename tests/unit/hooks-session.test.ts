@@ -177,7 +177,7 @@ describe("SessionStart", () => {
       'warden: T-2 is waiting for you: Looks right?. Type "approve" or "reject: <why>".',
       "warden: T-3 stopped at check (2/2, test). Run: warden next",
       'warden: T-4 is blocked: check left files: coverage/x. Fix it, then type "retry".',
-      `warden: updated to ${VERSION}; this project is on 0.0.9. Run /warden:upgrade.`,
+      `warden: updated to ${VERSION}; this project is on 0.0.9. When the user's current request is done, offer the upgrade; with their OK, run /warden:upgrade.`,
       `warden: version 99.0.0 is available; this session runs ${VERSION}. To update, run "claude plugin update warden@wm" in a terminal (or use /plugin), then /reload-plugins.`,
       "warden: checks due: docs-review (last never), retro (last never). When the user's current request is done, offer them in one short line. Do not start one unless the user says yes. To run one: warden checks run <name>.",
       `warden: auto checks failed on their last run: audit (${localDate()}). Tell the user in one short line; details: warden checks.`,

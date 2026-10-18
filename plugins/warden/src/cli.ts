@@ -10,7 +10,28 @@ export const COMMANDS = [
   "flow", "report", "retro", "upgrade", "tools", "site", "hook", "gate", "checks",
 ] as const;
 
-const USAGE = `usage: warden <command> [args]\ncommands: ${COMMANDS.join(" ")}`;
+// One line per command for --help. hook and gate are internal and not listed.
+export const HELP: Record<string, string> = {
+  version: "warden version",
+  init: "warden init --scan | --write [--file <payload>]",
+  start: "warden start <task> --template do|feature|bugfix | --flow <name|path> [--text <t> | --text-file <p>] [--worktree] [--branch <b>]",
+  next: "warden next [<task>]",
+  done: "warden done [<task>] [--json <text> | --file <path>]",
+  wait: "warden wait [<task>] [--max-seconds <n>]",
+  status: "warden status [--all]",
+  approve: "warden approve <task>   (a person, in a terminal)",
+  retry: "warden retry <task>   (a person, in a terminal)",
+  reset: "warden reset <task> [--yes]   (a person, in a terminal)",
+  flow: "warden flow check <file|name>... | warden flow save <path> --name <name> [--force]",
+  report: "warden report --kind bug|enhancement --title <t> --file <body> | warden report --status [--write] | warden report set <file> --status <s> [--note <t>] [--fixed-in <v>]",
+  retro: "warden retro --done [--date YYYY-MM-DD]",
+  upgrade: "warden upgrade --notes | --done",
+  tools: "warden tools list | add <name>",
+  site: "warden site [--port <n>]",
+  checks: "warden checks | warden checks run <name> [--background] | warden checks done <name> [--date YYYY-MM-DD] [--note <t>]",
+};
+
+const USAGE = `usage: warden <command> [args]   (warden <command> --help for details)\n${Object.values(HELP).map((l) => `  ${l}`).join("\n")}`;
 
 function isCommand(name: string): name is (typeof COMMANDS)[number] {
   return (COMMANDS as readonly string[]).includes(name);
@@ -37,11 +58,19 @@ function noteMissingHookHandler(event: string | undefined, ctx: Ctx): void {
 // argv is the full process argv: [bun, cli.ts, command, ...args]. Returns the exit code.
 export async function main(argv: string[], ctx: Ctx): Promise<number> {
   const name = argv[2];
+  if (name === "--help" || name === "-h" || name === "help") {
+    console.log(USAGE);
+    return EXIT.OK;
+  }
   if (name === undefined || !isCommand(name)) {
     console.error(USAGE);
     return EXIT.USAGE;
   }
   const args = argv.slice(3);
+  if ((args.includes("--help") || args.includes("-h")) && HELP[name]) {
+    console.log(`usage: ${HELP[name]}`);
+    return EXIT.OK;
+  }
 
   if (!existsSync(join(import.meta.dir, "commands", `${name}.ts`))) {
     if (name === "hook") {

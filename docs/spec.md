@@ -1356,7 +1356,7 @@ Prints plain lines (stdout is injected as context), and nothing when there is no
    - `warden: <task> is waiting for you: <waiting.reason>. Type "approve" or "reject: <why>".`
    - `warden: <task> is blocked: <reason>. Fix it, then type "retry".`
    - Also calls `ensureGate` for the run (5.4), which restarts a dead worker.
-2. When the plugin version is newer than `warden.json.wardenVersion`: `warden: updated to <v>; this project is on <old>. Run /warden:upgrade.`
+2. When the plugin version is newer than `warden.json.wardenVersion`: `warden: updated to <v>; this project is on <old>. When the user's current request is done, offer the upgrade; with their OK, run /warden:upgrade.`
 3. When `lastRetro` is null or ≥2 days before today: `warden: retro due (last <date|never>). When the user's current request is done, offer the retro in one short line. Do not start it unless the user says yes.` This is how the retro is offered "at most every 2 days" (design §12): the CPA only offers it, and the retro skill runs only when the user asked or agreed, and still waits for the user's OK before writing. `init --write` sets `lastRetro` to today, so a fresh project is not due.
 4. For each `reports.md` row whose outbox record has a different status: update the row, then print `warden: report <id> "<title>" is now <status>[ in <fixedIn>].`
 5. If Bun is missing or too old (from the wrapper): the Bun line in 2.3.
@@ -1701,7 +1701,7 @@ Or inside Claude Code: `/plugin marketplace add thucxuong/warden#stable`, then `
 ### 10.5 Upgrade
 
 1. With `autoUpdate`, Claude Code fetches new versions in the background after the session starts. Otherwise run `claude plugin update warden@warden-marketplace` or `/plugin marketplace update warden-marketplace`. Then run `/reload-plugins` or restart.
-2. The next session start says `warden: updated to <v>; this project is on <old>. Run /warden:upgrade.`
+2. The next session start says `warden: updated to <v>; this project is on <old>. When the user's current request is done, offer the upgrade; with their OK, run /warden:upgrade.`
 3. `/warden:upgrade` applies `upgrades/v*.md` notes to `.warden/`, then runs `warden upgrade --done`. Commit.
 
 ### 10.6 Release (WA side)

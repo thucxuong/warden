@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.3 — 2026-10-18
+
+- The agent may run /warden:upgrade itself after the user agrees; session start asks it to offer the upgrade.
+- `warden --help` and `warden <command> --help` print usage.
+
 ## 0.2.2 — 2026-10-18
 
 - When a report changes status, session start tells the agent to refresh and commit .warden/reports.md once the user's request is done.
