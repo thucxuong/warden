@@ -208,7 +208,6 @@
               <li>The CPA can't write warden's state files directly.</li>
             </ul>
           </li>
-          <li><b>Optional — tamper-evident log:</b> each log line stores a fingerprint of the line before it, so a hand edit or deleted line breaks the chain and warden notices.</li>
         </ul>
       </div>
     </section>
@@ -268,7 +267,8 @@
 
     <!-- OVERVIEW -->
     <section id="overview">
-      <h2 class="text-xl font-semibold mt-10 mb-3">11. Lead overview — every ticket, time and tokens</h2>
+      <h2 class="text-xl font-semibold mt-10 mb-3">11. Lead overview (in the CP) — every ticket, time and tokens</h2>
+      <p class="text-sm mb-3">For the CP's lead engineer. Built and viewed inside the CP from the CP's own data — warden never collects or shows it.</p>
       <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <table class="w-full text-sm">
           <thead class="bg-slate-100 dark:bg-slate-800 text-left font-medium"><tr><th class="px-3 py-2">Data</th><th class="px-3 py-2">Source</th></tr></thead>
@@ -281,7 +281,7 @@
           </tbody>
         </table>
       </div>
-      <p class="mt-2 text-sm"><code class="bg-slate-100 dark:bg-slate-800 rounded px-1.5">warden site</code> builds one HTML page: ticket table → click for timeline, tokens, findings; plus docs, ticket DAG and code graph. Replaces the Next.js docs site and Pipeline Studio. Committed history makes it team-wide. Later option: Claude Code's OpenTelemetry export for a live cross-project dashboard.</p>
+      <p class="mt-2 text-sm">Run in the CP, <code class="bg-slate-100 dark:bg-slate-800 rounded px-1.5">warden site</code> builds one HTML page of that CP: ticket table → click for timeline, tokens, findings; plus its docs, ticket DAG and code graph. Replaces the Next.js docs site and Pipeline Studio. Committed history makes it cover the whole CP team.</p>
     </section>
 
     <!-- REPORTING -->
@@ -425,10 +425,7 @@
     <section id="open">
       <h2 class="text-xl font-semibold mt-10 mb-3">17. Open questions</h2>
       <div class="space-y-2">
-        <details class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900" open>
-          <summary class="cursor-pointer font-medium">Tamper-evident log — yes or no?</summary>
-          <p class="mt-2 text-sm text-slate-500">Recommended: yes. ~10 lines of code; makes hand edits to state visible.</p>
-        </details>
+        <p class="text-sm text-slate-500">None right now.</p>
       </div>
       <p class="mt-10 text-xs text-slate-400">Draft · 2026-10-18</p>
     </section>
