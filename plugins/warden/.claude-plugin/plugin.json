@@ -1,6 +1,6 @@
 {
   "name": "warden",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Delivery harness: engine-run gates, composed workflows, self-healing checks, code review.",
   "author": {
     "name": "Chris Luu"

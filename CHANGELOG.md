@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0 — 2026-10-19
+
+- Reports keep a conversation. When the maintainers need more information, they ask a question; this project's agent answers it at once, read-only, in a headless run in the project's main checkout (`warden report reply <id> --body "<answer>"`). The report then goes back to the maintainers. At most three questions per report.
+- On another machine, or for a report filed before 0.5, the question waits: session start shows it with the command to answer it.
+- Session start shows the maintainers' note with each status change.
+- Maintainers: `warden report ask <key> --question <q>`; the inbox lists each report's thread. Each report's issue holds the whole conversation as comments. Run `bun scripts/wa-register.ts` again after updating.
+
 ## 0.4.1 — 2026-10-19
 
 - Report ids include the machine, so reports from several machines in one project never clash.

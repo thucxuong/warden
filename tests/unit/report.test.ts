@@ -121,7 +121,7 @@ describe("warden report set", () => {
 
     await call(run, ["set", recordPath(), "--status", "fixed", "--fixed-in", "0.2.0"]);
     expect(readRecord(rid(1))).toMatchObject({ status: "fixed", fixedIn: "0.2.0", note: "Accepted. Planned for a coming release." });
-    expect(reportStatusChanges(ctx())).toEqual([{ id: rid(1), key: `${machineId(data)}/${rid(1)}`, title: "One", status: "fixed", fixedIn: "0.2.0" }]);
+    expect(reportStatusChanges(ctx())).toEqual([{ id: rid(1), key: `${machineId(data)}/${rid(1)}`, title: "One", status: "fixed", fixedIn: "0.2.0", note: "Accepted. Planned for a coming release." }]);
   });
 
   test("a bad status, missing file argument or unreadable record exits 2", async () => {
@@ -160,13 +160,13 @@ describe("reportStatusChanges", () => {
     const before = readFileSync(join(repo, ".warden/reports.md"), "utf8");
     writeFileSync(join(data, `reports/${rid(2)}.json`), JSON.stringify({ ...readRecord(rid(2)), status: "fixed", fixedIn: "0.2.0" }));
 
-    expect(reportStatusChanges(ctx())).toEqual([{ id: rid(2), key: `${machineId(data)}/${rid(2)}`, title: "Two", status: "fixed", fixedIn: "0.2.0" }]);
+    expect(reportStatusChanges(ctx())).toEqual([{ id: rid(2), key: `${machineId(data)}/${rid(2)}`, title: "Two", status: "fixed", fixedIn: "0.2.0", note: null }]);
     expect(readFileSync(join(repo, ".warden/reports.md"), "utf8")).toBe(before);
     expect(JSON.parse(readFileSync(join(repo, ".warden/state/_reports.json"), "utf8"))).toEqual({ [`${machineId(data)}/${rid(2)}`]: "fixed" });
     expect(reportStatusChanges(ctx())).toEqual([]);
 
     writeFileSync(join(data, `reports/${rid(2)}.json`), JSON.stringify({ ...readRecord(rid(2)), status: "wontfix" }));
-    expect(reportStatusChanges(ctx())).toEqual([{ id: rid(2), key: `${machineId(data)}/${rid(2)}`, title: "Two", status: "wontfix", fixedIn: "0.2.0" }]);
+    expect(reportStatusChanges(ctx())).toEqual([{ id: rid(2), key: `${machineId(data)}/${rid(2)}`, title: "Two", status: "wontfix", fixedIn: "0.2.0", note: null }]);
   });
 
   test("a row without an outbox record, or no table, is ignored", async () => {
@@ -228,8 +228,8 @@ describe("one reports.md shared by two machines", () => {
     // Machine B: only its own row and the legacy row (its R-0001 is wontfix) change; A's row is ignored.
     const keyB = machineId(dataB);
     expect(reportStatusChanges(ctxFor(dataB))).toEqual([
-      { id: idB, key: `${keyB}/${idB}`, title: "B title", status: "wontfix", fixedIn: null },
-      { id: "R-0001", key: `${keyB}/R-0001`, title: "Old", status: "wontfix", fixedIn: null },
+      { id: idB, key: `${keyB}/${idB}`, title: "B title", status: "wontfix", fixedIn: null, note: null },
+      { id: "R-0001", key: `${keyB}/R-0001`, title: "Old", status: "wontfix", fixedIn: null, note: null },
     ]);
     expect(reportStatusChanges(ctxFor(dataB))).toEqual([]); // told once, under the full key
   });
@@ -490,7 +490,7 @@ describe("report transport commands", () => {
     expect(inbox.out.reports.map((r: any) => r.key)).toEqual([`${a}/R-0001`, `${b}/R-0001`, `${c}/R-0001`]);
     expect(inbox.out.reports[1]).toEqual({
       key: `${b}/R-0001`, machineId: b, id: "R-0001", projectId: "demo", kind: "bug", title: "From B", body: "From B body",
-      createdAt: "2026-10-02T00:00:00Z", status: "sent", fixedIn: null, note: null, local: false,
+      createdAt: "2026-10-02T00:00:00Z", status: "sent", fixedIn: null, note: null, thread: [], asks: 0, local: false,
     });
     expect(inbox.out.reports.map((r: any) => r.local)).toEqual([true, false, true]);
     expect(inbox.raw).not.toContain(bare);

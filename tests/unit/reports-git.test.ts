@@ -345,7 +345,7 @@ describe("pending edits", () => {
     // W's data dir is under the same HOME, so use a HOME-less ctx to keep A's outbox out of reach
     const wa = { ...w, env: { WARDEN_REPORTS_REMOTE: bare } } as Ctx;
     const out = setReportStatus(wa, key, { status: "accepted", note: "on it", fixedIn: "0.4.1" });
-    expect(out).toEqual({ key, status: "accepted", local: false, shared: true });
+    expect(out).toMatchObject({ key, status: "accepted", local: false, shared: true, files: [] });
     expect(pending(w)).toEqual({});
     const mid = machineId(a.data);
     expect(JSON.parse(show(`reports/demo/${mid}-R-0001.json`))).toMatchObject({ status: "accepted", note: "on it", fixedIn: "0.4.1", machineId: mid });
@@ -397,14 +397,14 @@ describe("pending edits", () => {
     const w = withRemote(machine(bare, "wa"), away);
     report(w, 1);
     const key = `${machineId(w.data)}/R-0001`;
-    expect(setReportStatus(w, key, { status: "accepted" })).toEqual({ key, status: "accepted", local: true, shared: false });
+    expect(setReportStatus(w, key, { status: "accepted" })).toMatchObject({ key, status: "accepted", local: true, shared: false });
     expect(outbox(w, "R-0001").status).toBe("accepted");
     expect(pending(w)[key]).toMatchObject({ status: "accepted" }); // queued, the filing data dir's status pull must not undo it
 
     const online = withRemote(w, bare);
     syncReports(online); // the record goes with its new status
     expect(JSON.parse(show(`reports/demo/${machineId(w.data)}-R-0001.json`)).status).toBe("accepted");
-    expect(setReportStatus(online, key, { status: "fixed", fixedIn: "0.4.0" })).toEqual({ key, status: "fixed", local: true, shared: true });
+    expect(setReportStatus(online, key, { status: "fixed", fixedIn: "0.4.0" })).toMatchObject({ key, status: "fixed", local: true, shared: true });
     expect(outbox(w, "R-0001")).toMatchObject({ status: "fixed", fixedIn: "0.4.0" });
     expect(JSON.parse(show(`reports/demo/${machineId(w.data)}-R-0001.json`))).toMatchObject({ status: "fixed", fixedIn: "0.4.0" });
   });
@@ -416,7 +416,7 @@ describe("pending edits", () => {
     syncReports(a);
     const key = `${machineId(a.data)}/R-0001`;
     syncReports(w); // like `inbox`, which comes first
-    expect(setReportStatus(w, key, { status: "accepted" })).toEqual({ key, status: "accepted", local: true, shared: true });
+    expect(setReportStatus(w, key, { status: "accepted" })).toMatchObject({ key, status: "accepted", local: true, shared: true });
     expect(outbox(a, "R-0001").status).toBe("accepted");
   });
 
@@ -520,7 +520,7 @@ describe("a stale WA mirror", () => {
     syncReports(d2);
     const key = `${machineId(d2.data)}/R-0001`;
     // the WA sees d2 as a data dir of this computer (same HOME)
-    expect(setReportStatus(wa, key, { status: "accepted" })).toEqual({ key, status: "accepted", local: true, shared: true });
+    expect(setReportStatus(wa, key, { status: "accepted" })).toMatchObject({ key, status: "accepted", local: true, shared: true });
     expect(JSON.parse(show(`reports/demo/${machineId(d2.data)}-R-0001.json`)).status).toBe("accepted");
     syncReports(d2);
     expect(outbox(d2, "R-0001").status).toBe("accepted");
@@ -778,7 +778,7 @@ describe("listInbox", () => {
     expect(sent.reports.map((i) => i.key)).toEqual([kb2, ka, kl]);
     expect(sent.reports[0]).toEqual({
       key: kb2, machineId: machineId(b.data), id: "R-0002", projectId: "demo", kind: "bug", title: "title R-0002", body: "body R-0002",
-      createdAt: "2026-10-19T08:30:00.000Z", status: "sent", fixedIn: null, note: null, local: true,
+      createdAt: "2026-10-19T08:30:00.000Z", status: "sent", fixedIn: null, note: null, thread: [], asks: 0, local: true,
     });
 
     const every = listInbox(w, true);

@@ -103,10 +103,13 @@ export async function sessionStart(call: HookCall): Promise<string | null> {
   const fixes = guarded(call, "tool fixes line", () => toolFixesLine(pendingToolFixes(call.main, call.ctx.root)));
   if (fixes) lines.push(fixes);
   lines.push(...(guarded(call, "orchestrate lines", () => orchestrateLines(call.main)) ?? []));
+  // "sent" again means this project answered a question: no news for it.
   const changes = reportStatusChanges(machineCtx(call));
-  for (const change of changes) {
+  for (const change of changes.filter((c) => c.status !== "sent")) {
     const version = change.fixedIn ? ` in ${change.fixedIn}` : "";
-    lines.push(`warden: report ${change.id} "${change.title}" is now ${change.status}${version}.`);
+    const note = change.note ? ` Note: ${change.note}` : "";
+    const answer = change.status === "needs-info" ? ` Answer it from this project when the user's request is done: warden report reply ${change.id} --body "<answer>"` : "";
+    lines.push(`warden: report ${change.id} "${change.title}" is now ${change.status}${version}.${note}${answer}`);
   }
   if (changes.length > 0) lines.push(REPORTS_REFRESH);
   const sync = guarded(call, "report sync", () => reportSyncLine(machineCtx(call)));

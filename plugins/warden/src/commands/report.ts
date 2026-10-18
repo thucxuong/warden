@@ -2,15 +2,16 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { loadWardenJson } from "../config/config.ts";
+import { startAnswer } from "../lib/answer.ts";
 import { ring } from "../lib/doorbell.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
 import { readJson, writeJsonAtomic } from "../lib/json.ts";
 import {
-  FIXED_IN, KEY_PATTERN, keyOfOutboxFile, listInbox, machineId, newReportId, NOTE_FORBIDDEN, OUTBOX_FILE, queuePendingEdit, REPORT_ID, setReportStatus, startReportSync, STATUSES, syncReports,
-  transportOn,
+  ANSWER_MAX, cleanThread, FIXED_IN, KEY_PATTERN, keyOfOutboxFile, listInbox, machineId, MAX_ASKS, mergeThread, newReportId, NOTE_FORBIDDEN,
+  OUTBOX_FILE, queuePendingEdit, REPORT_ID, setReportStatus, startReportSync, STATUSES, syncReports, transportOn,
 } from "../lib/reports-git.ts";
 import { mainRoot, stateRoot, worktreeRoot } from "../state/paths.ts";
-import type { Ctx, ReportRecord } from "../types.ts";
+import type { Ctx, ReportMessage, ReportRecord } from "../types.ts";
 
 export const REPORTS_HEADER = "| ID | Title | Status | Fixed in |\n|---|---|---|---|\n";
 const NO_VERSION = "—";
@@ -131,6 +132,58 @@ function syncCommand(args: string[], ctx: Ctx): void {
   }));
 }
 
+const ASK_USAGE = 'usage: warden report ask <key> --question "<question>"';
+
+// warden report ask <key> --question <q> (WA, 0.5): the report goes to needs-info with the question in its thread, and
+// when the project is on this machine a headless run there answers it at once.
+function askCommand(args: string[], ctx: Ctx): void {
+  const key = args[1] ?? "";
+  const question = flagValue(args, "--question")?.trim();
+  if (args.length !== 4 || args[2] !== "--question" || !KEY_PATTERN.test(key) || !question) throw new WardenError(ASK_USAGE, EXIT.USAGE);
+  const item = listInbox(ctx, true).reports.find((r) => r.key === key);
+  if (!item) throw new WardenError(`no report ${key}`, EXIT.NOT_FOUND);
+  if (item.asks >= MAX_ASKS) {
+    throw new WardenError(`report ${key} already has ${MAX_ASKS} questions: decide with what it has`, EXIT.REJECTED);
+  }
+  const message: ReportMessage = { from: "wa", at: new Date().toISOString(), text: question };
+  const result = setReportStatus(ctx, key, { status: "needs-info", note: question, message });
+
+  let answer: { started: boolean; reason?: string } = { started: false, reason: "other-machine" };
+  const file = result.files[0];
+  if (file) answer = startAnswer(ctx.env, ctx.root, dirname(dirname(file)), readJson<ReportRecord>(file));
+  console.log(JSON.stringify({
+    key, status: result.status, asks: item.asks + 1, thread: item.thread.length + 1, shared: result.shared,
+    answering: answer.started, ...(answer.reason ? { reason: answer.reason } : {}),
+  }));
+}
+
+const REPLY_USAGE = 'usage: warden report reply <id> --body "<answer>" | --file <path>';
+
+// warden report reply <id> --body <answer> (the project, 0.5): answers the open question; the report is sent again and
+// the doorbell rings.
+async function replyCommand(args: string[], ctx: Ctx): Promise<void> {
+  const id = args[1] ?? "";
+  if (!REPORT_ID.test(id) || args.length !== 4 || (args[2] !== "--body" && args[2] !== "--file")) throw new WardenError(REPLY_USAGE, EXIT.USAGE);
+  const text = (args[2] === "--body" ? args[3]! : readFileSync(args[3]!, "utf8")).trim();
+  if (!text) throw new WardenError("the answer is empty", EXIT.USAGE);
+  if (text.length > ANSWER_MAX) throw new WardenError(`the answer must be at most ${ANSWER_MAX} characters`, EXIT.USAGE);
+
+  const file = join(reportsDir(ctx), `${id}.json`);
+  if (!existsSync(file)) throw new WardenError(`no report ${id}`, EXIT.NOT_FOUND);
+  const record = readJson<ReportRecord>(file);
+  const thread = cleanThread(record.thread);
+  if (record.status !== "needs-info" || thread.at(-1)?.from !== "wa") {
+    throw new WardenError(`report ${id} has no open question`, EXIT.REJECTED);
+  }
+  const message: ReportMessage = { from: "project", at: new Date().toISOString(), text };
+  writeJsonAtomic(file, { ...record, status: "sent", thread: mergeThread(thread, [message]) });
+  const key = transportOn(ctx) ? keyOfOutboxFile(file) : null;
+  if (key) queuePendingEdit(ctx, key, { status: "sent", thread: [message] });
+  ring(ctx);
+  startReportSync(ctx);
+  console.log(JSON.stringify({ id, status: "sent" }));
+}
+
 function inboxCommand(args: string[], ctx: Ctx): void {
   const all = args.includes("--all");
   if (args.length !== (all ? 2 : 1)) throw new WardenError("usage: warden report inbox [--all]", EXIT.USAGE);
@@ -162,6 +215,8 @@ function printStatus(args: string[], ctx: Ctx): void {
 export async function run(args: string[], ctx: Ctx): Promise<void> {
   if (args[0] === "sync") return syncCommand(args, ctx);
   if (args[0] === "inbox") return inboxCommand(args, ctx);
+  if (args[0] === "ask") return askCommand(args, ctx);
+  if (args[0] === "reply") return replyCommand(args, ctx);
   if (args[0] === "set") {
     checkSetArgs(args);
     const fixedIn = flagValue(args, "--fixed-in");
@@ -185,7 +240,7 @@ export async function run(args: string[], ctx: Ctx): Promise<void> {
 
   const record = writeNewRecord(ctx, (id) => ({
     schema: 1, id, projectId, kind, title, body,
-    createdAt: new Date().toISOString(), status: "sent", fixedIn: null, note: null,
+    createdAt: new Date().toISOString(), status: "sent", fixedIn: null, note: null, projectDir: mainRoot(root),
   }));
   appendRow(reportsTablePath(root), REPORTS_HEADER, `| ${record.id} | ${cell(title)} | sent | ${NO_VERSION} |`);
   ring(ctx);
@@ -203,6 +258,7 @@ export interface ReportChange {
   title: string;
   status: string;
   fixedIn: string | null;
+  note: string | null;
 }
 
 function seenPath(ctx: Ctx): string {
@@ -226,7 +282,7 @@ function changeForRow(ctx: Ctx, line: string, seen: Record<string, string> = {})
   const record = readJson<ReportRecord>(recordPath);
   const key = `${mid}/${id}`;
   return record.status === (seen[key] ?? (named === undefined ? seen[id] : undefined) ?? status)
-    ? null : { id, key, title, status: record.status, fixedIn: record.fixedIn };
+    ? null : { id, key, title, status: record.status, fixedIn: record.fixedIn, note: record.note ?? null };
 }
 
 // What changed since the agent was last told. Read-only for the project: it never touches reports.md, it only notes

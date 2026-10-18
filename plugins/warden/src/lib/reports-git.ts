@@ -7,7 +7,7 @@ import {
   closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync, writeSync,
 } from "node:fs";
 import { basename, dirname, join, resolve, sep } from "node:path";
-import type { Ctx, ReportRecord } from "../types.ts";
+import type { Ctx, ReportMessage, ReportRecord } from "../types.ts";
 import { ring } from "./doorbell.ts";
 import { EXIT, WardenError } from "./exit.ts";
 import { readJson, writeJsonAtomic } from "./json.ts";
@@ -45,6 +45,8 @@ export interface InboxItem {
   key: string; machineId: string; id: string; projectId: string; kind: "bug" | "enhancement";
   title: string; body: string; createdAt: string; status: ReportRecord["status"];
   fixedIn: string | null; note: string | null;
+  thread: ReportMessage[]; // questions and answers after the body, oldest first
+  asks: number; // questions the WA has asked so far
   local: boolean; // the machine id is one of this computer's data dirs
 }
 
@@ -63,6 +65,8 @@ export const NO_ACCESS_LINE =
 const MACHINE_ID = /^[0-9a-f]{8}$/;
 const PROJECT_ID = /^[a-z][a-z0-9-]{1,40}$/;
 const NOTE_MAX = 500;
+export const ANSWER_MAX = 4000;
+export const MAX_ASKS = 3;
 const GIT_TIMEOUT_MS = 60_000;
 const HOUR_MS = 3_600_000;
 const MINUTE_MS = 60_000;
@@ -133,6 +137,24 @@ function fixedInOk(v: unknown): boolean {
   return v === null || v === undefined || (typeof v === "string" && FIXED_IN.test(v));
 }
 
+// The valid messages of a thread. A question is read by the project, so it follows the note rules.
+export function cleanThread(thread: unknown): ReportMessage[] {
+  if (!Array.isArray(thread)) return [];
+  return thread.filter((m: any): m is ReportMessage =>
+    !!m && typeof m === "object" && typeof m.at === "string" && typeof m.text === "string" && m.text.length > 0
+    && ((m.from === "wa" && noteOk(m.text)) || (m.from === "project" && m.text.length <= ANSWER_MAX)));
+}
+
+// Both threads, each message once, oldest first. Copies of one report can each gain messages, so they are joined, never replaced.
+export function mergeThread(a: unknown, b: unknown): ReportMessage[] {
+  const out = new Map<string, ReportMessage>();
+  for (const m of [...cleanThread(a), ...cleanThread(b)]) out.set(`${m.from}|${m.at}|${m.text}`, { from: m.from, at: m.at, text: m.text });
+  return [...out.values()].sort((x, y) => (x.at < y.at ? -1 : x.at > y.at ? 1 : 0));
+}
+
+export const askCount = (thread: unknown): number => cleanThread(thread).filter((m) => m.from === "wa").length;
+const lastAt = (thread: ReportMessage[]): string => thread.reduce((max, m) => (m.at > max ? m.at : max), "");
+
 // ---------------------------------------------------------------------------
 // Files in the data dir (spec-0.4 3.1)
 // ---------------------------------------------------------------------------
@@ -197,7 +219,7 @@ function readState(ctx: Ctx): ReportSyncState | null {
   }
 }
 
-interface PendingEdit { status: ReportRecord["status"]; note?: string | null; fixedIn?: string | null; at: string }
+interface PendingEdit { status: ReportRecord["status"]; note?: string | null; fixedIn?: string | null; thread?: ReportMessage[]; at: string }
 
 function readPending(ctx: Ctx): Record<string, PendingEdit> {
   const edits = readOr<{ edits?: unknown }>(pendingPath(ctx), {}).edits;
@@ -206,7 +228,7 @@ function readPending(ctx: Ctx): Record<string, PendingEdit> {
   for (const [key, e] of Object.entries(edits as Record<string, any>)) {
     if (!KEY_PATTERN.test(key) || !e || typeof e !== "object" || !STATUSES.includes(e.status)) continue;
     if (!noteOk(e.note) || !fixedInOk(e.fixedIn)) continue;
-    out[key] = e as PendingEdit;
+    out[key] = { ...e, ...(e.thread !== undefined ? { thread: cleanThread(e.thread) } : {}) } as PendingEdit;
   }
   return out;
 }
@@ -539,8 +561,10 @@ function runPasses(ctx: Ctx, state: ReportSyncState, result: SyncResult, opts: {
       if (!local || local.schema !== 1) continue;
       const fixedIn = b.fixedIn ?? null;
       const note = b.note ?? null;
-      if (local.status === b.status && (local.fixedIn ?? null) === fixedIn && (local.note ?? null) === note) continue;
-      writeJsonAtomic(file, { ...local, status: b.status, fixedIn, note });
+      const thread = mergeThread(local.thread, b.thread);
+      if (local.status === b.status && (local.fixedIn ?? null) === fixedIn && (local.note ?? null) === note
+        && JSON.stringify(cleanThread(local.thread)) === JSON.stringify(thread)) continue;
+      writeJsonAtomic(file, { ...local, status: b.status, fixedIn, note, ...(thread.length > 0 ? { thread } : {}) });
       result.updated += 1;
     }
     const ownIds = own.map((e) => e.record.id);
@@ -566,9 +590,12 @@ function runPasses(ctx: Ctx, state: ReportSyncState, result: SyncResult, opts: {
       const entry = byKey.get(key);
       cleared.push(key);
       if (!entry) continue; // no file on the branch: dropped
-      const next: BranchReport = { ...entry.record, status: edit.status };
+      // A message on the branch newer than this edit (an answer that went out first) keeps the branch's status.
+      const stale = lastAt(cleanThread(entry.record.thread)) > edit.at;
+      const next: BranchReport = { ...entry.record, status: stale ? entry.record.status : edit.status };
       if ("note" in edit) next.note = edit.note ?? null;
       if ("fixedIn" in edit) next.fixedIn = edit.fixedIn ?? null;
+      if (edit.thread && edit.thread.length > 0) next.thread = mergeThread(entry.record.thread, edit.thread);
       if (JSON.stringify(next) === JSON.stringify(entry.record)) continue;
       writeRecord(entry.path, next);
       changedEdits.push(`${key.replace("/", "-")} ${edit.status}`);
@@ -710,6 +737,7 @@ function toItem(machine: string, r: ReportRecord, local: Set<string>): InboxItem
   return {
     key: keyOf(machine, r.id), machineId: machine, id: r.id, projectId: r.projectId, kind: r.kind, title: r.title, body: r.body,
     createdAt: r.createdAt, status: r.status, fixedIn: r.fixedIn ?? null, note: r.note ?? null,
+    thread: cleanThread(r.thread), asks: askCount(r.thread),
     local: local.has(machine),
   };
 }
@@ -727,7 +755,18 @@ export function listInbox(ctx: Ctx, all: boolean): { fetched: boolean; reports: 
       if (isRecordShape(r) && `${r.id}.json` === name) items.set(keyOf(d.id, r.id), toItem(d.id, r, local));
     }
   }
-  for (const e of readBranch(mirrorDir(ctx))) items.set(e.key, toItem(e.record.machineId, e.record, local)); // the branch copy wins
+  for (const e of readBranch(mirrorDir(ctx))) {
+    // The branch copy wins, but a local copy may already hold a newer message.
+    const item = toItem(e.record.machineId, e.record, local);
+    const before = items.get(e.key);
+    if (before) {
+      // A local answer the branch has not got yet: its status (sent again) wins too.
+      if (lastAt(before.thread) > lastAt(item.thread)) item.status = before.status;
+      item.thread = mergeThread(before.thread, item.thread);
+      item.asks = askCount(item.thread);
+    }
+    items.set(e.key, item);
+  }
 
   for (const [key, edit] of Object.entries(readPending(ctx))) {
     const item = items.get(key);
@@ -735,6 +774,10 @@ export function listInbox(ctx: Ctx, all: boolean): { fetched: boolean; reports: 
     item.status = edit.status;
     if ("note" in edit) item.note = edit.note ?? null;
     if ("fixedIn" in edit) item.fixedIn = edit.fixedIn ?? null;
+    if (edit.thread) {
+      item.thread = mergeThread(item.thread, edit.thread);
+      item.asks = askCount(item.thread);
+    }
   }
 
   const reports = [...items.values()]
@@ -744,8 +787,8 @@ export function listInbox(ctx: Ctx, all: boolean): { fetched: boolean; reports: 
 }
 
 export function setReportStatus(
-  ctx: Ctx, key: string, edit: { status: string; note?: string; fixedIn?: string },
-): { key: string; status: ReportRecord["status"]; local: boolean; shared: boolean } {
+  ctx: Ctx, key: string, edit: { status: string; note?: string; fixedIn?: string; message?: ReportMessage },
+): { key: string; status: ReportRecord["status"]; local: boolean; shared: boolean; files: string[] } {
   if (!KEY_PATTERN.test(key)) throw new WardenError("usage: warden report set <key> --status <s> [--note <t>] [--fixed-in <v>]", EXIT.USAGE);
   const status = edit.status as ReportRecord["status"];
   if (!STATUSES.includes(status)) throw new WardenError(`--status must be one of ${STATUSES.join(", ")}`, EXIT.USAGE);
@@ -760,16 +803,20 @@ export function setReportStatus(
   const [machine, id] = key.split("/") as [string, string];
   const fields = (): Partial<ReportRecord> & { status: ReportRecord["status"] } => ({
     status, ...(edit.note !== undefined ? { note: edit.note } : {}), ...(edit.fixedIn !== undefined ? { fixedIn: edit.fixedIn } : {}),
+    ...(edit.message ? { thread: [edit.message] } : {}),
   });
 
   let local = false;
+  const files: string[] = [];
   for (const d of dataDirs(ctx, `${id}.json`)) {
     if (d.id !== machine) continue;
     const file = join(outboxDir(d.dir), `${id}.json`);
     const r = readOr<ReportRecord | null>(file, null);
     if (!r || r.schema !== 1) continue;
-    writeJsonAtomic(file, { ...r, ...fields() });
+    const thread = mergeThread(r.thread, edit.message ? [edit.message] : []);
+    writeJsonAtomic(file, { ...r, ...fields(), ...(thread.length > 0 ? { thread } : {}) });
     local = true;
+    files.push(file);
   }
 
   // Always queued, also for a local copy the mirror does not show yet: the filing data dir's next status pull would
@@ -784,13 +831,14 @@ export function setReportStatus(
     writePending(ctx, after);
     throw missing();
   }
-  return { key, status, local, shared };
+  return { key, status, local, shared, files };
 }
 
 // Adds a verdict to reports-pending.json: the next sync lays it on the branch record.
 export function queuePendingEdit(ctx: Ctx, key: string, fields: Partial<ReportRecord> & { status: ReportRecord["status"] }): void {
   const pending = readPending(ctx);
-  pending[key] = { ...pending[key], ...fields, at: nowIso() } as PendingEdit;
+  const thread = mergeThread(pending[key]?.thread, fields.thread);
+  pending[key] = { ...pending[key], ...fields, ...(thread.length > 0 ? { thread } : {}), at: nowIso() } as PendingEdit;
   writePending(ctx, pending);
 }
 

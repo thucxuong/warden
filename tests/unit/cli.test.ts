@@ -81,7 +81,7 @@ describe("help", () => {
     expect(HELP.start).toBe("warden start <task> --template do|feature|bugfix|chore | --flow <name|path> [--text <t> | --text-file <p> | --ticket] [--worktree] [--branch <b>]");
     expect(HELP.orchestrate).toBe("warden orchestrate plan <epic> | status <epic> | set-status <id> <status>");
     expect(HELP.report).toBe(
-      "warden report --kind bug|enhancement --title <t> --file <body> | warden report --status [--write] | warden report sync [--background] | warden report inbox [--all] | warden report set <key|file> --status <s> [--note <t>] [--fixed-in <v>]",
+      "warden report --kind bug|enhancement --title <t> --body <b>|--file <p> | warden report --status [--write] | warden report reply <id> --body <answer> | warden report sync [--background] | warden report inbox [--all] | warden report set <key|file> --status <s> [--note <t>] [--fixed-in <v>] | warden report ask <key> --question <q>",
     );
     expect(HELP.docs).toBe("warden docs check");
     expect(HELP.tools).toBe("warden tools list | add <name> | fixes [<tool>] | applied <tool> <version>");

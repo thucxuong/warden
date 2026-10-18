@@ -354,7 +354,12 @@ export interface ReportRecord {
   title: string; body: string; createdAt: string;
   status: "sent" | "accepted" | "fixed" | "wontfix" | "needs-info";
   fixedIn: string | null; note: string | null;  // set by WA
+  projectDir?: string;                          // 0.5: main checkout that filed it, so the WA can ask a question there
+  thread?: ReportMessage[];                     // 0.5: questions and answers after the body, oldest first
 }
+
+// 0.5: one message in a report's thread. "wa" asks, "project" answers.
+export interface ReportMessage { from: "wa" | "project"; at: string; text: string }
 
 // ---------------------------------------------------------------------------
 // 4.14 History
