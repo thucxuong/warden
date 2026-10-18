@@ -1,0 +1,16 @@
+#!/bin/sh
+# Fake `claude` for tests. Records each call under $FAKE_CLAUDE_DIR and prints a canned reply.
+#   call-N.argv   arguments, NUL separated      call-N.stdin   stdin text
+#   call-N.role   $WARDEN_ROLE                  call-N.cwd     working directory
+# Reply: $FAKE_CLAUDE_DIR/response-N.json, else response.json. Exit code: exit-N, else 0.
+dir="${FAKE_CLAUDE_DIR:?FAKE_CLAUDE_DIR is not set}"
+n=$(($(ls "$dir" | grep -c '\.argv$') + 1))
+printf '%s\0' "$@" > "$dir/call-$n.argv"
+cat > "$dir/call-$n.stdin"
+printf '%s' "${WARDEN_ROLE-}" > "$dir/call-$n.role"
+pwd > "$dir/call-$n.cwd"
+env > "$dir/call-$n.env"
+if [ -f "$dir/response-$n.json" ]; then cat "$dir/response-$n.json"; elif [ -f "$dir/response.json" ]; then cat "$dir/response.json"; fi
+code=0
+[ -f "$dir/exit-$n" ] && code=$(cat "$dir/exit-$n")
+exit "$code"

@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Warden</title>
+<style>
+  :root { color-scheme: light dark; --line: color-mix(in srgb, CanvasText 18%, Canvas); --soft: color-mix(in srgb, CanvasText 6%, Canvas); --muted: color-mix(in srgb, CanvasText 60%, Canvas); }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 system-ui, sans-serif; background: Canvas; color: CanvasText; }
+  header { display: flex; align-items: baseline; gap: 16px; padding: 12px 20px; border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0; font-size: 16px; }
+  header .refresh { margin-left: auto; color: var(--muted); font-size: 12px; }
+  nav { display: flex; gap: 4px; padding: 8px 20px 0; border-bottom: 1px solid var(--line); }
+  nav button { font: inherit; padding: 6px 14px; border: 1px solid transparent; border-bottom: 0; background: none; color: inherit; cursor: pointer; border-radius: 6px 6px 0 0; }
+  nav button[aria-selected="true"] { background: var(--soft); border-color: var(--line); font-weight: 600; }
+  main { padding: 16px 20px 40px; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 5px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { font-weight: 600; font-size: 12px; color: var(--muted); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .scroll { overflow-x: auto; }
+  tbody tr.task { cursor: pointer; }
+  tbody tr.task:hover, tbody tr.selected { background: var(--soft); }
+  tbody tr.selected { outline: 2px solid Highlight; outline-offset: -2px; }
+  .empty, .muted { color: var(--muted); }
+  .badge { display: inline-block; padding: 0 7px; border-radius: 9px; border: 1px solid var(--line); font-size: 12px; }
+  .s-active { border-color: Highlight; } .s-blocked { border-color: #c0392b; color: #c0392b; } .s-waiting { border-color: #b9770e; color: #b9770e; }
+  .s-shipped, .s-done { border-color: #1e8449; color: #1e8449; }
+  .v-CODE { color: #c0392b; } .v-OPS { color: #b9770e; } .v-UNCLEAR { color: var(--muted); }
+  #detail { margin-top: 24px; border-top: 2px solid var(--line); padding-top: 12px; }
+  #detail h2 { margin: 0 0 4px; font-size: 18px; }
+  #detail h3 { margin: 22px 0 6px; font-size: 14px; }
+  .timeline { display: flex; gap: 2px; height: 34px; }
+  .bar { min-width: 26px; padding: 2px 4px; overflow: hidden; font-size: 11px; color: #fff; border-radius: 3px; text-overflow: ellipsis; white-space: nowrap; }
+  .t-analyze { background: #5b6fb5; } .t-plan { background: #8e5bb5; } .t-implement { background: #2e86c1; } .t-check { background: #1e8449; }
+  .t-review { background: #b9770e; } .t-approve { background: #a04070; } .t-ship { background: #34495e; } .t-fix { background: #c0392b; }
+  .legend { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 6px; font-size: 12px; color: var(--muted); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; }
+  ul.plain { list-style: none; margin: 0; padding: 0; }
+  ul.plain li { padding: 3px 0; }
+  pre { background: var(--soft); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; overflow: auto; white-space: pre-wrap; margin: 0; }
+  .docs { display: grid; grid-template-columns: minmax(180px, 280px) 1fr; gap: 16px; }
+  .docs ul { margin: 0; padding: 0; list-style: none; }
+  .docs li button { width: 100%; text-align: left; font: inherit; color: inherit; background: none; border: 0; padding: 5px 8px; cursor: pointer; border-radius: 4px; }
+  .docs li button:hover, .docs li button[aria-current="true"] { background: var(--soft); }
+  .docs .path { display: block; font-size: 11px; color: var(--muted); }
+  .events { max-height: 260px; overflow: auto; font: 12px/1.5 ui-monospace, monospace; }
+  @media (max-width: 700px) { .docs { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Warden <span id="project" class="muted"></span></h1>
+  <span class="refresh">Last refresh: <span id="refreshed">never</span></span>
+</header>
+<nav role="tablist">
+  <button role="tab" id="tab-tasks" aria-selected="true">Tasks</button>
+  <button role="tab" id="tab-docs" aria-selected="false">Docs</button>
+</nav>
+<main>
+  <section id="view-tasks">
+    <div class="scroll"><table id="tasks"></table></div>
+    <div id="detail" hidden></div>
+  </section>
+  <section id="view-docs" hidden>
+    <div class="docs"><ul id="doclist"></ul><pre id="doctext">Pick a document.</pre></div>
+  </section>
+</main>
+<script>
+"use strict";
+// Everything from the API is data: it only ever goes through esc() or textContent.
+const $ = (id) => document.getElementById(id);
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const POLL_MS = 2000;
+const state = { tab: "tasks", selected: null, docPath: null, shown: {} };
+
+function fmtDuration(ms) {
+  const s = Math.round(ms / 1000);
+  if (s < 60) return s + "s";
+  const m = Math.floor(s / 60);
+  return m < 60 ? m + "m " + (s % 60) + "s" : Math.floor(m / 60) + "h " + (m % 60) + "m";
+}
+const fmtTime = (iso) => (iso ? new Date(iso).toLocaleString() : "");
+const fmtNum = (n) => Number(n || 0).toLocaleString();
+const fmtCost = (n) => "$" + Number(n || 0).toFixed(2);
+const badge = (status) => `<span class="badge s-${esc(status)}">${esc(status)}</span>`;
+const verdictList = (vs) => vs.map((v) => `<span class="v-${esc(v)}">${esc(v)}</span>`).join(" ");
+
+// Only repaint when the data changed, so the page does not flicker and selections stay.
+function paint(key, el, html) {
+  if (state.shown[key] === html) return;
+  state.shown[key] = html;
+  el.innerHTML = html;
+}
+
+async function getJson(url) {
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(url + " " + res.status);
+  return res.json();
+}
+
+// ---- tasks table ----
+
+function taskRow(t) {
+  const cls = "task" + (t.task === state.selected ? " selected" : "");
+  const author = t.author && (t.author.name || t.author.email) ? t.author.name || t.author.email : "";
+  return `<tr class="${cls}" data-task="${esc(t.task)}">
+    <td><strong>${esc(t.task)}</strong></td><td>${esc(t.flow)}</td><td>${badge(t.status)}</td><td>${esc(t.step)}</td>
+    <td>${esc(fmtTime(t.startedAt))}</td><td>${esc(t.endedAt ? fmtTime(t.endedAt) : "")}</td>
+    <td class="num">${esc(fmtDuration(t.durationMs))}</td><td class="num">${esc(t.reviewRounds)}</td><td class="num">${esc(t.fixerRounds)}</td>
+    <td>${verdictList(t.verdicts)}</td><td class="num">${esc(fmtNum(t.tokens))}</td><td class="num">${esc(fmtCost(t.costUsd))}</td>
+    <td>${esc(author)}</td><td>${t.pr ? esc(t.pr) : ""}</td><td class="muted">${esc(t.source)}</td></tr>`;
+}
+
+function renderTasks(data) {
+  $("project").textContent = data.project ? "· " + data.project : "";
+  const head = ["Task", "Flow", "Status", "Step", "Started", "Ended", "Duration", "Review", "Fixer", "Verdicts", "Tokens", "Cost (est.)", "Author", "PR", "Source"];
+  const numeric = new Set(["Duration", "Review", "Fixer", "Tokens", "Cost (est.)"]);
+  const th = head.map((h) => `<th class="${numeric.has(h) ? "num" : ""}">${esc(h)}</th>`).join("");
+  const body = data.tasks.length ? data.tasks.map(taskRow).join("") : `<tr><td colspan="${head.length}" class="empty">No tasks yet.</td></tr>`;
+  paint("tasks", $("tasks"), `<thead><tr>${th}</tr></thead><tbody>${body}</tbody>`);
+}
+
+// ---- detail panel ----
+
+function timeline(summary) {
+  const steps = summary.steps;
+  if (!steps.length) return `<p class="muted">No steps yet.</p>`;
+  const total = steps.reduce((sum, s) => sum + s.durationMs, 0) || 1;
+  const bars = steps.map((s) => {
+    const label = `${s.id} · ${fmtDuration(s.durationMs)}`;
+    return `<div class="bar t-${esc(s.type)}" style="flex:${Math.max(s.durationMs, total / 40)} 1 0" title="${esc(label)}">${esc(s.id)}</div>`;
+  }).join("");
+  const types = [...new Set(steps.map((s) => s.type))];
+  const legend = types.map((t) => `<span><i class="t-${esc(t)}"></i>${esc(t)}</span>`).join("");
+  return `<div class="timeline">${bars}</div><div class="legend">${legend}</div>`;
+}
+
+function tokenTable(summary) {
+  const row = (id, tk, cost, strong) => {
+    const b = strong ? ["<strong>", "</strong>"] : ["", ""];
+    return `<tr><td>${b[0]}${esc(id)}${b[1]}</td><td class="num">${fmtNum(tk.input)}</td><td class="num">${fmtNum(tk.output)}</td><td class="num">${fmtNum(tk.cacheRead)}</td><td class="num">${fmtNum(tk.cacheWrite)}</td><td class="num">${b[0]}${esc(fmtCost(cost))}${b[1]}</td></tr>`;
+  };
+  const rows = summary.steps.map((s) => row(s.id, s.tokens, s.costUsd, false)).join("") + row("total", summary.tokens, summary.costUsd, true);
+  return `<div class="scroll"><table><thead><tr><th>Step</th><th class="num">Input</th><th class="num">Output</th><th class="num">Cache read</th><th class="num">Cache write</th><th class="num">Cost (estimate)</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function triageList(reports) {
+  if (!reports.length) return `<p class="muted">No triage verdicts.</p>`;
+  const items = reports.map((r) =>
+    `<li><strong class="v-${esc(r.verdict)}">${esc(r.verdict)}</strong> ${esc(r.check)} (${esc(r.stepId)})${r.rule ? " rule " + esc(r.rule) : ""}${r.flaky ? " flaky" : ""}: ${esc(r.reason)}</li>`);
+  return `<ul class="plain">${items.join("")}</ul>`;
+}
+
+function findingItems(findings) {
+  return findings.map((f) => `<li>[${esc(f.severity)}] <code>${esc(f.file)}:${esc(f.line)}</code> ${esc(f.summary)}</li>`).join("");
+}
+
+function reviewList(rounds) {
+  if (!rounds.length) return `<p class="muted">No review rounds.</p>`;
+  return rounds.map((r) => `<h4>Round ${esc(r.round)} <span class="muted">(${esc(r.status)}, ${esc(r.model)})</span></h4>
+    ${r.kept.length ? `<ul class="plain">${findingItems(r.kept)}</ul>` : `<p class="muted">No kept findings.</p>`}
+    ${r.dropped.length ? `<p class="muted">Dropped (outside the diff):</p><ul class="plain muted">${findingItems(r.dropped)}</ul>` : ""}`).join("");
+}
+
+function eventList(events) {
+  if (!events.length) return `<p class="muted">No events.</p>`;
+  const lines = events.map((e) => `${new Date(e.ts).toLocaleTimeString()} ${e.type}${e.step ? " " + e.step : ""}`);
+  return `<pre class="events">${esc(lines.join("\n"))}</pre>`;
+}
+
+function renderDetail(d, events) {
+  const { run, summary } = d;
+  paint("detail", $("detail"), `
+    <h2>${esc(run.task)} ${badge(run.status)}</h2>
+    <p class="muted">${esc(run.flowName)} flow · step ${esc(run.current.id)} · branch ${esc(run.branch)}${summary.pr ? " · " + esc(summary.pr) : ""}</p>
+    <h3>Timeline</h3>${timeline(summary)}
+    <h3>Tokens per step</h3>${tokenTable(summary)}
+    <h3>Triage verdicts</h3>${triageList(d.triage)}
+    <h3>Review rounds</h3>${reviewList(d.review)}
+    <h3>Leftovers</h3>${d.leftovers ? `<pre>${esc(d.leftovers)}</pre>` : `<p class="muted">None.</p>`}
+    <h3>Events</h3>${eventList(events)}`);
+  $("detail").hidden = false;
+}
+
+async function refreshDetail() {
+  const task = state.selected;
+  if (!task) { $("detail").hidden = true; return; }
+  try {
+    const [detail, events] = await Promise.all([
+      getJson("/api/tasks/" + encodeURIComponent(task)),
+      getJson("/api/tasks/" + encodeURIComponent(task) + "/events"),
+    ]);
+    if (task === state.selected) renderDetail(detail, events.events);
+  } catch {
+    if (task === state.selected) paint("detail", $("detail"), `<p class="muted">Task ${esc(task)} could not be loaded.</p>`);
+  }
+}
+
+// ---- docs ----
+
+async function loadDocs() {
+  try {
+    const { docs } = await getJson("/api/docs");
+    const items = docs.map((d) =>
+      `<li><button data-path="${esc(d.path)}"${d.path === state.docPath ? ' aria-current="true"' : ""}>${esc(d.title)}<span class="path">${esc(d.path)}</span></button></li>`);
+    paint("doclist", $("doclist"), items.length ? items.join("") : `<li class="empty">No documents in .warden/.</li>`);
+  } catch {
+    paint("doclist", $("doclist"), `<li class="empty">Could not load documents.</li>`);
+  }
+}
+
+async function openDoc(path) {
+  state.docPath = path;
+  state.shown.doclist = null;
+  const res = await fetch("/api/doc?path=" + encodeURIComponent(path), { cache: "no-store" });
+  $("doctext").textContent = res.ok ? await res.text() : "Could not load " + path;
+  loadDocs();
+}
+
+// ---- wiring ----
+
+function showTab(name) {
+  state.tab = name;
+  for (const t of ["tasks", "docs"]) {
+    $("view-" + t).hidden = t !== name;
+    $("tab-" + t).setAttribute("aria-selected", String(t === name));
+  }
+  if (name === "docs") loadDocs();
+}
+
+$("tab-tasks").onclick = () => showTab("tasks");
+$("tab-docs").onclick = () => showTab("docs");
+$("doclist").onclick = (e) => {
+  const button = e.target.closest("button[data-path]");
+  if (button) openDoc(button.dataset.path);
+};
+$("tasks").onclick = (e) => {
+  const row = e.target.closest("tr[data-task]");
+  if (!row) return;
+  state.selected = state.selected === row.dataset.task ? null : row.dataset.task;
+  state.shown.tasks = null;
+  tick();
+};
+
+async function tick() {
+  try {
+    renderTasks(await getJson("/api/tasks"));
+    $("refreshed").textContent = new Date().toLocaleTimeString();
+  } catch {
+    $("refreshed").textContent = "failed";
+  }
+  refreshDetail();
+}
+
+tick();
+setInterval(tick, POLL_MS);
+</script>
+</body>
+</html>

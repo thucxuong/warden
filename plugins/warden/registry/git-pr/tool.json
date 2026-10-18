@@ -1,0 +1,6 @@
+{
+  "name": "git-pr",
+  "version": "0.1.0",
+  "needs": ["git", "gh"],
+  "description": "Open, view and merge a pull request for the current branch."
+}

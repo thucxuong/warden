@@ -1,0 +1,158 @@
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { reportStatusChanges, run } from "../../plugins/warden/src/commands/report.ts";
+import { run as runRetro } from "../../plugins/warden/src/commands/retro.ts";
+import { WardenError } from "../../plugins/warden/src/lib/exit.ts";
+import type { Ctx, ReportRecord } from "../../plugins/warden/src/types.ts";
+
+const pluginRoot = resolve(import.meta.dir, "../../plugins/warden");
+const temps: string[] = [];
+let repo: string;
+let data: string;
+
+function tempDir(prefix: string): string {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), prefix)));
+  temps.push(dir);
+  return dir;
+}
+
+function ctx(cwd = repo): Ctx {
+  return { root: pluginRoot, data, cwd, env: {}, stdinIsTTY: false };
+}
+
+async function call(fn: typeof run, args: string[], cwd = repo): Promise<{ out: any; code: number | null }> {
+  const lines: string[] = [];
+  const realLog = console.log;
+  console.log = (...a: unknown[]) => void lines.push(a.join(" "));
+  try {
+    await fn(args, ctx(cwd));
+    return { out: lines.length ? JSON.parse(lines.join("\n")) : null, code: null };
+  } catch (err) {
+    if (err instanceof WardenError) return { out: null, code: err.code };
+    throw err;
+  } finally {
+    console.log = realLog;
+  }
+}
+
+function bodyFile(text = "It broke.\nExpected: it works."): string {
+  const path = join(tempDir("warden-body-"), "body.md");
+  writeFileSync(path, text);
+  return path;
+}
+
+function readRecord(id: string): ReportRecord {
+  return JSON.parse(readFileSync(join(data, "reports", `${id}.json`), "utf8"));
+}
+
+beforeEach(() => {
+  repo = tempDir("warden-report-");
+  data = tempDir("warden-data-");
+  Bun.spawnSync(["git", "init", "-q", "-b", "main"], { cwd: repo });
+  mkdirSync(join(repo, ".warden"), { recursive: true });
+  writeFileSync(join(repo, ".warden/warden.json"), JSON.stringify({ schema: 1, wardenVersion: "0.1.0", projectId: "demo", taskIdPattern: "^DM-\\d+$", sitePort: 4400, lastRetro: null }));
+});
+afterAll(() => {
+  for (const dir of temps) rmSync(dir, { recursive: true, force: true });
+});
+
+describe("warden report", () => {
+  test("stamps ids in order, writes the outbox record and the table row", async () => {
+    const first = await call(run, ["--kind", "bug", "--title", "Gate hangs", "--file", bodyFile()]);
+    const second = await call(run, ["--kind", "enhancement", "--title", "Add a | pipe", "--file", bodyFile("More.")]);
+    expect(first.out).toEqual({ id: "R-0001" });
+    expect(second.out).toEqual({ id: "R-0002" });
+
+    const record = readRecord("R-0001");
+    expect(record).toMatchObject({ schema: 1, id: "R-0001", projectId: "demo", kind: "bug", title: "Gate hangs", body: "It broke.\nExpected: it works.", status: "sent", fixedIn: null, note: null });
+    expect(Number.isNaN(Date.parse(record.createdAt))).toBe(false);
+
+    const table = readFileSync(join(repo, ".warden/reports.md"), "utf8").split("\n");
+    expect(table[0]).toBe("| ID | Title | Status | Fixed in |");
+    expect(table).toContain("| R-0001 | Gate hangs | sent | — |");
+    expect(table).toContain("| R-0002 | Add a / pipe | sent | — |");
+  });
+
+  test("a number that is already taken is skipped", async () => {
+    mkdirSync(join(data, "reports"), { recursive: true });
+    writeFileSync(join(data, "reports", "R-0001.json"), "{}");
+    expect((await call(run, ["--kind", "bug", "--title", "t", "--file", bodyFile()])).out).toEqual({ id: "R-0002" });
+  });
+
+  test("bad kind, missing title or empty body exits 2", async () => {
+    expect((await call(run, ["--kind", "idea", "--title", "t", "--file", bodyFile()])).code).toBe(2);
+    expect((await call(run, ["--kind", "bug", "--file", bodyFile()])).code).toBe(2);
+    expect((await call(run, ["--kind", "bug", "--title", "t", "--file", bodyFile("  \n")])).code).toBe(2);
+    expect(existsSync(join(data, "reports"))).toBe(false);
+  });
+
+  test("a project without .warden exits 3", async () => {
+    rmSync(join(repo, ".warden"), { recursive: true });
+    expect((await call(run, ["--kind", "bug", "--title", "t", "--file", bodyFile()])).code).toBe(3);
+  });
+});
+
+describe("reportStatusChanges", () => {
+  async function fileTwo(): Promise<void> {
+    await call(run, ["--kind", "bug", "--title", "One", "--file", bodyFile()]);
+    await call(run, ["--kind", "bug", "--title", "Two", "--file", bodyFile()]);
+  }
+
+  test("returns nothing and changes nothing while all rows match the outbox", async () => {
+    await fileTwo();
+    const before = readFileSync(join(repo, ".warden/reports.md"), "utf8");
+    expect(reportStatusChanges(ctx())).toEqual([]);
+    expect(readFileSync(join(repo, ".warden/reports.md"), "utf8")).toBe(before);
+  });
+
+  test("updates the changed row and reports it once", async () => {
+    await fileTwo();
+    writeFileSync(join(data, "reports/R-0002.json"), JSON.stringify({ ...readRecord("R-0002"), status: "fixed", fixedIn: "0.2.0" }));
+
+    expect(reportStatusChanges(ctx())).toEqual([{ id: "R-0002", title: "Two", status: "fixed", fixedIn: "0.2.0" }]);
+    const table = readFileSync(join(repo, ".warden/reports.md"), "utf8");
+    expect(table).toContain("| R-0002 | Two | fixed | 0.2.0 |");
+    expect(table).toContain("| R-0001 | One | sent | — |");
+    expect(reportStatusChanges(ctx())).toEqual([]);
+  });
+
+  test("a row without an outbox record, or no table, is ignored", async () => {
+    expect(reportStatusChanges(ctx())).toEqual([]);
+    writeFileSync(join(repo, ".warden/reports.md"), "| ID | Title | Status | Fixed in |\n|---|---|---|---|\n| R-0009 | Gone | sent | — |\n");
+    expect(reportStatusChanges(ctx())).toEqual([]);
+  });
+
+  test("outside a git repo it returns nothing", () => {
+    expect(reportStatusChanges(ctx(tempDir("warden-nogit-")))).toEqual([]);
+  });
+});
+
+describe("warden retro --done", () => {
+  const lastRetro = () => JSON.parse(readFileSync(join(repo, ".warden/warden.json"), "utf8")).lastRetro;
+
+  test("needs the retro file, then sets lastRetro", async () => {
+    expect((await call(runRetro, ["--done", "--date", "2026-10-18"])).code).toBe(1);
+    expect(lastRetro()).toBeNull();
+
+    mkdirSync(join(repo, ".warden/retros"), { recursive: true });
+    writeFileSync(join(repo, ".warden/retros/2026-10-18.md"), "# Retro");
+    expect((await call(runRetro, ["--done", "--date", "2026-10-18"])).out).toEqual({ lastRetro: "2026-10-18" });
+    expect(lastRetro()).toBe("2026-10-18");
+  });
+
+  test("the date defaults to today", async () => {
+    const d = new Date();
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    mkdirSync(join(repo, ".warden/retros"), { recursive: true });
+    writeFileSync(join(repo, `.warden/retros/${today}.md`), "# Retro");
+    expect((await call(runRetro, ["--done"])).out).toEqual({ lastRetro: today });
+  });
+
+  test("usage errors exit 2", async () => {
+    expect((await call(runRetro, [])).code).toBe(2);
+    expect((await call(runRetro, ["--done", "--date", "yesterday"])).code).toBe(2);
+    expect((await call(runRetro, ["--done", "--date", "../x"])).code).toBe(2);
+  });
+});
