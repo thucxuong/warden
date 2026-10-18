@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "id": "R-0014",
+  "projectId": "pg",
+  "kind": "enhancement",
+  "title": "Orchestrator cannot retry a blocked ticket even when the user pre-approved it",
+  "body": "What happened: During /warden:orchestrate, a ticket was blocked and the session-start line said: Fix it, then type \"retry\". The user had said in their request that they agree to retry it. The agent ran `warden retry <id>` and a PreToolUse hook refused it: \"approve, retry and reset are for a person. Ask the user to type retry.\"\n\nWhat I expected: A way to use a pre-given, explicit user approval, or a clear note in the orchestrate skill on what to do when the user has already agreed. A second problem: the blocked ticket's branch was cut before the lint fix landed on main, so a plain retry would run the same failing check again. Nothing says how the branch picks up the fix.\n\nSteps: 1. Have a blocked ticket in an epic. 2. Tell the agent up front that retry is approved. 3. Agent runs `warden retry <id>`.\n\nEvidence: PreToolUse:Bash hook error: warden: approve, retry and reset are for a person. Ask the user to type \"approve\" / \"retry\".",
+  "createdAt": "2026-10-18T16:23:00.890Z",
+  "status": "fixed",
+  "fixedIn": "0.3.2",
+  "note": "Fixed. Retry now merges main into the ticket branch first. Retry stays a person's action: type retry <task> in the chat.",
+  "machineId": "9a4909ae"
+}

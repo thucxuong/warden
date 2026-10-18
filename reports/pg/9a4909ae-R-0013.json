@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "id": "R-0013",
+  "projectId": "pg",
+  "kind": "bug",
+  "title": "Stop hook blocks orchestrator while a fixer agent runs in background",
+  "body": "What happened: The orchestrator delegated a fix step (PG-302 fix-1) to a warden:fixer subagent running in the background. While it ran, the Stop hook blocked the orchestrator's turn three times with \"PG-302 is at fix-1 and needs you. Run: warden next (or warden wait while a gate runs).\"\nExpected: No block while a background agent is working on the step. Or the orchestrate skill says how to wait.\nSteps: 1) /warden:orchestrate on an epic. 2) A ticket reaches a fix step. 3) Start warden:fixer in the background. 4) End the turn to wait for the agent's notification.\nEvidence: Stop hook blocking error from command: \"warden hook stop\": warden: PG-302 is at fix-1 and needs you. Run: warden next (or warden wait while a gate runs).",
+  "createdAt": "2026-10-18T16:10:00.140Z",
+  "status": "fixed",
+  "fixedIn": "0.3.1",
+  "note": "Fixed. Stop no longer blocks an orchestrating session or a session whose fixer is still working.",
+  "machineId": "9a4909ae"
+}

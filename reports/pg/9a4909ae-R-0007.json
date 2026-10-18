@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "id": "R-0007",
+  "projectId": "pg",
+  "kind": "bug",
+  "title": "Review step in summary.json shows zero tokens but a non-zero cost",
+  "body": "What happened: In .warden/history/<task>/summary.json, the review step of two shipped runs has every token count at 0 (input, output, cacheRead, cacheWrite) while costUsd is above 0. Run 1: bugfix flow, review step costUsd 0.051304. Run 2: feature flow, review step costUsd 0.061027. A third run (feature flow) has small review token counts (input 4, output 148, cacheRead 181114) for a cost of 0.261367, so counts are recorded in some runs and not in others.\n\nExpected: token counts that match the cost, or a clear marker when they are not known.\n\nSteps to repeat: ship a run whose first review round passes, then read the review entry under steps in summary.json.\n\nEvidence: review step tokens input=0 output=0 cacheRead=0 cacheWrite=0 with costUsd=0.051304. The matching review.round event in events.jsonl has status ok and costUsd 0.051304. The run-level token total therefore leaves the review out.",
+  "createdAt": "2026-10-18T14:38:05.532Z",
+  "status": "fixed",
+  "fixedIn": "0.2.1",
+  "note": "Fixed. Review tokens are now counted.",
+  "machineId": "9a4909ae"
+}

@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "id": "R-0016",
+  "projectId": "pg",
+  "kind": "bug",
+  "title": "Fix step demands a new note and rule even when a known rule already matched",
+  "body": "What happened: A ticket failed a check. Triage matched an existing rule (TR-0001, OPS) and gave the fixer the existing fix note. The cause was only that the ticket branch was cut before main got the fix, so merging main in is enough. The fixer handed in FIXED and reused the existing note and rule. warden done rejected it: notePath must be .warden/fixes/<date>-<task>[-n].md for this task; the fix branch has no changes; the existing note and triage-rules.json were not changed on the fix branch; the existing note is missing the heading for this task.\n\nWhat I expected: When a known rule already matched and the fix is already on main, the fix step should accept FIXED with no new files, or tell the fixer up front that a new note and rule change are required. A second ticket hitting the same known cause should not need an empty rule change.\n\nSteps: 1. Two tickets cut from the same old commit. 2. Fix the cause for the first ticket (rule and note added). 3. Retry the second ticket so its check fails on the same cause. 4. Fixer answers FIXED with the existing note and rule. 5. warden done rejects it.\n\nEvidence: errors: notePath: must be .warden/fixes/<YYYY-MM-DD>-PG-302[-n].md; the fix branch has no changes; .warden/fixes/2026-10-18-PG-301.md: not changed on the fix branch; .warden/triage-rules.json: not changed on the fix branch.",
+  "createdAt": "2026-10-18T16:30:20.792Z",
+  "status": "fixed",
+  "fixedIn": "0.3.2",
+  "note": "Fixed. A fix may cite the rule that already matched, or a fix already on main.",
+  "machineId": "9a4909ae"
+}

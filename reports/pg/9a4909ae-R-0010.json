@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "id": "R-0010",
+  "projectId": "pg",
+  "kind": "bug",
+  "title": "Sent reports leave .warden/reports.md uncommitted, so main is not clean at ship",
+  "body": "What happened: at session start the main checkout already had `.warden/reports.md` modified (three report rows added by warden, not committed). The project's git workflow says the main checkout must be clean before the merge at ship. The run's ship step did not mention it, so I had to commit the file by hand before merging.\nExpected: warden commits the reports ledger when it adds or updates a row, or the ship step names this file as something to commit, or the cleanliness check ignores it.\nSteps: send a report with `warden report`, leave the row uncommitted, then ship a ticket by merging into main in a project that requires a clean main checkout.\nEvidence: `git status --short` in main at session start printed ` M .warden/reports.md`; `git diff` showed rows R-0006, R-0007 and R-0008 with status `sent`.",
+  "createdAt": "2026-10-18T14:52:16.312Z",
+  "status": "fixed",
+  "fixedIn": "0.2.2",
+  "note": "Fixed. Status changes and upgrades now refresh and commit reports.md.",
+  "machineId": "9a4909ae"
+}

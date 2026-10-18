@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "id": "R-0012",
+  "projectId": "pg",
+  "kind": "enhancement",
+  "title": "warden commands have no --help; report prints a misleading error instead",
+  "body": "What happened: asking for help does not work. `warden report --help` prints \"warden: --kind must be bug or enhancement\". `warden start --help` prints \"warden: unknown option --help\". Neither lists the options. The agent had to guess; a first `warden start` with the title as the id failed with \"task id ... does not match ^PG-\\d{3}$\".\nExpected: `--help` on any command prints usage (arguments, options, an example), and exits 0.\nSteps: run `warden report --help`, then `warden start --help`.\nEvidence: the two messages above.",
+  "createdAt": "2026-10-18T15:02:04.141Z",
+  "status": "fixed",
+  "fixedIn": "0.2.3",
+  "note": "Fixed. warden --help and warden <command> --help print usage.",
+  "machineId": "9a4909ae"
+}

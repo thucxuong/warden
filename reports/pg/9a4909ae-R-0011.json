@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "id": "R-0011",
+  "projectId": "pg",
+  "kind": "bug",
+  "title": "Session-start line tells the agent to run /warden:upgrade, but the agent cannot",
+  "body": "What happened: the session-start message says \"warden: updated to 0.2.2; this project is on 0.2.1. Run /warden:upgrade.\" The user also agreed in advance to the upgrade. When the agent called the skill, it was refused: \"Skill warden:upgrade cannot be used with Skill tool due to disable-model-invocation. Ask the user to run /warden:upgrade themselves.\"\nExpected: either the line is worded for the user (\"ask the user to run /warden:upgrade\"), or the agent is allowed to run it when the user has agreed.\nSteps: start a session on a project behind the plugin version; read the session-start line; try to invoke warden:upgrade through the Skill tool.\nEvidence: the exact refusal text above. The run went on with the old version (0.2.1).",
+  "createdAt": "2026-10-18T15:01:58.868Z",
+  "status": "fixed",
+  "fixedIn": "0.2.3",
+  "note": "Fixed. The agent offers the upgrade and runs /warden:upgrade after the user agrees.",
+  "machineId": "9a4909ae"
+}

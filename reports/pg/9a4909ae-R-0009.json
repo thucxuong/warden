@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "id": "R-0009",
+  "projectId": "pg",
+  "kind": "enhancement",
+  "title": "Worktree path and branch name ignore the project's git workflow doc",
+  "body": "What happened: `warden start <task> --template feature --worktree` created the worktree at a sibling folder `<repo>.worktrees/PG-204` on branch `pg-204`. The project's git workflow doc says worktrees live under `.worktrees/` inside the repo and branches are named `pg-<nnn>-<short-slug>` (example: `.worktrees/pg-005-page-two-repeat`).\nExpected: warden follows the project's documented worktree location and branch naming, or lets the project configure them (for example in warden.json), or says in the start output that it uses its own layout.\nSteps: in a repo whose git workflow doc defines a worktree folder and branch pattern, run `warden start PG-204 --template feature --worktree --text '...'`.\nEvidence: start output `\"worktree\":\"/.../warden-playground.worktrees/PG-204\"`; `git branch --show-current` printed `pg-204`.",
+  "createdAt": "2026-10-18T14:52:11.494Z",
+  "status": "wontfix",
+  "fixedIn": null,
+  "note": "Warden keeps worktrees next to the repo on purpose, so project tools never scan them. Update your git workflow doc to match. From 0.2.2 the work skill says this.",
+  "machineId": "9a4909ae"
+}

@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "id": "R-0008",
+  "projectId": "pg",
+  "kind": "enhancement",
+  "title": "Retro skill has no rule for a second retro on the same day",
+  "body": "What happened: The retro skill saves to .warden/retros/<YYYY-MM-DD>.md. A retro for the same date already existed (written earlier that day, with a second-pass section added by hand). Following the skill literally would overwrite it. The retro check also shows last = today and due = false, so nothing tells the user a retro file already exists.\n\nExpected: the skill says what to do when the file exists, for example append a new pass section or add a suffix to the file name, and never overwrite.\n\nSteps to repeat: run the retro skill twice on the same day, then save.\n\nEvidence: skill step 5 says to save the retro as .warden/retros/<YYYY-MM-DD>.md, with no case for an existing file. retros/INDEX.md already lists 2026-10-18 as the first retro plus a second pass.",
+  "createdAt": "2026-10-18T14:38:05.593Z",
+  "status": "fixed",
+  "fixedIn": "0.2.1",
+  "note": "Fixed. A second retro on the same day adds a section.",
+  "machineId": "9a4909ae"
+}

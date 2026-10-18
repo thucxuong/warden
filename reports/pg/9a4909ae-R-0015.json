@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "id": "R-0015",
+  "projectId": "pg",
+  "kind": "enhancement",
+  "title": "Fix step instructions do not show the fix-note heading or triage-rule format",
+  "body": "What happened: A fixer agent got a fix step with the instructions to write a note at .warden/fixes/<date>-<task>.md and add a triage rule. The instructions give no format for either. The agent searched, did not find a schema, and guessed. warden done then rejected the hand-in.\n\nWhat I expected: The fix step instructions (or the FixOutput schema text) show the required note heading and the triage rule fields (pattern, flags, and the rest), so the first hand-in is accepted.\n\nSteps: 1. Get a ticket into a fix step with an OPS verdict. 2. Give the context to the fixer agent. 3. Fixer writes a note and a rule without knowing the format. 4. warden done rejects it.\n\nEvidence: accepted false. Errors: the note has a missing heading \"# Fix <YYYY-MM-DD> PG-301\"; triage-rules.json rules[0].flags must be \"\" or \"i\", got undefined; rules[0].pattern must be a string, got undefined.",
+  "createdAt": "2026-10-18T16:25:25.804Z",
+  "status": "fixed",
+  "fixedIn": "0.3.2",
+  "note": "Fixed. The fix step shows a complete fix note and rule example.",
+  "machineId": "9a4909ae"
+}

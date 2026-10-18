@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "id": "R-0001",
+  "projectId": "pg",
+  "kind": "enhancement",
+  "title": "Blocked run message should end with the exact command to continue",
+  "body": "What happened: When a run is blocked, the block message does not say how to continue. The agent has to guess the next command.\n\nWhat I expected: The block message ends with the exact command a person types to continue, for example `warden retry <task>`.\n\nSteps to repeat:\n1. Start a task and let it reach a blocked state.\n2. Read the block message.\n3. Notice there is no command at the end telling what to type next.\n\nEvidence: Seen on ticket PG-104. The block message ended without any continue command, so the agent guessed.",
+  "createdAt": "2026-10-18T10:16:31.981Z",
+  "status": "fixed",
+  "fixedIn": "0.1.1",
+  "note": "Fixed. A blocked task now ends with how to continue.",
+  "machineId": "9a4909ae"
+}

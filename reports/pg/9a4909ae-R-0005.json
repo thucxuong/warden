@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "id": "R-0005",
+  "projectId": "pg",
+  "kind": "bug",
+  "title": "Automatic periodic check leaves uncommitted changes in main checkout",
+  "body": "What happened: An automatic periodic check (seen with docs-links) writes its result into the committed .warden/checks/<name>.md file. After every session start, the main checkout has uncommitted changes.\n\nWhat I expected: Running a periodic check should not dirty the main checkout. Results should go to an ignored/untracked location, or not into a committed file.\n\nSteps to repeat:\n1. Have a committed .warden/checks/docs-links.md in a clean checkout.\n2. Start a session so the automatic periodic check runs.\n3. Run git status in the main checkout.\n\nEvidence: git status shows .warden/checks/docs-links.md as modified after the check runs; it was clean before the session started.",
+  "createdAt": "2026-10-18T13:06:01.057Z",
+  "status": "fixed",
+  "fixedIn": "0.2.0",
+  "note": "Fixed. Check results now live in warden state, not in the check file.",
+  "machineId": "9a4909ae"
+}

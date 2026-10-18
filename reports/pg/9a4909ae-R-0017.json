@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "id": "R-0017",
+  "projectId": "pg",
+  "kind": "bug",
+  "title": "compose says to cd into the worktree, work says never cd; warden done then needs a task id",
+  "body": "What happened: compose step 7 says to cd into the worktree and run every later command from there. The work skill says never to run cd <dir> && ..., so a session that follows the work rule stays in the main checkout. There, 'warden done --json ...' fails with: warden: no active run in this worktree; live runs: PG-305 (plan); pass the task id: warden done <task>. Expected: the two skills agree, for example compose says to pass the task id (warden done PG-305) or to use absolute paths instead of cd. Steps: run /warden:compose with --worktree from the main checkout, then follow the work skill and call warden done without a task id. Evidence: the error message above.",
+  "createdAt": "2026-10-18T16:58:18.621Z",
+  "status": "fixed",
+  "fixedIn": "0.3.3",
+  "note": "Fixed. A plain cd on its own is fine; never chain it with &&.",
+  "machineId": "9a4909ae"
+}

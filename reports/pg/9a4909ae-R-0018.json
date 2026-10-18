@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "id": "R-0018",
+  "projectId": "pg",
+  "kind": "bug",
+  "title": "Decision INDEX.md is not updated by the plan step, so new decisions are missing from the index shown to later steps",
+  "body": "What happened: the plan step tells the agent to write .warden/decisions/NNNN-*.md but nothing says who updates .warden/decisions/INDEX.md. Decisions 0008 and 0009 were written by earlier runs and never added to the index; the last commit that touched INDEX.md was for decision 0007. Every later step prints this stale index under 'Read as needed', so agents do not see the newest decisions. Expected: warden adds the row to INDEX.md when a plan step hands in decisions, or the plan skill tells the agent to add the row. Steps: run warden start with the feature template, write a decision in the plan step, hand in the plan, then look at the INDEX.md shown in the implement step. Evidence: implement step instructions list decisions 0001 to 0007 only, while .warden/decisions/ holds 0001 to 0010.",
+  "createdAt": "2026-10-18T16:58:20.843Z",
+  "status": "fixed",
+  "fixedIn": "0.3.3",
+  "note": "Fixed. Steps that add a decision, knowledge or rules file also add its INDEX line.",
+  "machineId": "9a4909ae"
+}

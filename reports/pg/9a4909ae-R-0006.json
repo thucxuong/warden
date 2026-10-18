@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "id": "R-0006",
+  "projectId": "pg",
+  "kind": "bug",
+  "title": "warden done fails after the worktree is removed at ship",
+  "body": "What happened: At the ship step I merged the ticket branch into main and then removed the worktree and branch, as the project's git workflow doc says. After that, `warden done` failed with \"warden: no active run in this worktree\". `warden status` still listed the run as active at ship, and `warden next` from the main checkout gave the same error. I had to recreate the worktree at the merged commit to finish the run.\n\nWhat I expected: Either the ship instructions warn me to call `warden done` before removing the worktree, or `warden done` works from the main checkout when given a task id.\n\nSteps to repeat:\n1. Start a task with --worktree and reach the ship step.\n2. Merge the branch into main from the main checkout.\n3. Remove the worktree and delete the branch.\n4. Run `warden done --json '...'` from the main checkout.\n\nEvidence:\n- warden: no active run in this worktree\n- warden status: {\"runs\":[{\"task\":\"PG-203\",\"status\":\"active\",\"step\":\"ship\", ...}]}",
+  "createdAt": "2026-10-18T14:36:21.834Z",
+  "status": "fixed",
+  "fixedIn": "0.2.1",
+  "note": "Fixed. Hand in ship before removing the worktree; done also works from the main checkout.",
+  "machineId": "9a4909ae"
+}
