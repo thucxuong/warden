@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2 — 2026-10-18
+
+- When a report changes status, session start tells the agent to refresh and commit .warden/reports.md once the user's request is done.
+- /warden:upgrade refreshes .warden/reports.md and commits it with the upgrade.
+- The work skill says warden chooses the worktree and branch, even when a project doc describes another layout.
+
 ## 0.2.1 — 2026-10-18
 
 - Allow `warden done` from main checkout when the worktree is removed after merging.

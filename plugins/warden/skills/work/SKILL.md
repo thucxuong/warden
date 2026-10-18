@@ -9,6 +9,8 @@ allowed-tools: Bash(warden *)
 
 Repeat these steps until the status is `shipped`, `done`, `waiting` or `blocked`.
 
+Warden chooses the task's worktree and branch (`warden start` prints them). Use them even if a project doc describes another layout.
+
 1. Run `warden next`. Read `message`, `instructions`, `output` and `context`.
 2. If the status is `agent`, do the step as the instructions say.
    - plan step: follow the plan skill.

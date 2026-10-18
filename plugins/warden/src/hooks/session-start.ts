@@ -74,6 +74,10 @@ function checkLines(call: HookCall): string[] {
   return lines;
 }
 
+// Session start never writes tracked files, so the agent refreshes reports.md itself, at a quiet moment.
+export const REPORTS_REFRESH =
+  "warden: when the user's current request is done, run warden report --status --write and commit .warden/reports.md alone (chore: warden reports).";
+
 export async function sessionStart(call: HookCall): Promise<string | null> {
   recordSession(call);
   const lines: string[] = [];
@@ -93,10 +97,12 @@ export async function sessionStart(call: HookCall): Promise<string | null> {
   const newer = guarded(call, "newer version", () => newerVersionNotice(call.ctx.root));
   if (newer) lines.push(newer);
   lines.push(...checkLines(call));
-  for (const change of reportStatusChanges(machineCtx(call))) {
+  const changes = reportStatusChanges(machineCtx(call));
+  for (const change of changes) {
     const version = change.fixedIn ? ` in ${change.fixedIn}` : "";
     lines.push(`warden: report ${change.id} "${change.title}" is now ${change.status}${version}.`);
   }
+  if (changes.length > 0) lines.push(REPORTS_REFRESH);
 
   const run = runForSession(call);
   if (run) await linkSession(call, run.task);

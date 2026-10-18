@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { parsePrompt } from "../../plugins/warden/src/hooks/user-prompt.ts";
 import { done, start } from "../../plugins/warden/src/engine/machine.ts";
 import { type HookInput } from "../../plugins/warden/src/hooks/resolve.ts";
+import { REPORTS_REFRESH } from "../../plugins/warden/src/hooks/session-start.ts";
 import { taskDir } from "../../plugins/warden/src/state/paths.ts";
 import { readEvents, readSessionLinks, readSessionRecord } from "../../plugins/warden/src/state/store.ts";
 import { write } from "../helpers/repo.ts";
@@ -181,6 +182,7 @@ describe("SessionStart", () => {
       "warden: checks due: docs-review (last never), retro (last never). When the user's current request is done, offer them in one short line. Do not start one unless the user says yes. To run one: warden checks run <name>.",
       `warden: auto checks failed on their last run: audit (${localDate()}). Tell the user in one short line; details: warden checks.`,
       `warden: report R-0001 "Flaky login" is now fixed in ${VERSION}.`,
+      REPORTS_REFRESH,
     ]);
     expect(spawns).toBe(2);
     expect(eventTypes("T-3")).toContain("gate.restarted");
@@ -197,7 +199,7 @@ describe("SessionStart", () => {
       schema: 1, id: "R-0001", projectId: "demo", kind: "bug", title: "Flaky login", body: "b", createdAt: "2026-10-01T00:00:00Z",
       status: "accepted", fixedIn: null, note: null,
     }));
-    expect(await hook("session-start")).toBe('warden: report R-0001 "Flaky login" is now accepted.');
+    expect(await hook("session-start")).toBe(`warden: report R-0001 "Flaky login" is now accepted.\n${REPORTS_REFRESH}`);
     expect(await hook("session-start")).toBeNull();
     expect(readFileSync(join(main, ".warden/reports.md"), "utf8")).toBe(table);
   });
