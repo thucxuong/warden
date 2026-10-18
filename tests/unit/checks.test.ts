@@ -51,7 +51,7 @@ function read(rel: string): string {
 }
 
 function ctxFor(cwd: string): Ctx {
-  return { root: pluginRoot, data: join(main, ".data"), cwd, env: { PATH: process.env.PATH ?? "", HOME: main }, stdinIsTTY: false };
+  return { root: pluginRoot, data: join(main, ".data"), cwd, env: { PATH: process.env.PATH ?? "", HOME: main, TZ: process.env.TZ ?? "UTC" }, stdinIsTTY: false };
 }
 
 async function call(args: string[], fn: typeof run = run): Promise<{ out: any; code: number | null; err?: string }> {

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.3 — 2026-10-18
+
+- Skills agree on cd: a plain `cd <dir>` is fine, never chain it with `&&`.
+- Steps that add a decision, knowledge or rules file also add its INDEX.md line.
+- /warden:orchestrate removes the shipped tickets' worktrees and branches at the end.
+
 ## 0.3.2 — 2026-10-18
 
 - Retrying a blocked gate step merges the main branch into the ticket branch first, moves the base, runs setup, then re-runs the gate.

@@ -135,13 +135,18 @@ describe("orchestrate skill", () => {
 });
 
 describe("git and path rule", () => {
-  test("work, orchestrate and tools say git -C and never cd && ", () => {
+  test("work, orchestrate and tools say git -C, allow a plain cd and never chain cd with &&", () => {
     for (const name of ["work", "orchestrate", "tools"]) {
       const text = read(join(skillsDir, name, "SKILL.md"));
       expect(text).toContain("`git -C <dir> ...`");
-      expect(text).toContain("Never `cd <dir> && ...`");
-      expect(text.replace("Never `cd <dir> && ...`", "")).not.toMatch(/\bcd\b[^\n]*&&/);
+      expect(text).toContain("never chain it as `cd <dir> && ...`");
     }
+    expect(read(join(skillsDir, "compose", "SKILL.md"))).toContain("run `cd <worktree>` as its own command");
+  });
+
+  test("work and plan keep the decisions, knowledge and rules indexes up to date", () => {
+    expect(read(join(skillsDir, "work", "SKILL.md"))).toContain("add its one-line entry to that folder's `INDEX.md`");
+    expect(read(join(skillsDir, "plan", "SKILL.md"))).toContain("`.warden/decisions/INDEX.md`");
   });
 });
 

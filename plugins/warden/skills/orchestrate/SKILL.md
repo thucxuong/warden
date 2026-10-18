@@ -39,10 +39,10 @@ Run this only when the user asked for it. You are the orchestrator. Each ticket 
    Start it in the foreground and wait for it. Then run `warden orchestrate status $ARGUMENTS`. If the ticket did not end `merged`, ship no more tickets: go to step 7.
 7. If the project has a remote, run `git -C <main> pull --ff-only` first, so the merged PRs are in the main checkout. If it fails, tell the user and stop. For each `merged` ticket, run `warden orchestrate set-status <id> done`. If `changed` is not empty and the main checkout is on `<mainBranch>`, run `git -C <main> commit -m "chore(<id>): done" -- <changed paths>`. Otherwise tell the user which files to commit. Never push main.
 8. If any ticket of the wave is `blocked`, `waiting`, `pr-open`, `no-ship`, still `running`, or asked a question: stop. Show a table with the id, the phase, the reason or question, and what the user does (type `retry <id>`, type `approve <id>`, merge the PR, or answer). Then say `Run /warden:orchestrate <epic> again to go on.` and end your turn. Otherwise go back to step 1 for the next wave.
-9. When complete, run `warden orchestrate set-status <epic> done` and commit `changed` as in step 7. Show a final table: id, title, template, result, and the PR or merge commit.
+9. When complete, run `warden orchestrate set-status <epic> done` and commit `changed` as in step 7. Then remove each shipped ticket's worktree and branch: `git -C <main> worktree remove <worktree>` and `git -C <main> branch -d <branch>` (skip any that are not merged). Show a final table: id, title, template, result, and the PR or merge commit.
 
 Rules
-- Git and paths: run `git -C <dir> ...` and use absolute paths, one simple command per call. Never `cd <dir> && ...`: a permission rule such as `Bash(git *)` does not match it.
+- Git and paths: run `git -C <dir> ...` and use absolute paths, one simple command per call. A plain `cd <dir>` on its own is fine; never chain it as `cd <dir> && ...`, because a permission rule such as `Bash(git *)` does not match that.
 - Never do a ticket's steps yourself. You only start runs, hand fix steps to the fixer and set statuses.
 - Never start a ticket agent or the fixer with `run_in_background`. Foreground only.
 - Never edit files in a ticket worktree.

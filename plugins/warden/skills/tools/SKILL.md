@@ -19,4 +19,4 @@ Fix notes: when session start says tool fixes are available, offer `/warden:fix`
 
 Tell the user what the tool does and how to use it. Read `.claude/skills/<name>/SKILL.md` for that.
 
-Git and paths: run `git -C <dir> ...` and use absolute paths, one simple command per call. Never `cd <dir> && ...`: a permission rule such as `Bash(git *)` does not match it.
+Git and paths: run `git -C <dir> ...` and use absolute paths, one simple command per call. A plain `cd <dir>` on its own is fine; never chain it as `cd <dir> && ...`.

@@ -28,5 +28,5 @@ argument-hint: "<task-id> [what to do]"
    ```
 6. Start the run: `warden start <task> --template <t> --text '<what to do>'` (`<t>` is `do`, `feature`, `bugfix` or `chore`; one command; write a single quote in the text as `’`). For a saved or custom flow, use `--flow <name or path>` instead of `--template`.
    Add `--worktree` unless the user is already on a ticket branch.
-7. If warden created or reused a worktree, `cd` into it. Run every later command from there.
+7. If warden created or reused a worktree, run `cd <worktree>` as its own command (never chained with `&&`). Run every later command from there.
 8. Continue with the work skill.

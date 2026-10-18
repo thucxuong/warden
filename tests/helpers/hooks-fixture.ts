@@ -197,7 +197,8 @@ export function installHooksFixture(): void {
     main = join(base, "cp");
     cloneTemplate(template, main);
     wt = addWorktree(T);
-    const env = { ...process.env };
+    // bun test runs in UTC unless TZ is set; give child processes the same zone so dates agree.
+    const env: Record<string, string | undefined> = { ...process.env, TZ: process.env.TZ ?? "UTC" };
     for (const name of ["PROJECT_AGENT", "WARDEN_ROLE", "CLAUDE_PLUGIN_ROOT", "CLAUDE_PLUGIN_DATA", "WARDEN_TEST_MODE"]) delete env[name];
     ctx = { root: PLUGIN_ROOT, data: join(base, "data"), cwd: main, env, stdinIsTTY: false };
     spawns = 0;

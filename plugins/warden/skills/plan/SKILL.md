@@ -136,3 +136,5 @@ Example of a minimal valid output for a brainstorm step:
   }
 }
 ```
+
+When the plan records a decision in `.warden/decisions/`, add its one-line entry to `.warden/decisions/INDEX.md` in the same commit.

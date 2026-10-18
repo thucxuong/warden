@@ -30,7 +30,8 @@ Warden chooses the task's worktree and branch (`warden start` prints them). Use 
 5. If the status is `waiting` or `blocked`, tell the user the `message`. Then end your turn. The user types `approve`, `reject: <why>` or `retry`.
 
 Rules
-- Git and paths: run `git -C <dir> ...` and use absolute paths, one simple command per call. Never `cd <dir> && ...`: a permission rule such as `Bash(git *)` does not match it.
+- Git and paths: run `git -C <dir> ...` and use absolute paths, one simple command per call. A plain `cd <dir>` on its own is fine; never chain it as `cd <dir> && ...`, because a permission rule such as `Bash(git *)` does not match that.
+- Index files: when a step adds a file under `.warden/decisions/`, `.warden/knowledge/` or `.warden/rules/`, add its one-line entry to that folder's `INDEX.md` in the same commit.
 - Never run the checks yourself to prove a step.
 - Never write files under `.warden/state` or `.warden/history`.
 - Never push, open a pull request or merge outside the ship step.
