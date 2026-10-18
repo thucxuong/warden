@@ -1,0 +1,174 @@
+// warden orchestrate and warden start --ticket, as subprocesses on a temp CP with a fixture ticket tool.
+import { beforeEach, describe, expect, test } from "bun:test";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { base, cli, installCommandsFixture, main, wt } from "../helpers/commands-fixture.ts";
+
+installCommandsFixture();
+
+let fx: string;
+let log: string;
+
+const row = (id: string, blocked_by: string[] = [], status = "todo", extra: object = {}) => ({ id, title: `Title ${id}`, status, blocked_by, ...extra });
+
+function put(name: string, value: unknown): void {
+  writeFileSync(join(fx, name), typeof value === "string" ? value : JSON.stringify(value));
+}
+
+function calls(): string[] {
+  return existsSync(log) ? readFileSync(log, "utf8").split("\n").filter(Boolean) : [];
+}
+
+beforeEach(() => {
+  fx = join(base, "fx");
+  log = join(base, "tool.log");
+  mkdirSync(fx, { recursive: true });
+  const script = join(base, "tool.sh");
+  writeFileSync(script, `#!/bin/sh
+echo "$@" >> '${log}'
+case "$1" in
+  dag) if [ -n "$2" ]; then cat '${fx}'/dag-"$2".json || exit 3; else cat '${fx}'/all.json; fi ;;
+  show) cat '${fx}'/show-"$2".json || exit 3 ;;
+  set-status) if [ -f '${fx}'/bad-set ]; then echo '{}'; else printf '{"id":"%s","status":"%s","changed":["backlog/%s.md"]}' "$2" "$3" "$2"; fi ;;
+esac
+`);
+  setTickets(`sh ${script}`);
+  put("dag-E-1.json", [row("T-1"), row("T-2", ["T-1"]), row("T-3", ["T-1"], "todo", { type: "bug" })]);
+  put("all.json", [row("T-1"), row("T-2", ["T-1"]), row("T-3", ["T-1"]), row("T-50", [], "done"), row("T-60", [], "doing")]);
+  put("show-T-1.json", { ...row("T-1"), body: "Do the thing.\n\n- a\n- b" });
+});
+
+function setTickets(command: string | null): void {
+  const file = join(main, ".warden", "steps.json");
+  const steps = JSON.parse(readFileSync(file, "utf8"));
+  if (command === null) delete steps.tickets;
+  else steps.tickets = { tool: "fake", command };
+  writeFileSync(file, JSON.stringify(steps));
+}
+
+describe("orchestrate plan", () => {
+  test("writes the cache, prints the plan, one dag call, exit 0", () => {
+    const r = cli(["orchestrate", "plan", "E-1"]);
+    expect(r.code).toBe(0);
+    expect(r.json.waves).toEqual([["T-1"], ["T-2", "T-3"]]);
+    expect(r.json.next).toEqual(["T-1"]);
+    expect(r.json.tickets.map((t: any) => [t.id, t.template, t.phase])).toEqual([["T-1", "feature", "todo"], ["T-2", "feature", "todo"], ["T-3", "bugfix", "todo"]]);
+    expect(r.json.mainBranch).toBe("main");
+    expect(calls()).toEqual(["dag E-1"]);
+    const cached = JSON.parse(readFileSync(join(main, ".warden/state/_orchestrate/E-1.json"), "utf8"));
+    expect(cached).toEqual(r.json);
+  });
+
+  test("the whole-project dag is read only when a blocker is outside the epic", () => {
+    put("dag-E-1.json", [row("T-1", ["T-50"]), row("T-2", ["T-60"])]);
+    const r = cli(["orchestrate", "plan", "E-1"]);
+    expect(r.code).toBe(0);
+    expect(calls()).toEqual(["dag E-1", "dag"]);
+    expect(r.json.waves).toEqual([["T-1"]]);
+    expect(r.json.held).toEqual([{ id: "T-2", blockers: ["T-60"] }]);
+  });
+
+  test("errors print and write the plan, exit 1", () => {
+    put("dag-E-1.json", [row("T-1", ["T-99"])]);
+    const r = cli(["orchestrate", "plan", "E-1"]);
+    expect(r.code).toBe(1);
+    expect(r.json.errors).toEqual(["T-1: unknown blocker T-99"]);
+    expect(existsSync(join(main, ".warden/state/_orchestrate/E-1.json"))).toBe(true);
+  });
+
+  test("tool failure and non-JSON output are exit 1", () => {
+    const failed = cli(["orchestrate", "plan", "E-MISSING"]);
+    expect(failed.code).toBe(1);
+    expect(failed.err).toContain("ticket tool failed (exit 3)");
+    put("dag-E-BAD.json", "oops");
+    const bad = cli(["orchestrate", "plan", "E-BAD"]);
+    expect(bad.code).toBe(1);
+    expect(bad.err).toContain("ticket tool printed no JSON");
+  });
+
+  test("no tickets config is exit 3, for every subcommand", () => {
+    setTickets(null);
+    for (const args of [["plan", "E-1"], ["status", "E-1"], ["set-status", "T-1", "done"]]) {
+      expect(cli(["orchestrate", ...args]).code).toBe(3);
+    }
+  });
+
+  test("bad usage and ids are exit 2", () => {
+    for (const args of [[], ["plan"], ["plan", "a", "b"], ["bogus", "E-1"], ["plan", "../x"], ["plan", "-x"], ["set-status", "T-1"], ["set-status", "T-1", "open"]]) {
+      expect(cli(["orchestrate", ...args]).code).toBe(2);
+    }
+  });
+});
+
+describe("orchestrate status", () => {
+  test("without a cache it is exit 3", () => {
+    const r = cli(["orchestrate", "status", "E-1"]);
+    expect(r.code).toBe(3);
+    expect(r.err).toContain("run warden orchestrate plan E-1 first");
+  });
+
+  test("reads live runs without a tool call or a cache rewrite", () => {
+    cli(["orchestrate", "plan", "E-1"]);
+    const file = join(main, ".warden/state/_orchestrate/E-1.json");
+    const before = readFileSync(file, "utf8");
+    const started = cli(["start", "T-1", "--template", "chore", "--ticket", "--worktree"]);
+    expect(started.code).toBe(0);
+    const r = cli(["orchestrate", "status", "E-1"]);
+    expect(r.code).toBe(0);
+    expect(r.json.tickets[0]).toMatchObject({ id: "T-1", phase: "running", run: { status: "active", step: "implement", stepType: "implement", worktree: wt("T-1"), branch: "t-1", merged: false } });
+    expect(r.json.tickets[1]).toMatchObject({ phase: "todo", run: null });
+    expect(r.json.waves).toEqual([["T-1"], ["T-2", "T-3"]]);
+    expect(readFileSync(file, "utf8")).toBe(before);
+    expect(calls()).toEqual(["dag E-1", "show T-1"]); // status and the second start add no dag call
+  });
+});
+
+describe("orchestrate set-status", () => {
+  test("prints the tool's result and never commits", () => {
+    const r = cli(["orchestrate", "set-status", "T-1", "done"]);
+    expect(r.code).toBe(0);
+    expect(r.json).toEqual({ id: "T-1", status: "done", changed: ["backlog/T-1.md"] });
+    expect(calls()).toEqual(["set-status T-1 done"]);
+  });
+
+  test("a result of the wrong shape is exit 1", () => {
+    writeFileSync(join(fx, "bad-set"), "");
+    expect(cli(["orchestrate", "set-status", "T-1", "done"]).code).toBe(1);
+  });
+});
+
+describe("start --ticket", () => {
+  test("task.md is the ticket text", () => {
+    const r = cli(["start", "T-1", "--template", "chore", "--ticket", "--worktree"]);
+    expect(r.code).toBe(0);
+    expect(readFileSync(join(main, ".warden/state/T-1/task.md"), "utf8")).toBe("# T-1: Title T-1\n\nDo the thing.\n\n- a\n- b\n");
+    expect(calls()).toEqual(["show T-1"]);
+  });
+
+  test("an id mismatch is exit 1 and creates nothing", () => {
+    put("show-T-2.json", { ...row("T-3"), body: "x" });
+    const r = cli(["start", "T-2", "--template", "chore", "--ticket", "--worktree"]);
+    expect(r.code).toBe(1);
+    expect(existsSync(join(main, ".warden/state/T-2"))).toBe(false);
+    expect(existsSync(wt("T-2"))).toBe(false);
+  });
+
+  test("--ticket with --text or --text-file is exit 2", () => {
+    expect(cli(["start", "T-1", "--template", "chore", "--ticket", "--text", "hi"]).code).toBe(2);
+    expect(cli(["start", "T-1", "--template", "chore", "--ticket", "--text-file", "x.md"]).code).toBe(2);
+    expect(calls()).toEqual([]);
+  });
+
+  test("no tickets config is exit 3", () => {
+    setTickets(null);
+    const r = cli(["start", "T-1", "--template", "chore", "--ticket", "--worktree"]);
+    expect(r.code).toBe(3);
+    expect(r.err).toContain('no ticket tool: add "tickets" to .warden/steps.json');
+  });
+
+  test("the chore template is accepted", () => {
+    const r = cli(["start", "T-1", "--template", "chore", "--text", "tiny", "--worktree"]);
+    expect(r.code).toBe(0);
+    expect(r.json.flow).toBe("chore");
+  });
+});

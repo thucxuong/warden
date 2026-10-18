@@ -328,11 +328,21 @@ describe("UserPromptSubmit", () => {
     expect(readSessionLinks(main, ID).map((l) => l.sessionId)).toContain("S7");
   });
 
-  test("with two live runs, a bare approve from the main checkout picks neither", async () => {
+  test("with two runs waiting for approve, a bare approve from the main checkout asks for the task", async () => {
+    const wt2 = addWorktree("23456");
+    await startFlow([APPROVE, IMPL, CHECK], "23456", wt2);
+    expect(context(await prompt("approve", { session_id: "S8", cwd: main }))).toBe(
+      `warden: several runs wait for this (${ID}, 23456); type "approve <task>".`,
+    );
+    expect(run(ID).status).toBe("waiting");
+    expect(run("23456").status).toBe("waiting");
+  });
+
+  test("with two live runs and one waiting for approve, a bare approve from the main checkout acts on that one", async () => {
     const wt2 = addWorktree("23456");
     await startFlow([PLAN, APPROVE, IMPL, CHECK], "23456", wt2);
-    expect(await prompt("approve", { session_id: "S8", cwd: main })).toBeNull();
-    expect(run(ID).status).toBe("waiting");
+    expect(context(await prompt("approve", { session_id: "S8", cwd: main }))).toContain(`the user approved ${ID} at approve`);
+    expect(readSessionRecord(main, "S8")?.task).toBe(ID);
   });
 
   test("other prompts pass through untouched, and the session is linked", async () => {

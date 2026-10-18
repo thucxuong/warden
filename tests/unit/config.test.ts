@@ -116,6 +116,23 @@ describe("steps.json", () => {
     expect(config.review).toEqual({ model: "sonnet", rules: ["x"], rulesFiles: [], maxBudgetUsd: 2, timeoutSec: 1200 });
   });
 
+  test("tickets: absent stays absent, command defaults from the tool", () => {
+    expect("tickets" in parseStepsJson(JSON.stringify(validSteps))).toBe(false);
+    const config = parseStepsJson(JSON.stringify(withValue(validSteps, "tickets", { tool: "backlog" })));
+    expect(config.tickets).toEqual({ tool: "backlog", command: "bun .claude/skills/backlog/bin/tickets.ts" });
+    const custom = parseStepsJson(JSON.stringify(withValue(validSteps, "tickets", { tool: "gh-issues", command: "sh ./t.sh" })));
+    expect(custom.tickets).toEqual({ tool: "gh-issues", command: "sh ./t.sh" });
+  });
+
+  test("tickets: errors use the steps.json path format", () => {
+    const problems = (tickets: unknown) => problemsOf(() => parseStepsJson(JSON.stringify(withValue(validSteps, "tickets", tickets)), "steps.json"));
+    expect(problems("backlog")).toEqual(["steps.json: $.tickets: must be an object, got string"]);
+    expect(problems({})).toEqual(["steps.json: $.tickets.tool: must be a string, got undefined"]);
+    expect(problems({ tool: "Bad_Tool" })).toEqual(['steps.json: $.tickets.tool: must match /^[a-z][a-z0-9-]{0,40}$/, got "Bad_Tool"']);
+    expect(problems({ tool: "backlog", command: "  " })).toEqual(["steps.json: $.tickets.command: must not be empty"]);
+    expect(problems({ tool: "backlog", command: 5 })).toEqual(["steps.json: $.tickets.command: must be a string, got number"]);
+  });
+
   test("missing default check set", () => {
     const bad = withValue(validSteps, "check", { fast: { commands: [{ name: "lint", run: "true" }] } });
     expect(problemsOf(() => parseStepsJson(JSON.stringify(bad), "steps.json"))).toEqual(["steps.json: $.check.default: is required"]);

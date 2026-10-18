@@ -3,7 +3,7 @@ import { approve, reject, retry } from "../engine/machine.ts";
 import { WardenError } from "../lib/exit.ts";
 import { readRun, runExists } from "../state/store.ts";
 import type { RunJson } from "../types.ts";
-import { type HookCall, linkSession, liveRuns, machineCtx, recordSession, runForSession, wardenJson } from "./resolve.ts";
+import { type HookCall, linkSession, liveRuns, machineCtx, orchestrating, recordSession, runForSession, wardenJson } from "./resolve.ts";
 
 export interface PromptAction {
   word: "approve" | "reject" | "retry";
@@ -46,15 +46,26 @@ export async function userPrompt(call: HookCall): Promise<string | null> {
   if (typeof prompt !== "string") return null;
   const action = parsePrompt(prompt, wardenJson(call.main).taskIdPattern);
   if (!action) return null;
-  // A new session in the main checkout has no link and no worktree cwd. With exactly one live run,
-  // that run is the one SessionStart told the user about.
-  const live = liveRuns(call.main);
-  const only = !action.task && !resolved && live.length === 1 ? live[0]!.task : null;
-  const task = action.task ?? resolved?.task ?? only;
+  // Step 3: a new session in the main checkout has no link and no worktree cwd. With exactly one live
+  // run, that run is the one SessionStart told the user about. Step 4: with several, the only one in
+  // the state the action needs.
+  let task = action.task ?? resolved?.task ?? null;
+  let adopted = false;
+  if (task === null) {
+    const live = liveRuns(call.main);
+    const needing = live.length === 1 ? live : live.filter((run) => needsAction(action.word, run));
+    if (live.length > 1 && needing.length > 1) {
+      return contextJson(`warden: several runs wait for this (${needing.map((run) => run.task).join(", ")}); type "${action.word} <task>".`);
+    }
+    if (needing.length === 1) {
+      task = needing[0]!.task;
+      adopted = true;
+    }
+  }
   if (task === null || !runExists(call.main, task)) return null;
-  if (only !== null) {
-    recordSession(call, only);
-    await linkSession(call, only);
+  if (adopted && orchestrating(call) === null) {
+    recordSession(call, task);
+    await linkSession(call, task);
   }
 
   try {
@@ -63,6 +74,12 @@ export async function userPrompt(call: HookCall): Promise<string | null> {
     if (err instanceof WardenError) return contextJson(`warden: ${err.message}`);
     throw err;
   }
+}
+
+// Whether a run is in the state the action works on.
+function needsAction(word: PromptAction["word"], run: RunJson): boolean {
+  if (word === "retry") return run.status === "blocked" || run.waiting?.kind === "merge-fix";
+  return run.waiting?.kind === "approve";
 }
 
 // The same machine call as the TTY command; the machine then calls ensureGate.

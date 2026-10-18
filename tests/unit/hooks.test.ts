@@ -6,8 +6,8 @@ import { HANDLERS, NOT_SET_UP } from "../../plugins/warden/src/commands/hook.ts"
 import { stripHeredocs } from "../../plugins/warden/src/hooks/pre-tool-use.ts";
 import { done, start } from "../../plugins/warden/src/engine/machine.ts";
 import { readEvents, readSessionRecord } from "../../plugins/warden/src/state/store.ts";
-import { commit, sh } from "../helpers/repo.ts";
-import { PLUGIN_ROOT, T, IMPL, CHECK, FEATURE, base, main, wt, ctx, gates, startFlow, run, donePlan, implement, drive, atFix, hook, check, bash, editAt, reason, eventTypes, installHooksFixture } from "../helpers/hooks-fixture.ts";
+import { commit, sh, write } from "../helpers/repo.ts";
+import { PLUGIN_ROOT, T, IMPL, CHECK, FEATURE, base, main, wt, ctx, gates, startFlow, run, donePlan, implement, drive, atFix, hook, check, bash, editAt, reason, eventTypes, installHooksFixture, VERSION, hookWithRoot } from "../helpers/hooks-fixture.ts";
 
 setDefaultTimeout(60_000);
 installHooksFixture();
@@ -312,5 +312,70 @@ describe("PreToolUse: Bash, chained and compound commands", () => {
     }
     expect(await bash(`git push origin ${branch}:main`, fixer, { PROJECT_AGENT: "1" })).toBeNull();
     expect(await bash(`git push -u origin ${branch}:${branch}`, fixer)).toBeNull();
+  });
+});
+
+describe("SessionStart: line order of spec 0.3 section 10", () => {
+  // A plugin root with the current version and one registry tool that has a fix note newer than the project's copy.
+  function fakeRoot(): string {
+    const root = join(base, "plugin-root");
+    write(root, ".claude-plugin/plugin.json", JSON.stringify({ name: "warden", version: VERSION }));
+    write(root, "registry/demo/tool.json", JSON.stringify({ name: "demo", version: "1.2.0", needs: [], description: "demo tool" }));
+    write(root, "registry/demo/SKILL.md", "# demo\n");
+    write(root, "registry/demo/fixes/v1.1.0.md", "# demo v1.1.0\n## What changed\n");
+    write(root, "registry/demo/fixes/v1.2.0.md", "# demo v1.2.0\n## What changed\n");
+    return root;
+  }
+
+  function plan(tickets: { id: string; phase: string }[], complete = false): string {
+    return JSON.stringify({
+      schema: 1, epic: "EP-1", at: "2026-10-18T10:00:00.000Z", tool: "backlog", mainBranch: "main", mainRef: "main",
+      tickets: tickets.map((t) => ({ id: t.id, title: t.id, status: "todo", blocked_by: [], wave: 1, template: "chore", phase: t.phase, run: null })),
+      waves: [tickets.map((t) => t.id)], next: tickets.map((t) => t.id), held: [], errors: [], complete,
+    });
+  }
+
+  test("run line, checks, tool fixes, orchestration, then report changes and the refresh line", async () => {
+    await startFlow([IMPL, CHECK]);
+    const root = fakeRoot();
+    write(main, ".warden/tools.md", "| Name | Version | Customized | Fixes applied |\n|---|---|---|---|\n| demo | 1.0.0 | no | — |\n");
+    check("docs-review", "every: 7d\nkind: agent\nlast: never");
+    write(main, ".warden/state/_orchestrate/EP-1.json", plan([{ id: T, phase: "running" }, { id: "T-9", phase: "todo" }]));
+    write(main, ".warden/reports.md", "| ID | Title | Status | Fixed in |\n|---|---|---|---|\n| R-0001 | Flaky login | sent | — |\n");
+    write(ctx.data, "reports/R-0001.json", JSON.stringify({
+      schema: 1, id: "R-0001", projectId: "demo", kind: "bug", title: "Flaky login", body: "b", createdAt: "2026-10-01T00:00:00Z",
+      status: "accepted", fixedIn: null, note: null,
+    }));
+
+    const lines = (await hookWithRoot(root, "session-start"))!.split("\n");
+    expect(lines.length).toBe(6);
+    expect(lines[0]).toStartWith(`warden: ${T} stopped at implement`);
+    expect(lines[1]).toStartWith("warden: checks due: docs-review");
+    expect(lines[2]).toBe(
+      "warden: tool fixes available: demo v1.1.0 v1.2.0. When the user's current request is done, offer them in one short line; with their OK, run /warden:fix.",
+    );
+    expect(lines[3]).toBe(
+      "warden: orchestration of EP-1 stopped with 2 tickets left. When the user's current request is done, offer to go on; with their OK, run /warden:orchestrate EP-1.",
+    );
+    expect(lines[4]).toBe('warden: report R-0001 "Flaky login" is now accepted.');
+    expect(lines[5]).toStartWith("warden: when the user's current request is done, run warden report --status --write");
+  });
+
+  test("no tool fix line when the copy is current, no orchestration line when complete or no ticket has a live run", async () => {
+    const root = fakeRoot();
+    write(main, ".warden/tools.md", "| Name | Version | Customized | Fixes applied |\n|---|---|---|---|\n| demo | 1.2.0 | no | — |\n");
+    write(main, ".warden/state/_orchestrate/EP-1.json", plan([{ id: "T-9", phase: "todo" }]));
+    expect(await hookWithRoot(root, "session-start")).toBeNull();
+
+    await startFlow([IMPL, CHECK]);
+    write(main, ".warden/state/_orchestrate/EP-1.json", plan([{ id: T, phase: "running" }], true));
+    expect((await hookWithRoot(root, "session-start"))!.split("\n")).toHaveLength(1);
+  });
+
+  test("a broken plan cache or tools.md never breaks session start", async () => {
+    const root = fakeRoot();
+    write(main, ".warden/tools.md", "garbage\n| demo |\n");
+    write(main, ".warden/state/_orchestrate/EP-1.json", "{not json");
+    expect(await hookWithRoot(root, "session-start")).toBeNull();
   });
 });

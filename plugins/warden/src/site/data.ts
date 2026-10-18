@@ -25,7 +25,15 @@ export interface TaskDetail {
 
 export interface DocEntry { path: string; title: string }
 
-const DOC_DIRS = ["context", "rules", "decisions", "knowledge"];
+export interface FileGraph {
+  builtAt: string;
+  files: { path: string; symbols: number; community: number }[];
+  edges: { from: string; to: string; count: number }[];
+  cut: number;
+}
+
+const DOC_DIRS = ["context", "rules", "decisions", "knowledge", "checks", "retros", "fixes"];
+const MAX_GRAPH_FILES = 300;
 
 function readJsonFile<T>(path: string): T {
   return JSON.parse(readFileSync(path, "utf8")) as T;
@@ -222,6 +230,62 @@ export function readDoc(main: string, path: string | null): DocResult {
 export function readProjectId(main: string): string | null {
   try {
     return readJsonFile<{ projectId?: string }>(join(wardenDir(main), "warden.json")).projectId ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// ---- code graph (written by the graph tool, only read here) ----
+
+interface RawGraph {
+  nodes?: { id?: unknown; source_file?: unknown; community?: unknown }[];
+  links?: { source?: unknown; target?: unknown; relation?: unknown }[];
+}
+
+const endId = (v: unknown): unknown => (v && typeof v === "object" ? (v as { id?: unknown }).id : v);
+
+// File graph from graph.json: null when it is missing or does not parse.
+export function readGraph(main: string): FileGraph | null {
+  const file = join(main, ".warden", "state", "_graph", "graphify-out", "graph.json");
+  try {
+    const raw = readJsonFile<RawGraph>(file);
+    if (!Array.isArray(raw.nodes) || !Array.isArray(raw.links)) return null;
+    const fileOf = new Map<unknown, string>();
+    const symbols = new Map<string, number>();
+    const communities = new Map<string, Map<number, number>>();
+    for (const n of raw.nodes) {
+      if (typeof n.source_file !== "string" || n.source_file === "") continue;
+      const path = n.source_file;
+      fileOf.set(n.id, path);
+      symbols.set(path, (symbols.get(path) ?? 0) + 1);
+      const c = typeof n.community === "number" ? n.community : 0;
+      const votes = communities.get(path) ?? new Map<number, number>();
+      votes.set(c, (votes.get(c) ?? 0) + 1);
+      communities.set(path, votes);
+    }
+    const counts = new Map<string, { from: string; to: string; count: number }>();
+    const degree = new Map<string, number>();
+    for (const l of raw.links) {
+      if (l.relation === "contains") continue;
+      const from = fileOf.get(endId(l.source));
+      const to = fileOf.get(endId(l.target));
+      if (from === undefined || to === undefined || from === to) continue;
+      const key = `${from}\0${to}`;
+      const edge = counts.get(key) ?? { from, to, count: 0 };
+      edge.count++;
+      counts.set(key, edge);
+      degree.set(from, (degree.get(from) ?? 0) + 1);
+      degree.set(to, (degree.get(to) ?? 0) + 1);
+    }
+    const ranked = [...symbols.keys()].sort((a, b) => (degree.get(b) ?? 0) - (degree.get(a) ?? 0) || (a < b ? -1 : a > b ? 1 : 0));
+    const kept = new Set(ranked.slice(0, MAX_GRAPH_FILES));
+    const files = [...kept].sort().map((path) => {
+      const best = [...communities.get(path)!].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0]![0];
+      return { path, symbols: symbols.get(path)!, community: best };
+    });
+    const edges = [...counts.values()].filter((e) => kept.has(e.from) && kept.has(e.to))
+      .sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : a.to < b.to ? -1 : a.to > b.to ? 1 : 0));
+    return { builtAt: statSync(file).mtime.toISOString(), files, edges, cut: symbols.size - kept.size };
   } catch {
     return null;
   }

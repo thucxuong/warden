@@ -7,14 +7,14 @@ import { EXIT, WardenError } from "./lib/exit.ts";
 // Only these names are ever imported (spec 3.1). `gate` is internal.
 export const COMMANDS = [
   "version", "init", "start", "next", "done", "wait", "status", "approve", "retry", "reset",
-  "flow", "report", "retro", "upgrade", "tools", "site", "hook", "gate", "checks",
+  "flow", "report", "retro", "upgrade", "tools", "site", "hook", "gate", "checks", "orchestrate",
 ] as const;
 
 // One line per command for --help. hook and gate are internal and not listed.
 export const HELP: Record<string, string> = {
   version: "warden version",
   init: "warden init --scan | --write [--file <payload>]",
-  start: "warden start <task> --template do|feature|bugfix | --flow <name|path> [--text <t> | --text-file <p>] [--worktree] [--branch <b>]",
+  start: "warden start <task> --template do|feature|bugfix|chore | --flow <name|path> [--text <t> | --text-file <p> | --ticket] [--worktree] [--branch <b>]",
   next: "warden next [<task>]",
   done: "warden done [<task>] [--json <text> | --file <path>]",
   wait: "warden wait [<task>] [--max-seconds <n>]",
@@ -26,8 +26,9 @@ export const HELP: Record<string, string> = {
   report: "warden report --kind bug|enhancement --title <t> --file <body> | warden report --status [--write] | warden report set <file> --status <s> [--note <t>] [--fixed-in <v>]",
   retro: "warden retro --done [--date YYYY-MM-DD]",
   upgrade: "warden upgrade --notes | --done",
-  tools: "warden tools list | add <name>",
+  tools: "warden tools list | add <name> | fixes [<tool>] | applied <tool> <version>",
   site: "warden site [--port <n>]",
+  orchestrate: "warden orchestrate plan <epic> | status <epic> | set-status <id> <status>",
   checks: "warden checks | warden checks run <name> [--background] | warden checks done <name> [--date YYYY-MM-DD] [--note <t>]",
 };
 

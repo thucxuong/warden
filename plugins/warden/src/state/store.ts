@@ -155,30 +155,38 @@ function readJsonl<T>(file: string): T[] {
     .map((l) => JSON.parse(l) as T);
 }
 
-// ---- state/_sessions/<session_id>.json ----
+// ---- state/_sessions/<session_id>.json and <session_id>.agent-<agent_id>.json ----
 
-function sessionFile(main: string, sessionId: string): string {
-  // The id comes from hook input, so keep it from leaving the sessions dir.
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(sessionId)) throw new WardenError(`invalid session id: ${sessionId}`, EXIT.USAGE);
-  return join(sessionsDir(main), `${sessionId}.json`);
+const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+function sessionFile(main: string, sessionId: string, agentId?: string): string {
+  // The ids come from hook input, so keep them from leaving the sessions dir.
+  if (!SAFE_ID.test(sessionId)) throw new WardenError(`invalid session id: ${sessionId}`, EXIT.USAGE);
+  if (agentId === undefined) return join(sessionsDir(main), `${sessionId}.json`);
+  if (!SAFE_ID.test(agentId)) throw new WardenError(`invalid agent id: ${agentId}`, EXIT.USAGE);
+  return join(sessionsDir(main), `${sessionId}.agent-${agentId}.json`);
 }
 
-export function readSessionRecord(main: string, sessionId: string): SessionRecord | null {
-  const file = sessionFile(main, sessionId);
+// With agentId: the record of that subagent of the session (7.1), else the main thread's record.
+export function readSessionRecord(main: string, sessionId: string, agentId?: string): SessionRecord | null {
+  const file = sessionFile(main, sessionId, agentId);
   return existsSync(file) ? readJson<SessionRecord>(file) : null;
 }
 
+// The file comes from record.agentId.
 export function writeSessionRecord(main: string, record: SessionRecord): void {
-  writeJsonAtomic(sessionFile(main, record.sessionId), { ...record, updatedAt: new Date().toISOString() });
+  writeJsonAtomic(sessionFile(main, record.sessionId, record.agentId), { ...record, updatedAt: new Date().toISOString() });
 }
 
-// Create or update a record: fields in `patch` replace the old ones, the rest are kept.
+// Create or update a record: fields in `patch` replace the old ones, the rest are kept
+// (agentId and orchestrate included).
 export function upsertSessionRecord(
   main: string,
   sessionId: string,
   patch: Partial<Omit<SessionRecord, "schema" | "sessionId" | "updatedAt">>,
+  agentId?: string,
 ): SessionRecord {
-  const old = readSessionRecord(main, sessionId);
+  const old = readSessionRecord(main, sessionId, agentId);
   const next: SessionRecord = {
     schema: 1,
     sessionId,
@@ -186,8 +194,11 @@ export function upsertSessionRecord(
     projectAgent: old?.projectAgent ?? false,
     task: old?.task ?? null,
     updatedAt: "",
+    ...(old?.agentId !== undefined && { agentId: old.agentId }),
+    ...(old?.orchestrate !== undefined && { orchestrate: old.orchestrate }),
     ...patch,
+    ...(agentId !== undefined && { agentId }),
   };
   writeSessionRecord(main, next);
-  return readSessionRecord(main, sessionId) as SessionRecord;
+  return readSessionRecord(main, sessionId, agentId) as SessionRecord;
 }

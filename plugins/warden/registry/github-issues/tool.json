@@ -1,0 +1,7 @@
+{
+  "name": "github-issues",
+  "version": "0.1.0",
+  "kind": "tickets",
+  "needs": ["gh"],
+  "description": "Ticket tool for GitHub issues: read the dependency graph, show a ticket, set its status."
+}

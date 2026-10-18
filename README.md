@@ -68,6 +68,23 @@ The workflow is:
 
 Each step waits for you. Run `/warden:work` to drive the loop, or `warden next` / `warden done` / `warden wait` in a terminal.
 
+## Tools
+
+Warden ships with tools: `git-pr`, `backlog`, `github-issues`, `ado`, `e2e`, `ci-status`, `graph`. Add one to your project with `/warden:tools add <name>`.
+
+Ticket tools (`backlog`, `github-issues`, `ado`) read and write your tickets. To use them with `/warden:orchestrate`, add `"tickets": {"tool": "<name>"}` to `.warden/steps.json`.
+
+When new versions of copied tools have fixes, session start says so. Run `/warden:fix` to apply them.
+
+## Work an epic
+
+Run `/warden:orchestrate <epic>` to work on a set of tickets from your ticket tool:
+
+1. The orchestrator reads your ticket DAG and organizes them into waves (by dependencies).
+2. For each wave, it starts your tickets one at a time, each in its own worktree, with its own engine run.
+3. Tickets work in parallel; the orchestrator waits for fixes and then ships them one at a time (after merging the latest main, so gates run on merged code).
+4. Any ticket that blocks, waits, or has an unmerged PR stops the orchestration. Run `/warden:orchestrate <epic>` again to go on.
+
 ## Upgrade warden
 
 When a new version is available, Claude Code prints `warden: updated to <v>; this project is on <old>. Run /warden:upgrade.`
@@ -92,6 +109,9 @@ Then:
 - `warden reset <task>` — delete a task's live state (human only; TTY required).
 - `warden report --status` — list this project's reports with status, fixed-in version and note.
 - `warden checks` — list the periodic checks and which are due. `warden checks run <name>` runs one; `warden checks done <name>` marks an agent check done.
+- `warden orchestrate plan <epic>` — read the ticket DAG and print waves to work on.
+- `warden orchestrate status <epic>` — show the current phase of each ticket in the epic.
+- `warden tools fixes [<tool>]` — show pending fix notes for copied tools.
 - `warden site` — open the task dashboard at http://127.0.0.1:4400.
 
 ## Branch protection

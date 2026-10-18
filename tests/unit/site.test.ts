@@ -118,6 +118,10 @@ beforeAll(() => {
   write(join(w, "rules", "notes.txt"), "not markdown");
   write(join(w, "decisions", "0001-x.md"), "# Decision one\n");
   write(join(w, "knowledge", "k.md"), "# K\n");
+  write(join(w, "checks", "daily.md"), "# Daily check\n");
+  write(join(w, "retros", "r1.md"), "# Retro 1\n");
+  write(join(w, "fixes", "f1.md"), "# Fix 1\n");
+  write(join(w, "context", "rich.md"), "---\nk: v\n---\n# Rich <doc>\n\n- [ ] a\n- [x] b\n\nSee [other](overview.md), [web](https://example.com) and [bad](javascript:x).\n");
   write(join(w, "secret.md"), "# Not in a doc folder\n");
   write(join(main, "outside.md"), "# Outside .warden\n");
   symlinkSync(join(main, "outside.md"), join(w, "context", "link.md"));
@@ -252,13 +256,17 @@ describe("GET /api/tasks/:task/events", () => {
 });
 
 describe("docs", () => {
-  test("lists .md files in the four folders with the first # line as title (symlinks are skipped)", async () => {
+  test("lists .md files in the seven folders with the first # line as title (symlinks are skipped)", async () => {
     const { docs } = (await (await get("/api/docs")).json()) as { docs: { path: string; title: string }[] };
     expect(docs).toEqual([
       { path: "context/overview.md", title: "Overview" },
+      { path: "context/rich.md", title: "Rich <doc>" },
       { path: "rules/style.md", title: "style.md" },
       { path: "decisions/0001-x.md", title: "Decision one" },
       { path: "knowledge/k.md", title: "K" },
+      { path: "checks/daily.md", title: "Daily check" },
+      { path: "retros/r1.md", title: "Retro 1" },
+      { path: "fixes/f1.md", title: "Fix 1" },
     ]);
   });
 
@@ -267,6 +275,26 @@ describe("docs", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/plain");
     expect(await res.text()).toBe("intro\n# Overview\nbody");
+  });
+
+  test("format=html renders the Markdown; without format it stays text/plain", async () => {
+    const res = await get("/api/doc?path=context/rich.md&format=html");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/html");
+    const html = await res.text();
+    expect(html).toContain('<pre class="fm">k: v</pre>');
+    expect(html).toContain('<h1 id="rich-doc">Rich &lt;doc&gt;</h1>');
+    expect(html).toContain("<li>☐ a</li><li>☑ b</li>");
+    expect(html).toContain('<a href="#" data-doc="context/overview.md">other</a>');
+    expect(html).toContain('<a href="https://example.com" target="_blank" rel="noopener">web</a>');
+    expect(html).not.toContain("javascript");
+    expect((await get("/api/doc?path=context/rich.md")).headers.get("content-type")).toContain("text/plain");
+  });
+
+  test("format=html keeps the path rules", async () => {
+    expect((await get("/api/doc?path=../outside.md&format=html")).status).toBe(400);
+    expect((await get("/api/doc?path=context/link.md&format=html")).status).toBe(400);
+    expect((await get("/api/doc?path=context/missing.md&format=html")).status).toBe(404);
   });
 
   test("400 unless the path is a .md inside .warden/", async () => {
@@ -326,5 +354,141 @@ describe("warden site command", () => {
       console.error = original;
       rmSync(repo, { recursive: true, force: true });
     }
+  });
+});
+
+function ticket(id: string, over: Record<string, unknown> = {}) {
+  return { id, title: `Title ${id}`, status: "todo", blocked_by: [], wave: 1, template: "feature", phase: "todo", run: null, ...over };
+}
+
+function plan(epic: string, at: string, tickets: unknown[]) {
+  return { schema: 1, epic, at, tool: "backlog", mainBranch: "main", mainRef: "main", tickets, waves: [], next: [], held: [], errors: [], complete: false };
+}
+
+async function withProject<T>(setup: (w: string) => void, body: (base: string, w: string) => Promise<T>): Promise<T> {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "warden-site-x-")));
+  setup(join(dir, ".warden"));
+  const s = startServer(dir, 0);
+  try {
+    return await body(`http://127.0.0.1:${s.port}`, join(dir, ".warden"));
+  } finally {
+    s.stop(true);
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+describe("GET /api/tickets", () => {
+  test("no plans gives an empty list", async () => {
+    await withProject(() => {}, async (b) => {
+      expect(await (await fetch(b + "/api/tickets")).json()).toEqual({ epics: [] });
+    });
+  });
+
+  test("returns the cached plans newest first, skips a broken file, and reads fresh", async () => {
+    const dir = (w: string) => join(w, "state", "_orchestrate");
+    await withProject((w) => {
+      write(join(dir(w), "OLD.json"), plan("OLD", "2026-10-17T10:00:00.000Z", [ticket("T-1")]));
+      write(join(dir(w), "NEW.json"), plan("NEW", "2026-10-18T10:00:00.000Z", [ticket("T-2"), ticket("T-3", { blocked_by: ["T-2"], wave: 2 })]));
+      write(join(dir(w), "BAD.json"), "{ nope");
+    }, async (b, w) => {
+      const { epics } = (await (await fetch(b + "/api/tickets")).json()) as { epics: any[] };
+      expect(epics.map((e) => e.epic)).toEqual(["NEW", "OLD"]);
+      expect(epics[0].tickets.map((t: any) => t.id)).toEqual(["T-2", "T-3"]);
+      expect(epics[0].tickets[1].blocked_by).toEqual(["T-2"]);
+      write(join(dir(w), "MID.json"), plan("MID", "2026-10-18T05:00:00.000Z", [ticket("T-4")]));
+      const again = (await (await fetch(b + "/api/tickets")).json()) as { epics: any[] };
+      expect(again.epics.map((e) => e.epic)).toEqual(["NEW", "MID", "OLD"]);
+    });
+  });
+});
+
+describe("GET /api/graph", () => {
+  const graphFile = (w: string) => join(w, "state", "_graph", "graphify-out", "graph.json");
+  const node = (id: string, file: string, community: number) => ({ id, label: id, source_file: file, source_location: "L1", community });
+
+  test("null when the file is missing or does not parse", async () => {
+    await withProject(() => {}, async (b) => {
+      expect(await (await fetch(b + "/api/graph")).json()).toEqual({ graph: null });
+    });
+    await withProject((w) => write(graphFile(w), "{ nope"), async (b) => {
+      expect(await (await fetch(b + "/api/graph")).json()).toEqual({ graph: null });
+    });
+    await withProject((w) => write(graphFile(w), { nodes: 1 }), async (b) => {
+      expect(await (await fetch(b + "/api/graph")).json()).toEqual({ graph: null });
+    });
+  });
+
+  test("reduces symbols to files: contains and same-file links dropped, links counted per ordered pair", async () => {
+    await withProject((w) => write(graphFile(w), {
+      directed: true, multigraph: false, graph: {}, hyperedges: [],
+      nodes: [
+        node("a1", "src/a.ts", 1), node("a2", "src/a.ts", 1), node("a3", "src/a.ts", 2),
+        node("b1", "src/b.ts", 3), node("c1", "src/c.ts", 3), node("nofile", "", 0),
+      ],
+      links: [
+        { source: "a1", target: "b1", relation: "imports" },
+        { source: "a2", target: "b1", relation: "calls" },
+        { source: "b1", target: "a1", relation: "calls" },
+        { source: "a1", target: "a2", relation: "calls" },
+        { source: "a1", target: "c1", relation: "contains" },
+        { source: "a1", target: "ghost", relation: "calls" },
+        { source: "nofile", target: "a1", relation: "calls" },
+      ],
+    }), async (b) => {
+      const { graph } = (await (await fetch(b + "/api/graph")).json()) as { graph: any };
+      expect(graph.files).toEqual([
+        { path: "src/a.ts", symbols: 3, community: 1 },
+        { path: "src/b.ts", symbols: 1, community: 3 },
+        { path: "src/c.ts", symbols: 1, community: 3 },
+      ]);
+      expect(graph.edges).toEqual([
+        { from: "src/a.ts", to: "src/b.ts", count: 2 },
+        { from: "src/b.ts", to: "src/a.ts", count: 1 },
+      ]);
+      expect(graph.cut).toBe(0);
+      expect(Number.isNaN(Date.parse(graph.builtAt))).toBe(false);
+    });
+  });
+
+  test("keeps the 300 files with the most edges (ties by path) and counts the rest as cut", async () => {
+    const names = Array.from({ length: 305 }, (_, i) => `f${String(i).padStart(3, "0")}.ts`);
+    await withProject((w) => write(graphFile(w), {
+      nodes: names.map((n) => node(n, n, 0)),
+      links: names.slice(1).map((n, i) => ({ source: names[i], target: n, relation: "imports" })), // a chain
+    }), async (b) => {
+      const { graph } = (await (await fetch(b + "/api/graph")).json()) as { graph: any };
+      expect(graph.files).toHaveLength(300);
+      expect(graph.cut).toBe(5);
+      // the chain ends have one edge and go first; of the rest f001..f300 stay, f301..f303 are cut
+      expect(graph.files[0].path).toBe("f001.ts");
+      expect(graph.files[299].path).toBe("f300.ts");
+      expect(graph.edges).toHaveLength(299);
+      const kept = new Set(graph.files.map((f: any) => f.path));
+      for (const e of graph.edges) expect(kept.has(e.from) && kept.has(e.to)).toBe(true);
+    });
+  });
+
+  test("link ends given as objects with an id also work", async () => {
+    await withProject((w) => write(graphFile(w), {
+      nodes: [node("x", "x.ts", 0), node("y", "y.ts", 0)],
+      links: [{ source: { id: "x" }, target: { id: "y" }, relation: "imports" }],
+    }), async (b) => {
+      const { graph } = (await (await fetch(b + "/api/graph")).json()) as { graph: any };
+      expect(graph.edges).toEqual([{ from: "x.ts", to: "y.ts", count: 1 }]);
+    });
+  });
+});
+
+describe("nothing is written", () => {
+  test("serving the new routes leaves .warden unchanged", async () => {
+    const listing = (w: string) => Array.from(new Bun.Glob("**/*").scanSync({ cwd: w, dot: true })).sort();
+    await withProject((w) => {
+      write(join(w, "state", "_orchestrate", "E.json"), plan("E", "2026-10-18T10:00:00.000Z", [ticket("T-1")]));
+      write(join(w, "context", "a.md"), "# A\n");
+    }, async (b, w) => {
+      const before = listing(w);
+      for (const p of ["/api/tickets", "/api/graph", "/api/doc?path=context/a.md&format=html", "/api/docs"]) await fetch(b + p);
+      expect(listing(w)).toEqual(before);
+    });
   });
 });

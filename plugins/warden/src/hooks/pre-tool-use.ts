@@ -1,14 +1,15 @@
 // PreToolUse (spec 7.4): Edit/Write and Bash tripwires, plus the session-to-task link (7.1).
 // These rules catch the common shortcut; they are not a sandbox (1.3).
+import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
-import { editAllowed, isFixForbidden, matchesAny } from "../engine/catalog.ts";
+import { editAllowed, isFixForbidden, isGateFile, matchesAny } from "../engine/catalog.ts";
 import { gatesProven } from "../engine/proof.ts";
 import { currentBranch } from "../lib/git.ts";
 import { taskDir } from "../state/paths.ts";
 import { runExists, readRun } from "../state/store.ts";
 import type { RunJson } from "../types.ts";
 import {
-  type HookCall, isFixer, linkSession, liveRuns, logHookError, pathForms, recordSession, relInside, runEvent, runFlow, runForCwd, runForPath,
+  type HookCall, agentIdOf, isFixer, linkSession, liveRuns, logHookError, orchestrating, pathForms, recordSession, relInside, runEvent, runFlow, runForCwd, runForPath,
   runForSession, runSteps, wardenJson,
 } from "./resolve.ts";
 
@@ -74,6 +75,11 @@ function stateRun(main: string, target: string): RunJson | null {
   }
 }
 
+// E6a: ship-mode agents merge main into the ticket branch; conflicted files may then be edited.
+function mergeInProgress(worktree: string): boolean {
+  return spawnSync("git", ["-C", worktree, "rev-parse", "-q", "--verify", "MERGE_HEAD"], { stdio: "ignore" }).status === 0;
+}
+
 // Rules E1-E7, first match wins. null means allow.
 export function editDecision(main: string, target: string, fixer: boolean): Decision | null {
   const match = runForPath(main, target);
@@ -107,6 +113,7 @@ export function editDecision(main: string, target: string, fixer: boolean): Deci
   if (run.current.type === "fix") {
     return { reason: `the fixer works in ${run.fix?.worktree ?? "its fix worktree"}, not the ticket worktree`, run };
   }
+  if (run.current.type === "ship" && !isGateFile(rel) && mergeInProgress(run.worktree)) return null; // E6a
   const step = runFlow(main, run).steps[run.stepIndex];
   const variant = step?.type === "analyze" ? step.variant : undefined;
   if (!editAllowed(run.current.type, variant, rel, run.task)) {
@@ -156,6 +163,8 @@ const PR_COMMANDS = [
   /\.claude\/skills\/[^/\s]+\/bin\/pr\.ts\s+(create|merge)\b/,
 ];
 const MERGE_COMMANDS = [/\bgh\s+pr\s+merge\b/, /\bglab\s+mr\s+merge\b/, /\.claude\/skills\/[^/\s]+\/bin\/pr\.ts\s+merge\b/];
+const ORCHESTRATE_COMMAND = /(?:^|[;&|(\s])(?:[\w./-]*\/)?(?:warden|cli\.ts)\s+orchestrate\s+(?:plan|status)\b([^;&|\n]*)/;
+const EPIC_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const RUN_COMMAND = /(?:^|[;&|(\s])(?:[\w./-]*\/)?(?:warden|cli\.ts)\s+(start|next|done|wait)\b([^;&|\n]*)/;
 
 // Drops the body of a heredoc that feeds `warden done` or `warden report`: it is JSON or prose, not a command.
@@ -332,7 +341,7 @@ function writesEngineFiles(cmd: string, live: RunJson[], fixer: boolean, cwd: st
 }
 
 // The task a `warden start|next|done|wait` command is about: an id in its args, else the run of a
-// directory the command `cd`s into, else the run for cwd, else the task the session is already linked to.
+// directory the command `cd`s into, else the run of the session record (agent record for an agent call), else the run for cwd.
 function linkedTask(call: HookCall, cmd: string, dirRun: RunJson | null): string | null {
   const found = RUN_COMMAND.exec(cmd);
   if (!found) return null;
@@ -344,7 +353,13 @@ function linkedTask(call: HookCall, cmd: string, dirRun: RunJson | null): string
   }
   const args = (found[2] ?? "").trim().split(/\s+/).map(unquote);
   const named = pattern ? args.find((arg) => !arg.startsWith("-") && pattern.test(arg)) : undefined;
-  return named ?? dirRun?.task ?? runForCwd(call.main, call.ctx.cwd)?.task ?? runForSession(call)?.task ?? null;
+  return named ?? dirRun?.task ?? runForSession(call)?.task ?? null;
+}
+
+// `warden orchestrate plan|status <epic>`: the epic, else null.
+function orchestrateEpic(cmd: string): string | null {
+  const args = (ORCHESTRATE_COMMAND.exec(cmd)?.[1] ?? "").trim().split(/\s+/).map(unquote);
+  return args.find((arg) => EPIC_ID.test(arg)) ?? null;
 }
 
 async function bash(call: HookCall): Promise<string | null> {
@@ -352,19 +367,27 @@ async function bash(call: HookCall): Promise<string | null> {
   const cmd = stripHeredocs(typeof command === "string" ? command : "");
   const dirRun = runForDirs(call.main, commandDirs(cmd, call.ctx.cwd));
 
-  const task = linkedTask(call, cmd, dirRun);
-  recordSession(call, task ?? undefined);
-  if (task !== null) {
-    try {
-      await linkSession(call, task);
-    } catch (err) {
-      logHookError(call.ctx.data, "hook pre-tool-use: link", err); // the decision below still applies
-    }
-  }
+  await linkBash(call, cmd, dirRun);
 
   const run = dirRun ?? runForSession(call);
   const reason = bashDecision(call, cmd, run);
   return reason === null ? null : deny(call, "Bash", reason, run);
+}
+
+// 0.3 7.2: which task, if any, this call links the session (or the agent record) to.
+async function linkBash(call: HookCall, cmd: string, dirRun: RunJson | null): Promise<void> {
+  const isAgent = agentIdOf(call) !== undefined;
+  const epic = isAgent ? null : orchestrateEpic(cmd);
+  if (epic !== null) return recordSession(call, null, epic);
+  if (!isAgent && orchestrating(call) !== null) return recordSession(call);
+  const task = linkedTask(call, cmd, dirRun);
+  recordSession(call, task ?? undefined);
+  if (task === null || isAgent) return; // an agent's own transcript is linked at SubagentStop
+  try {
+    await linkSession(call, task);
+  } catch (err) {
+    logHookError(call.ctx.data, "hook pre-tool-use: link", err); // the decision below still applies
+  }
 }
 
 // Rules B1-B7, first match wins. null means allow.

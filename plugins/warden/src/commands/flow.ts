@@ -9,7 +9,7 @@ import { mainRoot, worktreeRoot } from "../state/paths.ts";
 import type { Ctx, FlowJson } from "../types.ts";
 import { parseArgs, printJson } from "./next.ts";
 
-export const TEMPLATES = ["do", "feature", "bugfix"];
+export const TEMPLATES = ["do", "feature", "bugfix", "chore"];
 const FLOW_NAME = /^[a-z][a-z0-9-]{1,40}$/;
 
 function savedFlowsDir(ctx: Ctx): string | null {

@@ -199,6 +199,19 @@ describe("branches and worktrees", () => {
     expect(git.branchExists(dir, "t-1")).toBe(false);
   });
 
+  test("worktreeAdd with a new branch from a remote ref sets no upstream (--no-track)", () => {
+    const origin = newRepo("origin-src");
+    write(origin, "f.txt", "f\n");
+    commitAll(origin, "init");
+    const clone = join(base, "notrack-clone");
+    execFileSync("git", ["clone", "-q", origin, clone]);
+    const wt = join(base, "notrack-clone.worktrees", "t-9");
+    git.worktreeAdd(clone, wt, "origin/main", "t-9");
+    expect(git.currentBranch(wt)).toBe("t-9");
+    expect(() => sh(clone, "rev-parse", "--abbrev-ref", "t-9@{upstream}")).toThrow();
+    expect(() => sh(clone, "config", "--get", "branch.t-9.remote")).toThrow();
+  });
+
   test("worktreeAdd on an existing branch; remove works with local changes", () => {
     const dir = newRepo("wt2");
     write(dir, "f.txt", "f\n");

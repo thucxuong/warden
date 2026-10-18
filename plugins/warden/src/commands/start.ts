@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 import { loadStepsJson, loadWardenJson, parseStepsJson } from "../config/config.ts";
 import { lintFlow } from "../engine/flow-lint.ts";
 import { start } from "../engine/machine.ts";
+import { showTicket, ticketsConfig } from "../engine/tickets.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
 import { branchExists, currentBranch, fetchMain, showFile, worktreeAdd, worktreeList } from "../lib/git.ts";
 import { readJson, writeJsonAtomic } from "../lib/json.ts";
@@ -15,7 +16,7 @@ import { readFlowFile, resolveFlowPath, TEMPLATES } from "./flow.ts";
 import { parseArgs, printJson, requiredTask, type ParsedArgs } from "./next.ts";
 
 const USAGE =
-  "warden start <task> --template do|feature|bugfix | --flow <name|path> [--text <t> | --text-file <p>] [--worktree] [--branch <b>]";
+  "warden start <task> --template do|feature|bugfix|chore | --flow <name|path> [--text <t> | --text-file <p> | --ticket] [--worktree] [--branch <b>]";
 
 function checkTaskId(task: string, pattern: string): void {
   if (task === SESSIONS_DIR_NAME) throw new WardenError(`${SESSIONS_DIR_NAME} is a reserved name`);
@@ -26,7 +27,7 @@ function chooseFlow(ctx: Ctx, parsed: ParsedArgs): FlowJson {
   const template = parsed.values["--template"];
   const flow = parsed.values["--flow"];
   if ((template === undefined) === (flow === undefined)) {
-    throw new WardenError("pass either --template do|feature|bugfix or --flow <name|path>", EXIT.USAGE);
+    throw new WardenError(`pass either --template ${TEMPLATES.join("|")} or --flow <name|path>`, EXIT.USAGE);
   }
   if (template !== undefined && !TEMPLATES.includes(template)) {
     throw new WardenError(`--template must be one of ${TEMPLATES.join(", ")}`, EXIT.USAGE);
@@ -34,7 +35,15 @@ function chooseFlow(ctx: Ctx, parsed: ParsedArgs): FlowJson {
   return readFlowFile(resolveFlowPath(ctx, (template ?? flow)!)) as FlowJson;
 }
 
-function readTaskText(ctx: Ctx, text: string | undefined, file: string | undefined): string | null {
+// 0.3 spec 4.2: the task text comes from the ticket tool.
+function ticketText(main: string, task: string): string {
+  const ticket = showTicket(main, ticketsConfig(main), task);
+  if (ticket.id !== task) throw new WardenError(`ticket tool returned ${ticket.id} for ${task}`);
+  return `# ${ticket.id}: ${ticket.title}\n\n${ticket.body}\n`;
+}
+
+function readTaskText(ctx: Ctx, text: string | undefined, file: string | undefined, ticket: boolean): string | null {
+  if (ticket && (text !== undefined || file !== undefined)) throw new WardenError("--ticket cannot be used with --text or --text-file", EXIT.USAGE);
   if (text !== undefined && file !== undefined) throw new WardenError("use --text or --text-file, not both", EXIT.USAGE);
   if (text !== undefined) return text;
   if (file === undefined) return null;
@@ -128,15 +137,16 @@ function allowWorktreesDir(main: string): void {
 }
 
 export async function run(args: string[], ctx: Ctx): Promise<void> {
-  const parsed = parseArgs(args, ["--template", "--flow", "--text", "--text-file", "--branch"], ["--worktree"]);
+  const parsed = parseArgs(args, ["--template", "--flow", "--text", "--text-file", "--branch"], ["--worktree", "--ticket"]);
   const task = requiredTask(parsed, USAGE);
   const useWorktree = parsed.switches.has("--worktree");
   if (!useWorktree && parsed.values["--branch"] !== undefined) throw new WardenError("--branch needs --worktree", EXIT.USAGE);
   const flow = chooseFlow(ctx, parsed);
-  const taskText = readTaskText(ctx, parsed.values["--text"], parsed.values["--text-file"]);
+  let taskText = readTaskText(ctx, parsed.values["--text"], parsed.values["--text-file"], parsed.switches.has("--ticket"));
 
   const main = mainRoot(ctx.cwd);
   checkTaskId(task, loadWardenJson(join(main, ".warden", "warden.json")).taskIdPattern);
+  if (parsed.switches.has("--ticket")) taskText = ticketText(main, task);
   const { mainBranch } = loadStepsJson(join(main, ".warden", "steps.json"));
   const ref = fetchRef(main, mainBranch);
 

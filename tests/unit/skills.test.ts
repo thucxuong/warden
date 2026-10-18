@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 const pluginRoot = resolve(import.meta.dir, "../../plugins/warden");
 const skillsDir = join(pluginRoot, "skills");
 
-const expectedSkills = ["init", "compose", "work", "plan", "retro", "report", "upgrade", "tools"];
+const expectedSkills = ["init", "compose", "work", "plan", "retro", "report", "upgrade", "tools", "orchestrate", "fix"];
 
 // Frontmatter extras from spec section 8 (string values, unquoted).
 const expectedExtras: Record<string, Record<string, string>> = {
@@ -14,6 +14,8 @@ const expectedExtras: Record<string, Record<string, string>> = {
   work: { "argument-hint": "[task-id]", "allowed-tools": "Bash(warden *)" },
   upgrade: {},
   tools: { "argument-hint": "list | add <name>" },
+  orchestrate: { "argument-hint": "<epic>" },
+  fix: { "argument-hint": "[tool]" },
 };
 
 function parseFrontmatter(text: string): Record<string, string> {
@@ -32,7 +34,7 @@ function parseFrontmatter(text: string): Record<string, string> {
 const read = (path: string) => readFileSync(path, "utf8");
 
 describe("skills", () => {
-  test("the skill folders are exactly the eight from the spec, and there is no site skill", () => {
+  test("the skill folders are exactly the ten from the spec, and there is no site skill", () => {
     const dirs = readdirSync(skillsDir).sort();
     expect(dirs).toEqual([...expectedSkills].sort());
     expect(existsSync(join(skillsDir, "site"))).toBe(false);
@@ -92,6 +94,52 @@ describe("fixer agent", () => {
   test("names all four results and the fix note headings", () => {
     for (const result of ["FIXED", "CODE", "GAVE_UP", "WARDEN_BUG"]) expect(text).toContain(result);
     expect(text).toContain("Symptom, Root cause, Fix, Test");
+  });
+});
+
+describe("ticket agent", () => {
+  const text = read(join(pluginRoot, "agents", "ticket.md"));
+  const fm = parseFrontmatter(text);
+
+  test("frontmatter", () => {
+    expect(fm.name).toBe("ticket");
+    expect(fm.tools).toBe("Bash, Read, Edit, Write, Glob, Grep, Skill");
+    expect(fm.model).toBeUndefined();
+    expect((fm.description ?? "").length).toBeGreaterThan(10);
+  });
+
+  test("names the reply words and the input keys", () => {
+    for (const word of ["READY", "FIX", "SHIPPED", "DONE", "WAITING", "BLOCKED", "ASK"]) expect(text).toContain(word);
+    for (const key of ["Task", "Worktree", "Mode", "Main", "Note"]) expect(text).toContain(`\`${key}\``);
+  });
+});
+
+describe("orchestrate skill", () => {
+  test("uses the exact ticket agent prompt keys", () => {
+    const text = read(join(skillsDir, "orchestrate", "SKILL.md"));
+    for (const key of ["Task:", "Worktree:", "Mode: work", "Mode: ship", "Main:", "Note:"]) expect(text).toContain(key);
+  });
+});
+
+describe("shipped text", () => {
+  test("skills and agents never use the word issue and keep the hidden strings out", () => {
+    const files = [
+      ...readdirSync(skillsDir).map((dir) => join(skillsDir, dir, "SKILL.md")),
+      ...readdirSync(join(pluginRoot, "agents")).map((file) => join(pluginRoot, "agents", file)),
+    ];
+    for (const file of files) {
+      const text = read(file);
+      expect(/\bissues?\b/i.test(text)).toBe(false);
+      for (const hidden of ["thucxuong", "WD-"]) expect(text).not.toContain(hidden);
+    }
+  });
+
+  test("tools, work and compose carry the 0.3 text", () => {
+    expect(read(join(skillsDir, "tools", "SKILL.md"))).toContain("/warden:fix");
+    expect(read(join(skillsDir, "work", "SKILL.md"))).toContain("graph.ts query");
+    const compose = read(join(skillsDir, "compose", "SKILL.md"));
+    expect(compose).toContain("| A small change that must be merged, such as a chore ticket | `chore` |");
+    expect(compose).toContain("`do`, `feature`, `bugfix` or `chore`");
   });
 });
 

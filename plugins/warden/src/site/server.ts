@@ -1,6 +1,8 @@
 // Bun.serve routes for `warden site` (spec 9). Read-only: nothing is cached or written.
 import { join } from "node:path";
-import { listDocs, listTaskRows, readDoc, readProjectId, taskDetail, taskEvents } from "./data.ts";
+import { readPlans } from "../engine/tickets.ts";
+import { listDocs, listTaskRows, readDoc, readGraph, readProjectId, taskDetail, taskEvents } from "./data.ts";
+import { renderMarkdown } from "./markdown.ts";
 
 const INDEX_HTML = join(import.meta.dir, "index.html");
 // Mirrors taskDir's rule, so a bad id is a plain 404 instead of an error.
@@ -34,7 +36,11 @@ function taskRoute(main: string, parts: string[]): Response {
 
 function docRoute(main: string, url: URL): Response {
   const result = readDoc(main, url.searchParams.get("path"));
-  if (result.ok) return new Response(result.text, { headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
+  if (result.ok) {
+    const html = url.searchParams.get("format") === "html";
+    const body = html ? renderMarkdown(result.text, { docPath: url.searchParams.get("path")! }) : result.text;
+    return new Response(body, { headers: { "content-type": `${html ? "text/html" : "text/plain"}; charset=utf-8`, "cache-control": "no-store" } });
+  }
   return json({ error: result.status === 400 ? "bad path" : "not found" }, result.status);
 }
 
@@ -51,6 +57,8 @@ function route(main: string, req: Request): Response | Promise<Response> {
   if (path.startsWith("/api/tasks/")) return taskRoute(main, path.slice("/api/tasks/".length).split("/").map(safeDecode));
   if (path === "/api/docs") return json({ docs: listDocs(main) });
   if (path === "/api/doc") return docRoute(main, url);
+  if (path === "/api/tickets") return json({ epics: readPlans(main) });
+  if (path === "/api/graph") return json({ graph: readGraph(main) });
   return notFound();
 }
 

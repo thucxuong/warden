@@ -1,0 +1,6 @@
+{
+  "name": "ci-status",
+  "version": "0.1.0",
+  "needs": ["gh", "git"],
+  "description": "Show the CI state of the current commit and the failed jobs of a run."
+}

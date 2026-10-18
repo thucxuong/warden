@@ -46,7 +46,43 @@
   .docs li button:hover, .docs li button[aria-current="true"] { background: var(--soft); }
   .docs .path { display: block; font-size: 11px; color: var(--muted); }
   .events { max-height: 260px; overflow: auto; font: 12px/1.5 ui-monospace, monospace; }
-  @media (max-width: 700px) { .docs { grid-template-columns: 1fr; } }
+  nav button[hidden] { display: none; }
+  #doctext { min-width: 0; overflow: auto; }
+  .md h1, .md h2, .md h3, .md h4, .md h5, .md h6 { margin: 1.2em 0 .4em; line-height: 1.25; }
+  .md h1 { font-size: 20px; } .md h2 { font-size: 17px; } .md h3 { font-size: 15px; } .md h4, .md h5, .md h6 { font-size: 14px; }
+  .md > :first-child { margin-top: 0; }
+  .md p, .md ul, .md ol, .md table, .md blockquote, .md pre { margin: 0 0 .8em; }
+  .md ul, .md ol { padding-left: 1.6em; }
+  .md code { font: 12px ui-monospace, monospace; background: var(--soft); padding: 1px 4px; border-radius: 3px; }
+  .md pre code { background: none; padding: 0; }
+  .md pre.fm { color: var(--muted); }
+  .md blockquote { border-left: 3px solid var(--line); padding: 0 12px; color: var(--muted); }
+  .md table th, .md table td { white-space: normal; border: 1px solid var(--line); }
+  .md hr { border: 0; border-top: 1px solid var(--line); }
+  .md a { color: LinkText; }
+  .epic { margin-bottom: 32px; }
+  .epic h2 { margin: 0 0 4px; font-size: 16px; }
+  .epic ul.errors { margin: 4px 0 8px; padding-left: 20px; color: #c0392b; }
+  .chart { position: relative; }
+  .chart svg { position: absolute; inset: 0; color: var(--muted); }
+  .chart .col { position: absolute; top: 0; font-size: 12px; font-weight: 600; color: var(--muted); }
+  .card { position: absolute; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--soft); overflow: hidden; font-size: 12px; line-height: 1.4; }
+  .card .cid { display: flex; justify-content: space-between; gap: 6px; font-weight: 600; }
+  .card .ctitle, .card .cmeta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .cmeta { color: var(--muted); }
+  .p-running { border-color: Highlight; color: Highlight; } .p-fix, .p-blocked { border-color: #c0392b; color: #c0392b; }
+  .p-ready, .p-merged, .p-done { border-color: #1e8449; color: #1e8449; } .p-waiting { border-color: #b9770e; color: #b9770e; }
+  .p-pr-open { border-color: #8e5bb5; color: #8e5bb5; } .p-todo, .p-no-ship { color: var(--muted); }
+  .graph-bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+  .graph-bar input { font: inherit; padding: 3px 8px; min-width: 240px; }
+  .graph-wrap { display: grid; grid-template-columns: 1fr minmax(200px, 320px); gap: 16px; }
+  #graphsvg { width: 100%; height: auto; max-height: 80vh; border: 1px solid var(--line); border-radius: 6px; }
+  #graphsvg .edge { stroke: var(--muted); stroke-opacity: .25; fill: none; }
+  #graphsvg .edge.on { stroke: Highlight; stroke-opacity: .9; } #graphsvg .edge.off { display: none; }
+  #graphsvg circle { cursor: pointer; stroke: Canvas; stroke-width: 1; } #graphsvg circle.dim { opacity: .15; }
+  #graphsvg circle.sel { stroke: CanvasText; stroke-width: 2; }
+  #graphinfo { min-width: 0; overflow-wrap: anywhere; } #graphinfo h3 { margin: 12px 0 4px; font-size: 13px; }
+  @media (max-width: 700px) { .docs, .graph-wrap { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
@@ -56,15 +92,22 @@
 </header>
 <nav role="tablist">
   <button role="tab" id="tab-tasks" aria-selected="true">Tasks</button>
+  <button role="tab" id="tab-tickets" aria-selected="false" hidden>Tickets</button>
   <button role="tab" id="tab-docs" aria-selected="false">Docs</button>
+  <button role="tab" id="tab-graph" aria-selected="false" hidden>Graph</button>
 </nav>
 <main>
   <section id="view-tasks">
     <div class="scroll"><table id="tasks"></table></div>
     <div id="detail" hidden></div>
   </section>
+  <section id="view-tickets" hidden><div id="epics"></div></section>
   <section id="view-docs" hidden>
-    <div class="docs"><ul id="doclist"></ul><pre id="doctext">Pick a document.</pre></div>
+    <div class="docs"><ul id="doclist"></ul><div id="doctext" class="md"><p class="muted">Pick a document.</p></div></div>
+  </section>
+  <section id="view-graph" hidden>
+    <div class="graph-bar"><input id="graphfilter" type="search" placeholder="Filter by path" aria-label="Filter by path"><span id="graphmeta" class="muted"></span></div>
+    <div class="graph-wrap"><svg id="graphsvg" role="img" aria-label="Code graph"></svg><div id="graphinfo" class="muted">Click a file.</div></div>
   </section>
 </main>
 <script>
@@ -214,28 +257,189 @@ async function loadDocs() {
 async function openDoc(path) {
   state.docPath = path;
   state.shown.doclist = null;
-  const res = await fetch("/api/doc?path=" + encodeURIComponent(path), { cache: "no-store" });
-  $("doctext").textContent = res.ok ? await res.text() : "Could not load " + path;
+  const res = await fetch("/api/doc?format=html&path=" + encodeURIComponent(path), { cache: "no-store" });
+  if (state.docPath !== path) return;
+  // The server escapes all document text; this is the one place HTML from the API is inserted.
+  if (res.ok) $("doctext").innerHTML = await res.text();
+  else $("doctext").textContent = "Could not load " + path;
+  $("doctext").scrollTop = 0;
   loadDocs();
+}
+
+// ---- tickets ----
+
+const CARD_W = 190, CARD_H = 62, COL_GAP = 56, ROW_GAP = 12, TOP = 22;
+
+function epicChart(plan, n) {
+  const cols = [];
+  const done = plan.tickets.filter((t) => t.status === "done");
+  if (done.length) cols.push({ name: "Done", tickets: done });
+  const maxWave = plan.tickets.reduce((m, t) => (t.status !== "done" && t.wave ? Math.max(m, t.wave) : m), 0);
+  for (let w = 1; w <= maxWave; w++) cols.push({ name: "Wave " + w, tickets: plan.tickets.filter((t) => t.status !== "done" && t.wave === w) });
+  const held = plan.tickets.filter((t) => t.status !== "done" && !t.wave);
+  if (held.length) cols.push({ name: "Held", tickets: held });
+  const pos = new Map();
+  cols.forEach((c, x) => c.tickets.forEach((t, y) => pos.set(t.id, { x: x * (CARD_W + COL_GAP), y: TOP + y * (CARD_H + ROW_GAP) })));
+  const width = Math.max(1, cols.length) * (CARD_W + COL_GAP) - COL_GAP;
+  const height = TOP + Math.max(1, ...cols.map((c) => c.tickets.length)) * (CARD_H + ROW_GAP);
+  const lines = [];
+  for (const t of plan.tickets) {
+    const to = pos.get(t.id);
+    for (const b of t.blocked_by || []) {
+      const from = pos.get(b);
+      if (!from) continue;
+      let x1, y1, x2, y2;
+      if (from.x === to.x) { // same column: top or bottom edges
+        const down = from.y < to.y;
+        x1 = x2 = from.x + CARD_W / 2; y1 = from.y + (down ? CARD_H : 0); y2 = to.y + (down ? 0 : CARD_H);
+      } else {
+        const right = from.x < to.x;
+        x1 = from.x + (right ? CARD_W : 0); x2 = to.x + (right ? 0 : CARD_W);
+        y1 = from.y + CARD_H / 2; y2 = to.y + CARD_H / 2;
+      }
+      lines.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="currentColor" stroke-width="1.2" marker-end="url(#arrow-${n})"/>`);
+    }
+  }
+  const heads = cols.map((c, x) => `<div class="col" style="left:${x * (CARD_W + COL_GAP)}px">${esc(c.name)}</div>`).join("");
+  const cards = plan.tickets.map((t) => {
+    const p = pos.get(t.id);
+    return `<div class="card" style="left:${p.x}px;top:${p.y}px;width:${CARD_W}px;height:${CARD_H}px" title="${esc(t.id + ": " + t.title)}">
+      <div class="cid"><span>${esc(t.id)}</span><span class="badge p-${esc(t.phase)}">${esc(t.phase)}</span></div>
+      <div class="ctitle">${esc(t.title)}</div><div class="cmeta">${esc(t.template)}</div></div>`;
+  }).join("");
+  const svg = `<svg width="${width}" height="${height}"><defs><marker id="arrow-${n}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="currentColor"/></marker></defs>${lines.join("")}</svg>`;
+  return `<div class="scroll"><div class="chart" style="width:${width}px;height:${height}px">${svg}${heads}${cards}</div></div>`;
+}
+
+function renderEpics(epics) {
+  const html = epics.map((p, n) => `<div class="epic"><h2>${esc(p.epic)} · plan at ${esc(fmtTime(p.at))}</h2>
+    ${p.errors && p.errors.length ? `<ul class="errors">${p.errors.map((e) => `<li>${esc(e)}</li>`).join("")}</ul>` : ""}
+    ${epicChart(p, n)}</div>`).join("");
+  paint("epics", $("epics"), html);
+}
+
+async function loadTickets() {
+  try {
+    const { epics } = await getJson("/api/tickets");
+    $("tab-tickets").hidden = !epics.length;
+    if (!epics.length && state.tab === "tickets") showTab("tasks");
+    if (state.tab === "tickets") renderEpics(epics);
+  } catch {
+    // keep what is shown
+  }
+}
+
+// ---- graph ----
+
+const SVGNS = "http://www.w3.org/2000/svg";
+const svgEl = (name, attrs) => {
+  const el = document.createElementNS(SVGNS, name);
+  for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, v);
+  return el;
+};
+const graph = { data: null, nodes: new Map(), edges: [], selected: null };
+
+function buildGraph(g) {
+  const svg = $("graphsvg");
+  svg.replaceChildren();
+  graph.data = g; graph.nodes = new Map(); graph.edges = []; graph.selected = null;
+  const files = [...g.files].sort((a, b) => a.community - b.community || (a.path < b.path ? -1 : 1));
+  const R = Math.max(180, files.length * 5), C = R + 40;
+  svg.setAttribute("viewBox", `0 0 ${2 * C} ${2 * C}`);
+  const pt = new Map();
+  files.forEach((f, i) => {
+    const a = (2 * Math.PI * i) / files.length - Math.PI / 2;
+    pt.set(f.path, [C + R * Math.cos(a), C + R * Math.sin(a)]);
+  });
+  const lines = svgEl("g");
+  for (const e of g.edges) {
+    const [x1, y1] = pt.get(e.from), [x2, y2] = pt.get(e.to);
+    const line = svgEl("line", { class: "edge", x1, y1, x2, y2, "stroke-width": Math.min(4, 1 + Math.log2(e.count)) });
+    lines.append(line);
+    graph.edges.push({ e, line });
+  }
+  svg.append(lines);
+  for (const f of files) {
+    const [cx, cy] = pt.get(f.path);
+    const c = svgEl("circle", { cx, cy, r: Math.min(9, 3 + Math.sqrt(f.symbols) / 2), fill: `hsl(${(f.community * 47) % 360} 55% 50%)` });
+    c.dataset.path = f.path;
+    const t = svgEl("title"); t.textContent = `${f.path} (${f.symbols} symbols)`;
+    c.append(t);
+    svg.append(c);
+    graph.nodes.set(f.path, c);
+  }
+  $("graphmeta").textContent = `built ${fmtTime(g.builtAt)} · ${g.files.length} files · ${g.edges.length} links` + (g.cut ? ` · ${g.cut} files cut` : "");
+  applyGraph();
+}
+
+function applyGraph() {
+  const q = $("graphfilter").value.trim().toLowerCase();
+  const sel = graph.selected;
+  for (const [path, c] of graph.nodes) {
+    c.classList.toggle("dim", q !== "" && !path.toLowerCase().includes(q));
+    c.classList.toggle("sel", path === sel);
+  }
+  for (const { e, line } of graph.edges) {
+    const hidden = q !== "" && !(e.from.toLowerCase().includes(q) && e.to.toLowerCase().includes(q));
+    line.classList.toggle("off", hidden);
+    line.classList.toggle("on", sel !== null && (e.from === sel || e.to === sel));
+  }
+  const info = $("graphinfo");
+  if (!sel) { info.textContent = "Click a file."; return; }
+  const uses = graph.edges.filter(({ e }) => e.from === sel).map(({ e }) => `${e.to} (${e.count})`);
+  const usedBy = graph.edges.filter(({ e }) => e.to === sel).map(({ e }) => `${e.from} (${e.count})`);
+  const list = (items) => (items.length ? `<ul class="plain">${items.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>` : `<p class="muted">None.</p>`);
+  info.innerHTML = `<strong>${esc(sel)}</strong><h3>Uses</h3>${list(uses)}<h3>Used by</h3>${list(usedBy)}`;
+}
+
+async function loadGraph() {
+  try {
+    const { graph: g } = await getJson("/api/graph");
+    $("tab-graph").hidden = !g;
+    if (!g && state.tab === "graph") showTab("tasks");
+    if (g) buildGraph(g);
+  } catch {
+    // keep what is shown
+  }
 }
 
 // ---- wiring ----
 
+const TABS = ["tasks", "tickets", "docs", "graph"];
+
 function showTab(name) {
   state.tab = name;
-  for (const t of ["tasks", "docs"]) {
+  for (const t of TABS) {
     $("view-" + t).hidden = t !== name;
     $("tab-" + t).setAttribute("aria-selected", String(t === name));
   }
   if (name === "docs") loadDocs();
+  if (name === "tickets") loadTickets();
+  if (name === "graph") loadGraph();
 }
 
-$("tab-tasks").onclick = () => showTab("tasks");
-$("tab-docs").onclick = () => showTab("docs");
+for (const t of TABS) $("tab-" + t).onclick = () => showTab(t);
 $("doclist").onclick = (e) => {
   const button = e.target.closest("button[data-path]");
   if (button) openDoc(button.dataset.path);
 };
+$("doctext").onclick = (e) => {
+  const a = e.target.closest("a");
+  if (!a) return;
+  if (a.dataset.doc) { e.preventDefault(); openDoc(a.dataset.doc); return; }
+  const href = a.getAttribute("href") || "";
+  if (href.startsWith("#")) { // same page: ids in the document, not in the page
+    e.preventDefault();
+    const target = [...$("doctext").querySelectorAll("[id]")].find((el) => el.id === decodeURIComponent(href.slice(1)));
+    if (target) target.scrollIntoView();
+  }
+};
+$("graphsvg").onclick = (e) => {
+  const c = e.target.closest("circle[data-path]");
+  graph.selected = c && c.dataset.path !== graph.selected ? c.dataset.path : null;
+  applyGraph();
+};
+$("graphfilter").oninput = applyGraph;
 $("tasks").onclick = (e) => {
   const row = e.target.closest("tr[data-task]");
   if (!row) return;
@@ -256,6 +460,9 @@ async function tick() {
 
 tick();
 setInterval(tick, POLL_MS);
+loadTickets();
+loadGraph();
+setInterval(loadTickets, 5000); // also reveals the tab when the first plan appears
 </script>
 </body>
 </html>

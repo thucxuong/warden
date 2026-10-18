@@ -8,7 +8,7 @@ import { taskDir, worktreeRoot } from "../state/paths.ts";
 import {
   appendEvent, appendSessionLink, listTasks, readRun, readSessionLinks, readSessionRecord, runExists, upsertSessionRecord, withLock,
 } from "../state/store.ts";
-import type { Ctx, EventType, FlowJson, RunJson, SessionLink, StepsJson, WardenJson } from "../types.ts";
+import type { Ctx, EventType, FlowJson, RunJson, SessionLink, SessionRecord, StepsJson, WardenJson } from "../types.ts";
 import type { SpawnWorker } from "../engine/machine.ts";
 
 // The fields of Claude Code's hook JSON that warden reads.
@@ -187,16 +187,35 @@ export function runForCwd(main: string, cwd: string, runs = readRuns(main).filte
   return here[0] ?? null;
 }
 
+// The run named by a session record's task, among the runs a hook can still talk about.
+function runOfTask(main: string, task: string | null): RunJson | undefined {
+  return task === null ? undefined : readRuns(main).filter(resolvable).find((run) => run.task === task);
+}
+
 // Bash, Stop, UserPromptSubmit: the run named by the session record first, then the run for cwd.
+// An agent call uses its own agent record and never the main record (7.3).
 export function runForSession(call: HookCall): RunJson | null {
-  const runs = readRuns(call.main).filter(resolvable);
-  const task = sessionTask(call);
-  const linked = task === null ? undefined : runs.find((run) => run.task === task);
-  return linked ?? runForCwd(call.main, call.ctx.cwd, runs);
+  return runOfTask(call.main, sessionTask(call)) ?? runForCwd(call.main, call.ctx.cwd);
+}
+
+// SubagentStop step 1: only the agent record, no cwd.
+export function runForAgentRecord(call: HookCall): RunJson | null {
+  return runOfTask(call.main, sessionTask(call)) ?? null;
+}
+
+// SubagentStop step 3: the main thread's record (even for an agent call), then cwd.
+export function runForMainRecord(call: HookCall): RunJson | null {
+  return runOfTask(call.main, mainTask(call)) ?? runForCwd(call.main, call.ctx.cwd);
+}
+
+// The only live run whose current step is fix (the warden:fixer fallback), else null.
+export function onlyFixRun(main: string): RunJson | null {
+  const fixing = liveRuns(main).filter((run) => run.current.type === "fix");
+  return fixing.length === 1 ? fixing[0]! : null;
 }
 
 // ---------------------------------------------------------------------------
-// Session records (4.7) and links (7.6)
+// Session records (4.7, 0.3 7.1) and links (7.6)
 // ---------------------------------------------------------------------------
 
 function sessionId(call: HookCall): string | null {
@@ -204,18 +223,39 @@ function sessionId(call: HookCall): string | null {
   return typeof id === "string" && SESSION_ID.test(id) ? id : null;
 }
 
-function sessionTask(call: HookCall): string | null {
+// A valid agent_id makes the call an agent call; its session record is its own file.
+export function agentIdOf(call: HookCall): string | undefined {
+  const id = call.input.agent_id;
+  return typeof id === "string" && SESSION_ID.test(id) ? id : undefined;
+}
+
+function recordOf(call: HookCall, agentId: string | undefined): SessionRecord | null {
   const id = sessionId(call);
   if (id === null) return null;
   try {
-    return readSessionRecord(call.main, id)?.task ?? null;
+    return readSessionRecord(call.main, id, agentId);
   } catch {
     return null;
   }
 }
 
-// Creates or updates state/_sessions/<id>.json. projectAgent comes from this hook process's own env.
-export function recordSession(call: HookCall, task?: string): void {
+// The task of this call's own record: the agent record for an agent call, else the main record.
+function sessionTask(call: HookCall): string | null {
+  return recordOf(call, agentIdOf(call))?.task ?? null;
+}
+
+function mainTask(call: HookCall): string | null {
+  return recordOf(call, undefined)?.task ?? null;
+}
+
+// The epic the main thread of this session orchestrates, if any.
+export function orchestrating(call: HookCall): string | null {
+  return recordOf(call, undefined)?.orchestrate ?? null;
+}
+
+// Creates or updates this call's session record (state/_sessions/<id>[.agent-<agent>].json).
+// projectAgent comes from this hook process's own env. `orchestrate` is for the main record.
+export function recordSession(call: HookCall, task?: string | null, orchestrate?: string): void {
   const id = sessionId(call);
   if (id === null) return;
   const transcript = call.input.transcript_path;
@@ -223,7 +263,8 @@ export function recordSession(call: HookCall, task?: string): void {
     projectAgent: call.ctx.env.PROJECT_AGENT === "1",
     ...(typeof transcript === "string" && { transcriptPath: transcript }),
     ...(task !== undefined && { task }),
-  });
+    ...(orchestrate !== undefined && { orchestrate }),
+  }, agentIdOf(call));
 }
 
 // Appends the link unless `same` finds it already there. Never creates state for a run that does not exist.

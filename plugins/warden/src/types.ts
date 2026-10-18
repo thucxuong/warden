@@ -42,6 +42,11 @@ export interface CommandDef {
   env?: Record<string, string>; // added to the inherited env
 }
 
+export interface TicketsConfig {
+  tool: string;                                // /^[a-z][a-z0-9-]{0,40}$/, folder in .claude/skills/
+  command: string;                             // non-empty string; default "bun .claude/skills/<tool>/bin/tickets.ts"
+}
+
 export interface StepsJson {
   schema: 1;
   mainBranch: string;                          // e.g. "main"
@@ -63,6 +68,7 @@ export interface StepsJson {
   };
   triage: { branchReruns: number };            // 1..3, default 2
   fix: { scope: string[] };                    // Bun.Glob patterns the fixer may change
+  tickets?: TicketsConfig;                     // optional: ticket tool config for orchestrate
 }
 
 // ---------------------------------------------------------------------------
@@ -240,6 +246,8 @@ export interface SessionRecord {
   schema: 1; sessionId: string; transcriptPath: string;
   projectAgent: boolean;           // process.env.PROJECT_AGENT === "1" in the hook process
   task: string | null;             // set by PreToolUse when this session runs `warden start|next|done|wait` (7.4)
+  agentId?: string;                // set on agent records (§7.1)
+  orchestrate?: string | null;     // main record only: the epic of a `warden orchestrate plan|status` run in this session (§7.1)
   updatedAt: string;
 }
 
@@ -366,6 +374,59 @@ export interface HistorySummary {
   findings: { blocking: number; minor: number; dropped: number; leftovers: number };
   tokens: StepSummary["tokens"]; costUsd: number;  // costUsd is an estimate
   author: { name: string; email: string }; commit: string; pr: string | null; branch: string;
+}
+
+// ---------------------------------------------------------------------------
+// 0.3: ticket tools and orchestrate
+// ---------------------------------------------------------------------------
+
+export type TicketStatus = "todo" | "doing" | "review" | "done";
+
+export interface DagTicket {
+  id: string;
+  title: string;
+  status: TicketStatus;
+  blocked_by: string[];           // ticket ids
+  epic?: string;                  // parent epic id, absent when none
+  type?: string;                  // lowercased, e.g. "bug", "feature", "chore"; absent when none
+}
+
+export type TicketDetail = DagTicket & { body: string };
+
+export type TicketTemplate = "chore" | "bugfix" | "feature" | "compose";
+export type TicketPhase = "todo" | "running" | "fix" | "ready" | "waiting" | "blocked" | "pr-open" | "merged" | "no-ship" | "done";
+
+export interface TicketRun {
+  status: RunStatus;
+  step: string;
+  stepType: StepType | "fix";
+  worktree: string;
+  branch: string;
+  reason: string | null;           // run.waiting?.reason
+  pr: string | null;
+  merged: boolean;                 // from the accepted ship output; null/false before ship
+}
+
+export interface OrchestrateTicket extends DagTicket {
+  wave: number | null;             // 1-based; null for done, held and cycle tickets
+  template: TicketTemplate;
+  phase: TicketPhase;
+  run: TicketRun | null;
+}
+
+export interface OrchestratePlan {
+  schema: 1;
+  epic: string;
+  at: string;
+  tool: string;
+  mainBranch: string;              // paths.mainBranch for the ship agents
+  mainRef: string;                 // paths.mainRef, for the ship agents
+  tickets: OrchestrateTicket[];    // the epic's children, sorted by id
+  waves: string[][];               // not-done tickets, wave by wave
+  next: string[];                  // waves[0] ?? []
+  held: { id: string; blockers: string[] }[];  // waiting on a ticket outside the epic that is not done
+  errors: string[];
+  complete: boolean;               // every child is done
 }
 
 // ---------------------------------------------------------------------------

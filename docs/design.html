@@ -123,6 +123,7 @@
             <div><code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">do</code> <span class="text-slate-500">implement → check</span></div>
             <div><code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">feature</code> <span class="text-slate-500">plan → implement → check → review → ship</span></div>
             <div><code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">bugfix</code> <span class="text-slate-500">reproduce → diagnose → feature flow</span></div>
+            <div><code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">chore</code> <span class="text-slate-500">implement → check → ship</span></div>
           </div>
         </div>
       </div>
@@ -200,6 +201,7 @@
         <ul class="list-disc pl-5 space-y-1.5">
           <li><b>Gates run by the engine</b>, not reported by the CPA.</li>
           <li><b>Proof is tied to the commit:</b> any code change after a gate cancels it.</li>
+          <li><b>Several runs at once:</b> edits are matched by path; Bash by the directory a command works in, then the agent's own link; each subagent has its own session record; the orchestrator is never linked to a ticket; in the ship step, files may be edited while a merge of main is in progress.</li>
           <li><b>Hooks:</b>
             <ul class="list-[circle] pl-5 mt-1 space-y-1">
               <li>Editing files is blocked in steps that shouldn't change code (e.g. plan).</li>
@@ -257,7 +259,9 @@
             <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">knowledge/&lt;area&gt;.md</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Facts learned about one code area: gotchas, quirks</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Rules</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Any step, when surprised</td></tr>
             <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">retros/&lt;date&gt;.md</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">One retro: findings, where each was sent</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">The fixes themselves</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Retro</td></tr>
             <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">reports.md</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Reports sent to warden: ID, title, status, fixed-in version</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Issue links, repo names</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Report, session start</td></tr>
-            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">tools.md</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Tools copied from warden: name, version, customized, fixes applied</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">CPA-built tools</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Add tool, apply fix</td></tr>
+            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">tools.md</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Tools copied from warden: name, version, customized, fixes applied (versions)</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">CPA-built tools</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Add tool, /warden:fix</td></tr>
+            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">state/_orchestrate/&lt;epic&gt;.json</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">The last orchestrate plan: tickets, waves, phases; site chart</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Live runs</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800"><code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">warden orchestrate plan</code></td></tr>
+            <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">state/_graph/</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Code graph from the graph tool; untracked</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Anything hand-written</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800"><code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">graph.ts build</code></td></tr>
             <tr><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800 font-mono">.claude/skills/&lt;tool&gt;/</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">The CP's tools — copied from warden or built by the CPA</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Warden workflows</td><td class="px-3 py-2 border-b border-slate-200 dark:border-slate-800">Add tool, CPA builds</td></tr>
           </tbody>
         </table>
@@ -287,7 +291,7 @@
           <li>Run in the CP. Starts a Bun server on the given port (default in <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">warden.json</code>).</li>
           <li>Reads the JSON in <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">state/</code> and <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">history/</code> on each request — nothing is generated or written.</li>
           <li>One fixed page that fetches the data and refreshes live, so running tasks update on screen.</li>
-          <li>Shows: tasks table → timeline, tokens, findings, verdicts; docs as plain text. Ticket DAG and code graph: later.</li>
+          <li>Shows: tasks table → timeline, tokens, findings, verdicts; ticket chart per orchestrated epic; docs rendered as Markdown; code graph when the graph tool built one.</li>
           <li>Replaces the Next.js docs site and Pipeline Studio. Committed history makes it cover the whole CP team.</li>
         </ul>
       </div>
@@ -330,7 +334,7 @@
             <li><b>Only WA creates issues.</b> The CPA sees report IDs and plain status only.</li>
           </ul>
           <ul class="list-disc pl-5 space-y-1">
-            <li><b>Session start:</b> runs to resume, layout upgrade needed, newer version available, checks due (offered, never started; auto command checks run in background), report status changes.</li>
+            <li><b>Session start:</b> runs to resume, layout upgrade needed, newer version available, checks due (offered, never started; auto command checks run in background), tool fixes available (offered), orchestration to resume (offered), report status changes.</li>
             <li><b>Retro:</b> the built-in agent check every 2 days. The CPA offers it, and it runs only on the user's yes.</li>
           </ul>
         </div>
@@ -360,40 +364,42 @@
       <div class="grid gap-3 sm:grid-cols-2">
         <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 text-sm">
           <pre class="text-xs bg-slate-100 dark:bg-slate-800 rounded p-3 overflow-x-auto">registry/&lt;tool&gt;/
-  tool.json     name, version, needs (az, gh…)
+  tool.json     name, version, needs (az, gh…), kind
   SKILL.md      how the CPA uses it
   bin/*.ts      Bun scripts
   fixes/vX.Y.Z.md</pre>
           <ul class="mt-3 list-disc pl-5 space-y-1">
-            <li>Commands: <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">/warden:tools list</code>, <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">/warden:tools add &lt;name&gt;</code>.</li>
-            <li>Only <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">git-pr</code> ships; the other starter tools and <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">/warden:fix</code> are later.</li>
-            <li>Fixes are notes (what, how, how to apply to a customized copy), never overwrites.</li>
+            <li>Commands: <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">/warden:tools list</code>, <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">add &lt;name&gt;</code>, <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">warden tools fixes</code>, <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">/warden:fix</code>.</li>
+            <li><b>Ticket tools</b> (backlog, github-issues, ado) share <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">dag [&lt;epic&gt;]</code>, <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">show</code>, <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">set-status</code>. They need <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">"tickets": {"tool": "&lt;name&gt;"}</code> in <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">.warden/steps.json</code>.</li>
+            <li>Fixes are notes (what, how, how to apply to a customized copy), applied on top of the CP's copy; <code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">tools.md</code> records the version.</li>
             <li>Retro can promote a CPA-built tool → WA generalizes it.</li>
           </ul>
         </div>
         <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 text-sm">
-          <h3 class="font-semibold">Starter tools (later)</h3>
+          <h3 class="font-semibold">Shipped tools</h3>
           <div class="mt-2 flex flex-wrap gap-2">
-            <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-slate-200 text-slate-600 dark:bg-slate-800">ado</span>
-            <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-slate-200 text-slate-600 dark:bg-slate-800">github-issues</span>
-            <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-slate-200 text-slate-600 dark:bg-slate-800">e2e</span>
-            <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-slate-200 text-slate-600 dark:bg-slate-800">ci-status</span>
-            <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-slate-200 text-slate-600 dark:bg-slate-800">graph (graphify)</span>
+            <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700">git-pr</span>
+            <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700">backlog</span>
+            <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700">github-issues</span>
+            <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700">ado</span>
+            <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700">e2e</span>
+            <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700">ci-status</span>
+            <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700">graph</span>
           </div>
-          <p class="mt-3"><b>Shipped now:</b> <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700">git-pr</span></p>
         </div>
       </div>
     </section>
 
     <!-- DAG -->
     <section id="dag">
-      <h2 class="text-xl font-semibold mt-10 mb-3">15. Multi-ticket orchestration (ticket DAG) — later (not in 0.2)</h2>
+      <h2 class="text-xl font-semibold mt-10 mb-3">15. Multi-ticket orchestration (ticket DAG)</h2>
       <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 text-sm">
         <ul class="list-disc pl-5 space-y-1">
-          <li><code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">/warden:orchestrate &lt;epic&gt;</code> reads the DAG from the CP's ticket tool.</li>
-          <li>A wave = every ticket whose blockers are all done.</li>
-          <li>One agent per ticket, each in its own git worktree, each with its own engine run.</li>
-          <li>Merge in dependency order, rebasing on main before each.</li>
+          <li><code class="text-xs bg-slate-100 dark:bg-slate-800 rounded px-1.5">warden orchestrate plan &lt;epic&gt;</code> reads the DAG from the ticket tool and prints waves (checks cycles and unknown blockers).</li>
+          <li>Runs start one at a time, each in its own worktree.</li>
+          <li>One ticket agent per ticket works in parallel; fix steps come back to the orchestrator for the fixer.</li>
+          <li>Ship goes one ticket at a time in wave order, after merging main, so gates run on the merged code; the ticket is marked done.</li>
+          <li>Any blocked, waiting or unmerged ticket stops it, and running it again goes on.</li>
         </ul>
       </div>
     </section>
@@ -437,7 +443,7 @@
       <div class="space-y-2">
         <p class="text-sm text-slate-500">None right now.</p>
       </div>
-      <p class="mt-10 text-xs text-slate-400">Matches warden 0.2 · 2026-10-18</p>
+      <p class="mt-10 text-xs text-slate-400">Matches warden 0.3 · 2026-10-18</p>
     </section>
   </main>
 

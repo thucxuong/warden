@@ -49,7 +49,7 @@ describe("cli", () => {
   test("allowlist is exactly the spec list", () => {
     expect([...COMMANDS]).toEqual([
       "version", "init", "start", "next", "done", "wait", "status", "approve", "retry", "reset",
-      "flow", "report", "retro", "upgrade", "tools", "site", "hook", "gate", "checks",
+      "flow", "report", "retro", "upgrade", "tools", "site", "hook", "gate", "checks", "orchestrate",
     ]);
   });
 
@@ -78,6 +78,9 @@ describe("help", () => {
     expect(await main(["bun", "cli.ts", "--help"], ctx)).toBe(0);
     expect(await main(["bun", "cli.ts", "report", "--help"], ctx)).toBe(0);
     expect(HELP.report).toContain("warden report --status");
+    expect(HELP.start).toBe("warden start <task> --template do|feature|bugfix|chore | --flow <name|path> [--text <t> | --text-file <p> | --ticket] [--worktree] [--branch <b>]");
+    expect(HELP.orchestrate).toBe("warden orchestrate plan <epic> | status <epic> | set-status <id> <status>");
+    expect(HELP.tools).toBe("warden tools list | add <name> | fixes [<tool>] | applied <tool> <version>");
   });
 });
 

@@ -12,7 +12,7 @@ const codesOf = async (name: string, checkNames?: string[]) =>
   [...new Set(lintFlow(await fixture(name), checkNames).map((e) => e.code))].sort();
 
 describe("valid flows", () => {
-  test.each(["do", "feature", "bugfix"])("template %s lints clean", async (name) => {
+  test.each(["do", "feature", "bugfix", "chore"])("template %s lints clean", async (name) => {
     expect(lintFlow(await loadJson(join(templateDir, `${name}.json`)), ["default"])).toEqual([]);
   });
 

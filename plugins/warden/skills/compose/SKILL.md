@@ -14,6 +14,7 @@ argument-hint: "<task-id> [what to do]"
 | New feature, schema or API change, many files, new UI, auth entry point, or no label | `feature` |
 | Bug in existing code | `bugfix` |
 | Docs, config only, typo, single-file obvious edit | `do` |
+| A small change that must be merged, such as a chore ticket | `chore` |
 | Investigation or spike (no code change) | Compose a flow with one `analyze` step, variant `spike` |
 | Other shapes (for example a migration: analyze, plan, approve, implement, check, ship) | Compose a custom flow |
 
@@ -25,7 +26,7 @@ argument-hint: "<task-id> [what to do]"
    Flow: <name>
    Why: <one line>
    ```
-6. Start the run: `warden start <task> --template <t> --text '<what to do>'` (one command; write a single quote in the text as `’`). For a saved or custom flow, use `--flow <name or path>` instead of `--template`.
+6. Start the run: `warden start <task> --template <t> --text '<what to do>'` (`<t>` is `do`, `feature`, `bugfix` or `chore`; one command; write a single quote in the text as `’`). For a saved or custom flow, use `--flow <name or path>` instead of `--template`.
    Add `--worktree` unless the user is already on a ticket branch.
 7. If warden created or reused a worktree, `cd` into it. Run every later command from there.
 8. Continue with the work skill.

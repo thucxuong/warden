@@ -154,7 +154,7 @@ export function deleteBranch(cwd: string, branch: string): void {
 // With newBranch: creates it at ref and checks it out in the new worktree. Without: checks out ref.
 export function worktreeAdd(main: string, path: string, ref: string, newBranch?: string): void {
   const args = ["worktree", "add"];
-  if (newBranch !== undefined) args.push("-b", newBranch);
+  if (newBranch !== undefined) args.push("--no-track", "-b", newBranch); // no upstream: parallel workers must not lock .git/config
   args.push(path, ref);
   gitOk(main, args);
 }

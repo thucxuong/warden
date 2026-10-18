@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0 — 2026-10-18
+
+- Ticket tools `backlog`, `github-issues` and `ado` with one command set (`dag`, `show`, `set-status`).
+- `steps.json` `tickets`, `warden start --ticket` and the `chore` template.
+- `warden orchestrate plan / status / set-status`: waves, cycle and blocker checks, phases, a cached plan.
+- `/warden:orchestrate <epic>` skill and the `warden:ticket` agent.
+- Hooks handle several live runs at once: per-agent session records, orchestrating sessions, merge conflicts at ship.
+- Registry tools `e2e`, `ci-status` and `graph`.
+- Tool fix notes: `warden tools fixes / applied`, `/warden:fix` and a session start line.
+- Site: ticket chart, rendered Markdown docs and code graph.
+
 ## 0.2.3 — 2026-10-18
 
 - The agent may run /warden:upgrade itself after the user agrees; session start asks it to offer the upgrade.

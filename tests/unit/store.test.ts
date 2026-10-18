@@ -172,5 +172,33 @@ describe("sessions", () => {
   test("session id that could leave the dir is refused", () => {
     expect(() => readSessionRecord(main, "../x")).toThrow(WardenError);
     expect(() => upsertSessionRecord(main, "a/b", {})).toThrow(WardenError);
+    expect(() => readSessionRecord(main, "s1", "../x")).toThrow(WardenError);
+    expect(() => upsertSessionRecord(main, "s1", {}, "a/b")).toThrow(WardenError);
+  });
+
+  test("agent records live in <session>.agent-<agent>.json, apart from the main record", () => {
+    upsertSessionRecord(main, "s1", { task: "T-9" });
+    const a1 = upsertSessionRecord(main, "s1", { task: "T-1", transcriptPath: "/a1" }, "a1");
+    upsertSessionRecord(main, "s1", { task: "T-2" }, "a2");
+    expect(a1).toMatchObject({ sessionId: "s1", agentId: "a1", task: "T-1", transcriptPath: "/a1" });
+    expect(existsSync(join(main, ".warden/state/_sessions/s1.agent-a1.json"))).toBe(true);
+    expect(readSessionRecord(main, "s1", "a2")?.task).toBe("T-2");
+    expect(readSessionRecord(main, "s1")).toMatchObject({ task: "T-9" });
+    expect(readSessionRecord(main, "s1")?.agentId).toBeUndefined();
+    expect(readSessionRecord(main, "s1", "a3")).toBeNull();
+  });
+
+  test("writeSessionRecord picks the file from record.agentId", () => {
+    writeSessionRecord(main, { schema: 1, sessionId: "s1", agentId: "a1", transcriptPath: "/t", projectAgent: false, task: "T-1", updatedAt: "" });
+    expect(existsSync(join(main, ".warden/state/_sessions/s1.agent-a1.json"))).toBe(true);
+    expect(existsSync(join(main, ".warden/state/_sessions/s1.json"))).toBe(false);
+  });
+
+  test("upsert keeps agentId and orchestrate", () => {
+    upsertSessionRecord(main, "s1", { orchestrate: "EP-1" });
+    expect(upsertSessionRecord(main, "s1", { task: null })).toMatchObject({ orchestrate: "EP-1" });
+    upsertSessionRecord(main, "s1", { task: "T-1" }, "a1");
+    expect(upsertSessionRecord(main, "s1", { transcriptPath: "/x" }, "a1")).toMatchObject({ agentId: "a1", task: "T-1", transcriptPath: "/x" });
+    expect(readSessionRecord(main, "s1")?.orchestrate).toBe("EP-1");
   });
 });

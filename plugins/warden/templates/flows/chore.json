@@ -1,0 +1,4 @@
+{ "schema": 1, "name": "chore", "description": "Small change that must be merged: implement, check, ship.",
+  "steps": [ { "id": "implement", "type": "implement" },
+             { "id": "check", "type": "check", "check": "default" },
+             { "id": "ship", "type": "ship" } ] }
