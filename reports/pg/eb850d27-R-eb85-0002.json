@@ -6,8 +6,8 @@
   "title": "Machine B test 2: second report after 0.4.1",
   "body": "Second cross-machine test. Please mark wontfix.",
   "createdAt": "2026-10-18T18:15:06.223Z",
-  "status": "sent",
+  "status": "needs-info",
   "fixedIn": null,
-  "note": null,
+  "note": "This looks like a test report and does not describe an enhancement. What change do you want in warden, and what should it do?",
   "machineId": "eb850d27"
 }
