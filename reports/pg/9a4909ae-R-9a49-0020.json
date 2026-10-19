@@ -6,9 +6,9 @@
   "title": "Finished runs still list worktree folders that no longer exist",
   "body": "After a run is finished, warden still lists its worktree folder even though the folder is gone. I expected finished runs to not list missing folders.",
   "createdAt": "2026-10-19T00:01:31.563Z",
-  "status": "sent",
+  "status": "accepted",
   "fixedIn": null,
-  "note": "Which command or screen showed the old worktree folders: warden status, warden status --all, session start, or warden site? Please paste one line it printed.",
+  "note": "Accepted. Planned for a coming release.",
   "projectDir": "/Users/cluu/Documents/Work/warden-playground",
   "machineId": "9a4909ae",
   "thread": [
