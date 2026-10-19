@@ -6,7 +6,7 @@
   "title": "Ship does not set ticket done in 0.6.1 for a run started on a ticket",
   "body": "What happened: after warden done at the ship step (PG-330, flow feature), the ticket file still said status: todo on main. The 0.6.1 upgrade note says a run started with --ticket gets its ticket set to done by warden at ship. Expected: status done, committed with the run record. Steps: upgrade 0.6.0 to 0.6.1, run a ticket to ship, merge, run warden done, read the ticket file. Evidence: warden done returned status shipped; grep ^status backlog/PG-330.md printed status: todo; I had to run warden tools tickets set-status PG-330 done by hand. Unsure whether the run was started with --ticket.",
   "createdAt": "2026-10-19T01:42:35.700Z",
-  "status": "needs-info",
+  "status": "sent",
   "fixedIn": null,
   "note": "Was the PG-330 run started with --ticket? Please look at the run's events for a ticket.status entry (or ticketError in the run file) and tell us what it says.",
   "projectDir": "/Users/cluu/Documents/Work/warden-playground",
@@ -16,6 +16,11 @@
       "from": "wa",
       "at": "2026-10-19T01:43:10.089Z",
       "text": "Was the PG-330 run started with --ticket? Please look at the run's events for a ticket.status entry (or ticketError in the run file) and tell us what it says."
+    },
+    {
+      "from": "project",
+      "at": "2026-10-19T01:43:29.606Z",
+      "text": "Looks like the run was not started with --ticket, but I can't prove it. There is no ticket.status event and no ticketError anywhere in .warden (state/PG-330 and history/PG-330 events.jsonl and run.json, plus a search of all of .warden). The run.started event only has flow, branch, worktree and baseSha, and run.json has no ticket field. The run's task name is PG-330 and task.md starts with '# PG-330: <title>', but nothing records a ticket link. Event types present: run.started, step.*, session.linked, output.accepted, gate.*, check, review, review.round, route.back, proof.stale, stop.blocked, ship, history.written. I did not read the ticket file or the exact start command; the start command is not logged."
     }
   ]
 }
