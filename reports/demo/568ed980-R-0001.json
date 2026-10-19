@@ -6,9 +6,9 @@
   "title": "Gate hangs",
   "body": "It hangs.",
   "createdAt": "2026-10-01T00:00:00Z",
-  "status": "sent",
+  "status": "needs-info",
   "fixedIn": null,
-  "note": "Which pnpm version does the project use?",
+  "note": "Which gate command hangs, and what are the last lines of its log?",
   "projectDir": "/private/var/folders/7b/s_s22ngn1mqdxxvl5hpdg41c0000gq/T/warden-project-nIG0Ch",
   "thread": [
     {
@@ -20,6 +20,11 @@
       "from": "project",
       "at": "2026-10-18T23:57:05.335Z",
       "text": "We use pnpm 11 and Node 26."
+    },
+    {
+      "from": "wa",
+      "at": "2026-10-19T00:02:14.697Z",
+      "text": "Which gate command hangs, and what are the last lines of its log?"
     }
   ],
   "machineId": "568ed980"
