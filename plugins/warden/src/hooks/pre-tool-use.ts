@@ -3,6 +3,7 @@
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { editAllowed, isFixForbidden, isGateFile, matchesAny } from "../engine/catalog.ts";
+import { readRoles } from "../commands/tools.ts";
 import { gatesProven } from "../engine/proof.ts";
 import { currentBranch } from "../lib/git.ts";
 import { taskDir } from "../state/paths.ts";
@@ -18,7 +19,9 @@ const EDIT_TOOLS = ["Edit", "Write", "MultiEdit", "NotebookEdit"];
 const DENY_LOCK_WAIT_MS = 1000;
 
 // The gate files a live run's checks depend on (E3). State and history are E1.
-const CONFIG_GATE_GLOBS = [".warden/steps.json", ".warden/flows/**", ".warden/warden.json", ".warden/triage-rules.json"];
+const CONFIG_GATE_GLOBS = [
+  ".warden/steps.json", ".warden/flows/**", ".warden/warden.json", ".warden/triage-rules.json", ".warden/tools/roles.json",
+];
 
 export async function preToolUse(call: HookCall): Promise<string | null> {
   const tool = call.input.tool_name ?? "";
@@ -138,8 +141,8 @@ const CLAUDE_PRINT = /(^|[;&|(\s])claude\b[^;&|\n]*\s(-p|--print)(?=\s|$)/;
 // `script` as the command word of a simple command, not the word in prose or JSON.
 const SCRIPT_CMD = /^[\s(]*(?:(?:exec|env|sudo|command|nohup|time)\s+)*(?:\w+=\S*\s+)*(?:\S*\/)?script(?:\s|$)/;
 const ENGINE_PATHS = [".warden/state", ".warden/history"];
-const CONFIG_PATHS = [".warden/steps.json", ".warden/warden.json", ".warden/triage-rules.json", ".warden/flows"];
-const CONFIG_PATH_ARG = /[^\s'"<>|;&()]*\.warden\/(?:steps\.json|warden\.json|triage-rules\.json|flows)[^\s'"<>|;&()]*/g;
+const CONFIG_PATHS = [".warden/steps.json", ".warden/warden.json", ".warden/triage-rules.json", ".warden/flows", ".warden/tools/roles.json"];
+const CONFIG_PATH_ARG = /[^\s'"<>|;&()]*\.warden\/(?:steps\.json|warden\.json|triage-rules\.json|flows|tools\/roles\.json)[^\s'"<>|;&()]*/g;
 // Redirects that write no file: fd duplication (2>&1, >&2) and /dev/null.
 const HARMLESS_REDIRECT = /(?:\d*|&)>>?\s*\/dev\/null(?![\w./-])|\d*>&\s*(?:\d+|-)/g;
 // A command word only when it is not part of a path or a longer name (".../cp/...", "bunx").
@@ -160,9 +163,9 @@ const PR_COMMANDS = [
   /\bgh\s+pr\s+(create|merge)\b/,
   /\baz\s+repos\s+pr\s+(create|update)\b/,
   /\bglab\s+mr\s+(create|merge)\b/,
-  /\.claude\/skills\/[^/\s]+\/bin\/pr\.ts\s+(create|merge)\b/,
+  /[\w./-]*\/pr\.ts\s+(create|merge)\b/,
 ];
-const MERGE_COMMANDS = [/\bgh\s+pr\s+merge\b/, /\bglab\s+mr\s+merge\b/, /\.claude\/skills\/[^/\s]+\/bin\/pr\.ts\s+merge\b/];
+const MERGE_COMMANDS = [/\bgh\s+pr\s+merge\b/, /\bglab\s+mr\s+merge\b/, /[\w./-]*\/pr\.ts\s+merge\b/];
 const ORCHESTRATE_COMMAND = /(?:^|[;&|(\s])(?:[\w./-]*\/)?(?:warden|cli\.ts)\s+orchestrate\s+(?:plan|status)\b([^;&|\n]*)/;
 const EPIC_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const RUN_COMMAND = /(?:^|[;&|(\s])(?:[\w./-]*\/)?(?:warden|cli\.ts)\s+(start|next|done|wait)\b([^;&|\n]*)/;
@@ -302,12 +305,28 @@ function pushesToMain(cmd: string, mainBranch: string): boolean {
   return false;
 }
 
-function isPushPrOrMerge(cmd: string, mainBranch: string, cwd: string): boolean {
-  return GIT_PUSH.test(cmd) || PR_COMMANDS.some((re) => re.test(cmd)) || mergesIntoMain(cmd, mainBranch, cwd);
+// `warden tools <n> <subs>`, where <n> is `pr`, the tool the main checkout's `pr` role names, or any other
+// role that names that tool or `pr` (0.6).
+function prToolCommand(main: string, subs: string): RegExp {
+  const names = new Set(["pr"]);
+  try {
+    const roles = readRoles(main);
+    const tool = roles.pr ?? "pr";
+    names.add(tool);
+    for (const [role, value] of Object.entries(roles)) if (value === tool || value === "pr") names.add(role);
+  } catch {
+    // a broken roles.json means `pr` only
+  }
+  return new RegExp(String.raw`(?:^|[;&|(\s])(?:[\w./-]*\/)?(?:warden|cli\.ts)\s+tools\s+(?:${[...names].map(escapeRegex).join("|")})\s+(?:${subs})\b`);
 }
 
-function isMerge(cmd: string, mainBranch: string, cwd: string): boolean {
-  return MERGE_COMMANDS.some((re) => re.test(cmd)) || mergesIntoMain(cmd, mainBranch, cwd);
+function isPushPrOrMerge(cmd: string, mainBranch: string, cwd: string, main: string): boolean {
+  return GIT_PUSH.test(cmd) || PR_COMMANDS.some((re) => re.test(cmd)) || prToolCommand(main, "create|merge").test(cmd)
+    || mergesIntoMain(cmd, mainBranch, cwd);
+}
+
+function isMerge(cmd: string, mainBranch: string, cwd: string, main: string): boolean {
+  return MERGE_COMMANDS.some((re) => re.test(cmd)) || prToolCommand(main, "merge").test(cmd) || mergesIntoMain(cmd, mainBranch, cwd);
 }
 
 // B3: a pipeline that writes and names state, history or (while a run is live) gate config.
@@ -407,11 +426,11 @@ function bashDecision(call: HookCall, cmd: string, run: RunJson | null): string 
 
   if (!run) return null;
   const mainBranch = runSteps(main, run).mainBranch;
-  if (!isPushPrOrMerge(cmd, mainBranch, ctx.cwd)) return null;
+  if (!isPushPrOrMerge(cmd, mainBranch, ctx.cwd, main)) return null;
 
   if (run.current.type === "fix") {
     const branch = run.fix?.branch;
-    const merging = isMerge(cmd, mainBranch, ctx.cwd) || pushesToMain(cmd, mainBranch);
+    const merging = isMerge(cmd, mainBranch, ctx.cwd, main) || pushesToMain(cmd, mainBranch);
     const allowed = fixer && branch !== undefined && cmd.includes(branch) && (!merging || ctx.env.PROJECT_AGENT === "1");
     return allowed ? null : "only the warden:fixer subagent pushes the fix branch";
   }

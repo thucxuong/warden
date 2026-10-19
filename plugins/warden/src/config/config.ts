@@ -2,7 +2,7 @@
 // Every problem is reported as "<file>: <json-path>: <problem>"; json-path looks like $.check.default.commands[0].name.
 import { existsSync, readFileSync } from "node:fs";
 import { EXIT, WardenError } from "../lib/exit.ts";
-import type { CommandDef, StepsJson, TicketsConfig, TriageRule, TriageRulesJson, WardenJson } from "../types.ts";
+import type { CommandDef, StepsJson, TriageRule, TriageRulesJson, WardenJson } from "../types.ts";
 
 export const DEFAULT_SITE_PORT = 4400;
 export const DEFAULT_COMMAND_TIMEOUT_SEC = 900;
@@ -162,23 +162,10 @@ export function validateStepsJson(value: unknown, file = "steps.json"): StepsJso
   const review = checkReview(c, root.review ?? {});
   const triage = checkTriage(c, root.triage ?? {});
   const fix = checkFix(c, root.fix);
-  const tickets = root.tickets === undefined ? undefined : checkTickets(c, root.tickets);
+  // 0.6: `tickets` moved to .warden/tools/roles.json. The key is still accepted and ignored until the project upgrades.
   c.done();
 
-  const steps: StepsJson = { schema: 1, mainBranch: mainBranch!, setup: setup!, check: check!, agent: agent!, review: review!, triage: triage!, fix: fix! };
-  if (tickets) steps.tickets = tickets;
-  return steps;
-}
-
-// 0.3 spec 4.1: the ticket tool orchestrate talks to.
-function checkTickets(c: Checker, value: unknown): TicketsConfig | undefined {
-  const obj = c.object(value, "$.tickets");
-  if (!obj) return undefined;
-  const before = c.problems.length;
-  const tool = c.matching(obj.tool, "$.tickets.tool", /^[a-z][a-z0-9-]{0,40}$/, "/^[a-z][a-z0-9-]{0,40}$/");
-  const command = obj.command === undefined ? undefined : c.nonEmptyString(obj.command, "$.tickets.command");
-  if (c.problems.length > before) return undefined;
-  return { tool: tool!, command: command ?? `bun .claude/skills/${tool}/bin/tickets.ts` };
+  return { schema: 1, mainBranch: mainBranch!, setup: setup!, check: check!, agent: agent!, review: review!, triage: triage!, fix: fix! };
 }
 
 function checkSetup(c: Checker, value: unknown): StepsJson["setup"] | undefined {

@@ -1,338 +1,252 @@
+// warden tools (0.6): the project's own tools in .warden/tools/, run as a CLI process on a temp checkout.
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { pendingToolFixes, run, toolFixesLine } from "../../plugins/warden/src/commands/tools.ts";
-import { WardenError } from "../../plugins/warden/src/lib/exit.ts";
-import { compareSemver } from "../../plugins/warden/src/lib/version.ts";
-import type { Ctx } from "../../plugins/warden/src/types.ts";
+import { barrel, TEMPLATES, writeRoles, writeTools } from "../helpers/tools-fixture.ts";
 
-const realRegistry = resolve(import.meta.dir, "../../plugins/warden/registry");
+const PLUGIN = resolve(import.meta.dir, "../../plugins/warden");
+const CLI = join(PLUGIN, "src", "cli.ts");
 const temps: string[] = [];
-let pluginRoot: string;
 let repo: string;
 
-function tempDir(prefix: string): string {
-  const dir = realpathSync(mkdtempSync(join(tmpdir(), prefix)));
-  temps.push(dir);
-  return dir;
+afterAll(() => temps.forEach((dir) => rmSync(dir, { recursive: true, force: true })));
+
+function git(cwd: string, ...args: string[]): void {
+  const r = Bun.spawnSync(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
+  if (r.exitCode !== 0) throw new Error(`git ${args.join(" ")}: ${r.stderr.toString()}`);
 }
 
-function ctx(): Ctx {
-  return { root: pluginRoot, data: tempDir("warden-data-"), cwd: repo, env: {}, stdinIsTTY: false };
-}
-
-let errLines: string[] = [];
-
-async function call(args: string[]): Promise<{ out: any; code: number | null }> {
-  const lines: string[] = [];
-  errLines = [];
-  const realLog = console.log;
-  const realErr = console.error;
-  console.log = (...a: unknown[]) => void lines.push(a.join(" "));
-  console.error = (...a: unknown[]) => void errLines.push(a.join(" "));
+function tools(args: string[], cwd = repo) {
+  const env: Record<string, string> = {};
+  for (const [k, v] of Object.entries(process.env)) if (v !== undefined) env[k] = v;
+  delete env.PROJECT_AGENT;
+  delete env.WARDEN_MAIN_ROOT;
+  env.WARDEN_ROOT = PLUGIN;
+  const r = Bun.spawnSync([process.execPath, CLI, "tools", ...args], { cwd, env, stdout: "pipe", stderr: "pipe" });
+  const out = r.stdout.toString();
+  let json: any = null;
   try {
-    await run(args, ctx());
-    return { out: lines.length ? JSON.parse(lines.join("\n")) : null, code: null };
-  } catch (err) {
-    if (err instanceof WardenError) return { out: null, code: err.code };
-    throw err;
-  } finally {
-    console.log = realLog;
-    console.error = realErr;
+    json = JSON.parse(out);
+  } catch {
+    // not JSON
   }
+  return { code: r.exitCode, out, err: r.stderr.toString(), json };
 }
 
-// A registry entry in the fake plugin root.
-function addTool(name: string, needs: string[], extra: Record<string, unknown> = {}): void {
-  const dir = join(pluginRoot, "registry", name);
-  mkdirSync(join(dir, "bin"), { recursive: true });
-  writeFileSync(join(dir, "tool.json"), JSON.stringify({ name, version: "1.2.3", needs, ...extra }));
-  writeFileSync(join(dir, "SKILL.md"), `---\nname: ${name}\ndescription: test\n---\n`);
-  writeFileSync(join(dir, "bin", "run.ts"), "console.log(1)\n");
-}
+// Tools that print their argv or where they run, return codes sync and async, throw, or return no number.
+const ECHO = `  { name: "echo", summary: "prints argv", usage: "echo [args...]", run: (argv) => { console.log(JSON.stringify(argv)); return 4; } },
+  { name: "later", summary: "async run", run: async (argv) => { await Bun.sleep(10); console.log(JSON.stringify(argv)); return 5; } },
+  { name: "where", summary: "prints where it runs", run: () => {
+    console.log(JSON.stringify({ cwd: process.cwd(), main: process.env.WARDEN_MAIN_ROOT, path: process.env.PATH }));
+    return 0;
+  } },
+  { name: "boom", summary: "throws", run: () => { throw new Error("it broke"); } },
+  { name: "odd", summary: "returns no number", run: () => "yes" as unknown as number },`;
 
 beforeEach(() => {
-  pluginRoot = tempDir("warden-plugin-");
-  repo = tempDir("warden-tools-");
-  Bun.spawnSync(["git", "init", "-q", "-b", "main"], { cwd: repo });
+  repo = realpathSync(mkdtempSync(join(tmpdir(), "warden-tools-")));
+  temps.push(repo);
+  git(repo, "init", "-q", "-b", "main");
+  git(repo, "config", "user.name", "Test User");
+  git(repo, "config", "user.email", "test@example.com");
   mkdirSync(join(repo, ".warden"), { recursive: true });
-  writeFileSync(join(repo, ".warden/warden.json"), "{}");
-});
-afterAll(() => {
-  for (const dir of temps) rmSync(dir, { recursive: true, force: true });
 });
 
-describe("tools list", () => {
-  test("shows version, needs, missing programs and installed state", async () => {
-    addTool("alpha", ["git"]);
-    addTool("beta", ["git", "no-such-program-xyz"]);
-    mkdirSync(join(repo, ".claude/skills/alpha"), { recursive: true });
-
-    const { out } = await call(["list"]);
-    expect(out.tools).toEqual([
-      { name: "alpha", version: "1.2.3", needs: ["git"], missing: [], installed: true, kind: null, description: "" },
-      { name: "beta", version: "1.2.3", needs: ["git", "no-such-program-xyz"], missing: ["no-such-program-xyz"], installed: false, kind: null, description: "" },
-    ]);
+describe("loading", () => {
+  test("a missing index.ts is exit 3", () => {
+    const r = tools([]);
+    expect(r.code).toBe(3);
+    expect(r.err).toContain("no project tools: run warden tools --init");
+    expect(tools(["echo"]).code).toBe(3);
   });
 
-  test("shows kind and description from tool.json", async () => {
-    addTool("tix", [], { kind: "tickets", description: "Local tickets." });
-    expect((await call(["list"])).out.tools[0]).toMatchObject({ name: "tix", kind: "tickets", description: "Local tickets." });
+  test.each([
+    ["the default export is not an array", "export default {};\n", "the default export must be an array"],
+    ["an invalid name", barrel(`  { name: "Bad Name", summary: "s", run: () => 0 },`, ""), "name must match"],
+    ["a name used twice", barrel(`  { name: "a", summary: "s", run: () => 0 },\n  { name: "a", summary: "t", run: () => 0 },`, ""), "name a is used twice"],
+    ["an empty summary", barrel(`  { name: "a", summary: " ", run: () => 0 },`, ""), "summary must be a non-empty string"],
+    ["run is not a function", barrel(`  { name: "a", summary: "s", run: 1 as any },`, ""), "run must be a function"],
+    ["usage of the wrong type", barrel(`  { name: "a", summary: "s", usage: 3 as any, run: () => 0 },`, ""), "usage must be a string"],
+    ["probe of the wrong type", barrel(`  { name: "a", summary: "s", probe: "x" as any, run: () => 0 },`, ""), "probe must be a function"],
+    ["a barrel that does not load", "export default [;\n", "cannot load"],
+  ])("%s is exit 1", (_label, index, problem) => {
+    writeTools(repo, index);
+    const r = tools([]);
+    expect(r.code).toBe(1);
+    expect(r.out).toBe("");
+    expect(r.err).toContain(problem);
+    expect(r.err).toContain(".warden/tools/index.ts");
   });
 
-  test("no registry means an empty list", async () => {
-    expect((await call(["list"])).out).toEqual({ tools: [] });
+  test("each problem is its own stderr line, roles.json problems too", () => {
+    writeTools(repo, barrel(`  { name: "a", summary: "", run: 1 as any },`, ""), { Bad: "a", ok: "Not A Tool" });
+    const r = tools([]);
+    expect(r.code).toBe(1);
+    const lines = r.err.trim().split("\n");
+    expect(lines).toHaveLength(4);
+    expect(lines.filter((l) => l.startsWith(".warden/tools/roles.json"))).toHaveLength(2);
+    writeFileSync(join(repo, ".warden/tools/roles.json"), "[]");
+    expect(tools([]).err).toContain("roles.json: must be an object");
   });
 
-  test("the shipped registry lists git-pr", async () => {
-    pluginRoot = resolve(realRegistry, "..");
-    const tools = (await call(["list"])).out.tools;
-    expect(tools.find((t: any) => t.name === "git-pr")).toMatchObject({ version: "0.1.1", needs: ["git", "gh"], kind: null });
+  test("the plain template barrel loads", () => {
+    for (const name of ["index.ts", "tool.ts", "roles.json"]) {
+      mkdirSync(join(repo, ".warden/tools"), { recursive: true });
+      writeFileSync(join(repo, ".warden/tools", name), readFileSync(join(TEMPLATES, name)));
+    }
+    expect(tools([])).toMatchObject({ code: 0, json: { tools: [], roles: {} } });
   });
 });
 
-describe("tools add", () => {
-  test("copies SKILL.md and bin/ and appends a row to tools.md", async () => {
-    addTool("alpha", ["git"]);
-    const { out } = await call(["add", "alpha"]);
-    expect(out).toEqual({ added: "alpha", path: ".claude/skills/alpha", kind: null });
-    expect(errLines).toEqual([
-      "If your lint or format checks scan .claude/, exclude .claude/skills/alpha or keep the copy formatted",
-    ]);
-    expect(existsSync(join(repo, ".claude/skills/alpha/SKILL.md"))).toBe(true);
-    expect(existsSync(join(repo, ".claude/skills/alpha/bin/run.ts"))).toBe(true);
-    expect(existsSync(join(repo, ".claude/skills/alpha/tool.json"))).toBe(false);
+describe("list and run", () => {
+  beforeEach(() => writeTools(repo, barrel(ECHO, ""), { show: "echo" }));
 
-    const table = readFileSync(join(repo, ".warden/tools.md"), "utf8");
-    expect(table).toContain("| Name | Version | Customized | Fixes applied |");
-    expect(table).toContain("| alpha | 1.2.3 | no | — |");
+  test("list prints the tools and the roles", () => {
+    const r = tools([]);
+    expect(r.code).toBe(0);
+    expect(r.json.tools[0]).toEqual({ name: "echo", summary: "prints argv" });
+    expect(r.json.tools.map((t: any) => t.name)).toEqual(["echo", "later", "where", "boom", "odd"]);
+    expect(r.json.roles).toEqual({ show: "echo" });
   });
 
-  test("appends to an existing tools.md", async () => {
-    addTool("alpha", []);
-    writeFileSync(join(repo, ".warden/tools.md"), "| Name | Version | Customized | Fixes applied |\n|---|---|---|---|\n| old | 1.0.0 | yes | — |\n");
-    await call(["add", "alpha"]);
-    const table = readFileSync(join(repo, ".warden/tools.md"), "utf8");
-    expect(table).toContain("| old | 1.0.0 | yes | — |\n| alpha | 1.2.3 | no | — |\n");
+  test("argv and the exit code pass through, sync and async", () => {
+    const args = ["a b", `it's "q"`, "$HOME", "--flag", "-h", "*"];
+    const sync = tools(["echo", ...args]);
+    expect(sync.code).toBe(4);
+    expect(JSON.parse(sync.out)).toEqual(args);
+    const later = tools(["later", "x"]);
+    expect(later.code).toBe(5);
+    expect(JSON.parse(later.out)).toEqual(["x"]);
   });
 
-  test("a missing needed program is refused and nothing is copied", async () => {
-    addTool("beta", ["no-such-program-xyz"]);
-    expect((await call(["add", "beta"])).code).toBe(1);
-    expect(existsSync(join(repo, ".claude/skills/beta"))).toBe(false);
+  test("a role resolves, and a real tool name beats a role", () => {
+    expect(tools(["show", "x"])).toMatchObject({ code: 4, out: '["x"]\n' });
+    writeRoles(repo, { echo: "later" });
+    expect(tools(["echo", "x"]).code).toBe(4);
+  });
+
+  test("an unknown word is exit 3", () => {
+    const r = tools(["nope"]);
+    expect(r.code).toBe(3);
+    expect(r.err.trim()).toBe("warden tools: no tool or role named nope");
+  });
+
+  test("-h prints the usage, or the summary when there is none", () => {
+    expect(tools(["echo", "-h"])).toMatchObject({ code: 0, out: "echo [args...]\n" });
+    expect(tools(["show", "--help"])).toMatchObject({ code: 0, out: "echo [args...]\n" });
+    expect(tools(["later", "-h"])).toMatchObject({ code: 0, out: "async run\n" });
+    expect(tools(["-h"]).out).toContain("usage: warden tools [--check [<name>] | --init]");
+  });
+
+  test("a throw is exit 1 with the message on stderr; a non-number result is exit 1", () => {
+    const r = tools(["boom"]);
+    expect(r.code).toBe(1);
+    expect(r.out).toBe("");
+    expect(r.err.trim()).toBe("warden tools boom: it broke");
+    expect(tools(["odd"]).code).toBe(1);
+  });
+
+  test("the tool runs in the checkout root, with WARDEN_MAIN_ROOT and the plugin bin first on PATH", () => {
+    mkdirSync(join(repo, "sub"));
+    const r = tools(["where"], join(repo, "sub"));
+    expect(r.code).toBe(0);
+    expect(r.json.cwd).toBe(repo);
+    expect(r.json.main).toBe(repo);
+    expect(r.json.path.startsWith(`${join(PLUGIN, "bin")}:`)).toBe(true);
+  });
+
+  test("bad flags are exit 2", () => {
+    for (const args of [["--bogus"], ["--init", "x"], ["--check", "a", "b"]]) expect(tools(args).code).toBe(2);
+  });
+});
+
+describe("command()", () => {
+  test("passes awkward argv to the shell command and returns its status", () => {
+    const script = join(repo, "args.sh");
+    writeFileSync(script, 'for a in "$@"; do printf "[%s]" "$a"; done\nexit 7\n');
+    writeTools(repo, barrel(`  { name: "sh", summary: "a shell tool", run: command(${JSON.stringify(`sh '${script}' first`)}) },`));
+    const r = tools(["sh", "a b", `it's`, "$(echo x)", ";", ""]);
+    expect(r.code).toBe(7);
+    expect(r.out).toBe("[first][a b][it's][$(echo x)][;][]");
+  });
+});
+
+describe("--check", () => {
+  const probes = `  { name: "good", summary: "s", run: () => 0, probe: () => [{ status: "OK", label: "bin", detail: "found" }] },
+  { name: "bad", summary: "s", run: () => 0, probe: async () => [{ status: "FAIL", label: "token", detail: "not set" }] },
+  { name: "plain", summary: "s", run: () => 0 },
+  { name: "throws", summary: "s", run: () => 0, probe: () => { throw new Error("nope"); } },`;
+
+  test("runs the probes and is exit 1 on a FAIL", () => {
+    writeTools(repo, barrel(probes, ""));
+    const r = tools(["--check"]);
+    expect(r.code).toBe(1);
+    const rows = r.json.checks;
+    expect(rows).toContainEqual({ tool: "good", status: "OK", label: "bin", detail: "found" });
+    expect(rows).toContainEqual({ tool: "bad", status: "FAIL", label: "token", detail: "not set" });
+    expect(rows).toContainEqual({ tool: "plain", status: "SKIP", label: "probe", detail: "no probe" });
+    expect(rows).toContainEqual({ tool: "throws", status: "FAIL", label: "probe", detail: "nope" });
+  });
+
+  test("one tool by name or role", () => {
+    writeTools(repo, barrel(probes, ""), { ok: "good" });
+    expect(tools(["--check", "good"]).code).toBe(0);
+    const byRole = tools(["--check", "ok"]);
+    expect(byRole.code).toBe(0);
+    expect(byRole.json.checks.filter((c: any) => c.tool !== "warden").map((c: any) => c.tool)).toEqual(["good"]);
+    expect(tools(["--check", "bad"]).code).toBe(1);
+    expect(tools(["--check", "nope"]).code).toBe(3);
+  });
+
+  test("a role to a missing tool is a FAIL; a role key that is also a tool name is a WARN", () => {
+    writeTools(repo, barrel(`  { name: "good", summary: "s", run: () => 0 },\n  { name: "other", summary: "s", run: () => 0 },`, ""), { tickets: "gone", good: "other" });
+    const r = tools(["--check"]);
+    expect(r.code).toBe(1);
+    expect(r.json.checks).toContainEqual(expect.objectContaining({ tool: "warden", status: "FAIL", label: "role tickets" }));
+    expect(r.json.checks).toContainEqual(expect.objectContaining({ tool: "warden", status: "WARN", label: "role good" }));
+  });
+
+  test("warns on what 0.5 left: tools.md and a steps.json tickets key", () => {
+    writeTools(repo, barrel(`  { name: "good", summary: "s", run: () => 0 },`, ""), { graph: "good" });
+    expect(tools(["--check"]).json.checks.filter((c: any) => c.status === "WARN")).toEqual([]);
+    writeFileSync(join(repo, ".warden/tools.md"), "| Name |\n");
+    writeFileSync(join(repo, ".warden/steps.json"), JSON.stringify({ schema: 1, tickets: { tool: "backlog" } }));
+    const r = tools(["--check"]);
+    expect(r.code).toBe(0);
+    const warns = r.json.checks.filter((c: any) => c.status === "WARN").map((c: any) => c.label);
+    expect(warns).toEqual(["tools.md", "steps.json tickets"]);
+  });
+});
+
+describe("--init", () => {
+  test("writes the three files once and never overwrites", () => {
+    const first = tools(["--init"]);
+    expect(first.code).toBe(0);
+    expect(first.json).toEqual({ written: [".warden/tools/index.ts", ".warden/tools/tool.ts", ".warden/tools/roles.json"] });
+    for (const name of ["index.ts", "tool.ts", "roles.json"]) {
+      expect(readFileSync(join(repo, ".warden/tools", name), "utf8")).toBe(readFileSync(join(TEMPLATES, name), "utf8"));
+    }
+    writeFileSync(join(repo, ".warden/tools/roles.json"), '{"tickets":"mine"}');
+    rmSync(join(repo, ".warden/tools/tool.ts"));
+    expect(tools(["--init"]).json).toEqual({ written: [".warden/tools/tool.ts"] });
+    expect(readFileSync(join(repo, ".warden/tools/roles.json"), "utf8")).toBe('{"tickets":"mine"}');
+    expect(tools(["--init"]).json).toEqual({ written: [] });
     expect(existsSync(join(repo, ".warden/tools.md"))).toBe(false);
   });
-
-  test("an existing folder is refused and left alone", async () => {
-    addTool("alpha", []);
-    mkdirSync(join(repo, ".claude/skills/alpha"), { recursive: true });
-    writeFileSync(join(repo, ".claude/skills/alpha/SKILL.md"), "mine");
-    expect((await call(["add", "alpha"])).code).toBe(1);
-    expect(readFileSync(join(repo, ".claude/skills/alpha/SKILL.md"), "utf8")).toBe("mine");
-  });
-
-  test("unknown tool exits 3, missing name or bad subcommand exits 2, uninitialised project exits 3", async () => {
-    addTool("alpha", []);
-    expect((await call(["add", "nope"])).code).toBe(3);
-    expect((await call(["add", "../alpha"])).code).toBe(3);
-    expect((await call(["add"])).code).toBe(2);
-    expect((await call(["remove", "alpha"])).code).toBe(2);
-    rmSync(join(repo, ".warden"), { recursive: true });
-    expect((await call(["add", "alpha"])).code).toBe(3);
-  });
 });
 
-function addFix(tool: string, version: string): void {
-  const dir = join(pluginRoot, "registry", tool, "fixes");
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, `v${version}.md`), `# ${tool} v${version}\n`);
-}
-
-const HEADER = "| Name | Version | Customized | Fixes applied |\n|---|---|---|---|\n";
-const toolsMd = () => readFileSync(join(repo, ".warden/tools.md"), "utf8");
-
-describe("tools add with kind", () => {
-  test("prints the kind and still copies only SKILL.md and bin/", async () => {
-    addTool("tix", [], { kind: "tickets" });
-    addFix("tix", "1.2.0");
-    const { out } = await call(["add", "tix"]);
-    expect(out).toEqual({ added: "tix", path: ".claude/skills/tix", kind: "tickets" });
-    expect(readdirSync(join(repo, ".claude/skills/tix")).sort()).toEqual(["SKILL.md", "bin"]);
-  });
-});
-
-describe("tools fixes and applied", () => {
-  beforeEach(() => {
-    addTool("alpha", []);
-    addFix("alpha", "1.0.5");
-    addFix("alpha", "1.0.10");
-    addFix("alpha", "1.0.2");
-    addFix("alpha", "1.2.3");
-    addTool("beta", []);
-    addTool("gamma", []);
-    addFix("gamma", "1.1.0");
-    writeFileSync(
-      join(repo, ".warden/tools.md"),
-      "intro line\n" + HEADER + "| alpha | 1.0.2 | yes | — |\n\nstray text\n| gamma | 1.0.0 | no | — |\n| beta | 1.2.3 | no | — |\n| gone | 1.0.0 | no | — |\n",
-    );
-  });
-
-  test("fixes lists pending notes per copied tool, ascending, above the row version", async () => {
-    const { out } = await call(["fixes"]);
-    expect(out.fixes.map((f: any) => [f.tool, f.from, f.version, f.customized])).toEqual([
-      ["alpha", "1.0.2", "1.0.5", true],
-      ["alpha", "1.0.2", "1.0.10", true],
-      ["alpha", "1.0.2", "1.2.3", true],
-      ["gamma", "1.0.0", "1.1.0", false],
-    ]);
-    expect(out.fixes[0].note).toBe("# alpha v1.0.5\n");
-  });
-
-  test("fixes <tool> filters; a tool without a row exits 3; no warden.json exits 3", async () => {
-    expect((await call(["fixes", "gamma"])).out.fixes).toHaveLength(1);
-    expect((await call(["fixes", "beta"])).out).toEqual({ fixes: [] });
-    expect((await call(["fixes", "nope"])).code).toBe(3);
-    rmSync(join(repo, ".warden/warden.json"));
-    expect((await call(["fixes"])).code).toBe(3);
-    expect((await call(["applied", "alpha", "1.0.5"])).code).toBe(3);
-  });
-
-  test("applied enforces the lowest pending note first", async () => {
-    const before = toolsMd();
-    expect((await call(["applied", "alpha", "1.0.10"])).code).toBe(1);
-    expect((await call(["applied", "alpha", "1.0.3"])).code).toBe(1);
-    expect((await call(["applied", "alpha", "9.9.9"])).code).toBe(1);
-    expect((await call(["applied", "beta", "1.2.3"])).code).toBe(1);
-    expect((await call(["applied", "nope", "1.0.5"])).code).toBe(3);
-    expect((await call(["applied", "alpha"])).code).toBe(2);
-    expect(toolsMd()).toBe(before);
-  });
-
-  test("applied rewrites only that row; the comma list grows, other lines stay", async () => {
-    const before = toolsMd();
-    const first = await call(["applied", "alpha", "1.0.5"]);
-    expect(first.out).toEqual({ tool: "alpha", version: "1.0.5", fixesApplied: ["1.0.5"] });
-    expect(toolsMd()).toBe(before.replace("| alpha | 1.0.2 | yes | — |", "| alpha | 1.0.5 | yes | 1.0.5 |"));
-
-    const second = await call(["applied", "alpha", "1.0.10"]);
-    expect(second.out.fixesApplied).toEqual(["1.0.5", "1.0.10"]);
-    expect(toolsMd()).toContain("| alpha | 1.0.10 | yes | 1.0.5, 1.0.10 |\n");
-    expect(toolsMd().startsWith("intro line\n" + HEADER)).toBe(true);
-    expect(toolsMd()).toContain("\n\nstray text\n| gamma | 1.0.0 | no | — |\n");
-    expect((await call(["applied", "alpha", "1.0.10"])).code).toBe(1);
-  });
-});
-
-describe("pendingToolFixes and toolFixesLine", () => {
-  test("pending per copied tool; never throws", () => {
-    addTool("alpha", []);
-    addFix("alpha", "1.0.0");
-    addFix("alpha", "1.1.0");
-    addTool("beta", []);
-    writeFileSync(join(repo, ".warden/tools.md"), HEADER + "| beta | 1.2.3 | no | — |\n| alpha | 1.0.0 | no | — |\n| old | bad | no | — |\n");
-    expect(pendingToolFixes(repo, pluginRoot)).toEqual([{ tool: "alpha", versions: ["1.1.0"] }]);
-    expect(pendingToolFixes(join(repo, "nowhere"), pluginRoot)).toEqual([]);
-    expect(pendingToolFixes(repo, join(repo, "nowhere"))).toEqual([]);
-  });
-
-  test("line text", () => {
-    expect(toolFixesLine([])).toBeNull();
-    expect(
-      toolFixesLine([
-        { tool: "a", versions: ["1.0.1", "1.0.2"] },
-        { tool: "b", versions: ["2.0.0"] },
-      ]),
-    ).toBe(
-      "warden: tool fixes available: a v1.0.1 v1.0.2, b v2.0.0. When the user's current request is done, offer them in one short line; with their OK, run /warden:fix.",
-    );
-  });
-});
-
-describe("shipped registry", () => {
-  const tools = readdirSync(realRegistry, { withFileTypes: true }).filter((e) => e.isDirectory());
-
-  test("no tool script uses console.*; each has a v0.1.1 fix note in the fix-note format", () => {
-    for (const { name } of tools) {
-      const dir = join(realRegistry, name);
-      for (const f of readdirSync(join(dir, "bin")).filter((f) => f.endsWith(".ts"))) {
-        expect(readFileSync(join(dir, "bin", f), "utf8")).not.toMatch(/\bconsole\./);
-      }
-      expect(JSON.parse(readFileSync(join(dir, "tool.json"), "utf8")).version).toBe(name === "backlog" ? "0.1.2" : "0.1.1");
-      const note = readFileSync(join(dir, "fixes", "v0.1.1.md"), "utf8");
-      expect(note.startsWith(`# ${name} v0.1.1\n## What changed\n`)).toBe(true);
-      for (const h of ["## Why", "## Apply to your copy", "## Check"]) expect(note).toContain(h);
-    }
-  });
-
-  test("every tool has tool.json, SKILL.md and a bin script; no fix note is above its tool version", () => {
-    expect(tools.length).toBeGreaterThan(0);
-    for (const { name } of tools) {
-      const dir = join(realRegistry, name);
-      const manifest = JSON.parse(readFileSync(join(dir, "tool.json"), "utf8"));
-      expect(manifest.name).toBe(name);
-      expect(existsSync(join(dir, "SKILL.md"))).toBe(true);
-      expect(readdirSync(join(dir, "bin")).some((f) => f.endsWith(".ts"))).toBe(true);
-      const fixDir = join(dir, "fixes");
-      if (!existsSync(fixDir)) continue;
-      for (const file of readdirSync(fixDir)) {
-        const version = /^v(\d+\.\d+\.\d+)\.md$/.exec(file)?.[1];
-        expect(version).toBeDefined();
-        expect(compareSemver(version!, manifest.version)).toBeLessThanOrEqual(0);
-      }
-    }
-  });
-});
-
-describe("git-pr registry script", () => {
-  const script = join(realRegistry, "git-pr/bin/pr.ts");
-  let fakeBin: string;
-  let logFile: string;
-
-  // Fake git and gh that record their arguments and answer like the real ones.
-  beforeEach(() => {
-    fakeBin = tempDir("warden-fakebin-");
-    logFile = join(fakeBin, "calls.log");
-    const gh = `#!/bin/sh
-echo "gh $*" >> "${logFile}"
-case "$1 $2" in
-  "pr create") echo "Creating pull request"; echo "https://example.test/pr/7" ;;
-  "pr view") if [ "$4" = "--json" ]; then echo '{"mergeCommit":{"oid":"abc123"}}'; else echo "view output"; fi ;;
-esac
-exit 0
-`;
-    writeFileSync(join(fakeBin, "gh"), gh);
-    writeFileSync(join(fakeBin, "git"), `#!/bin/sh\necho "git $*" >> "${logFile}"\n`);
-    chmodSync(join(fakeBin, "gh"), 0o755);
-    chmodSync(join(fakeBin, "git"), 0o755);
-  });
-
-  function pr(...args: string[]) {
-    const res = Bun.spawnSync([process.execPath, script, ...args], { env: { PATH: `${fakeBin}:${process.env.PATH}`, HOME: fakeBin } });
-    return { code: res.exitCode, out: res.stdout.toString().trim(), err: res.stderr.toString() };
-  }
-
-  const calls = () => readFileSync(logFile, "utf8").trim().split("\n");
-
-  test("create pushes, opens the pull request and prints its URL", () => {
-    const res = pr("create", "--title", "My change", "--body-file", "body.md", "--base", "main");
-    expect(res.out).toBe("https://example.test/pr/7");
-    expect(calls()).toEqual(["git push -u origin HEAD", "gh pr create --title My change --body-file body.md --base main"]);
-  });
-
-  test("merge merges and prints the merge commit", () => {
-    const res = pr("merge", "7");
-    expect(res.out).toBe("abc123");
-    expect(calls()).toEqual(["gh pr merge 7 --merge", "gh pr view 7 --json mergeCommit"]);
-  });
-
-  test("view passes through", () => {
-    expect(pr("view", "7").out).toBe("view output");
-  });
-
-  test("bad usage exits 2", () => {
-    expect(pr().code).toBe(2);
-    expect(pr("create", "--title", "x").code).toBe(2);
-    expect(pr("merge").code).toBe(2);
+describe("worktrees", () => {
+  test("in a task worktree, the worktree's barrel loads", () => {
+    writeTools(repo, barrel(`  { name: "v", summary: "main", run: () => 0 },`, ""));
+    git(repo, "add", "-A");
+    git(repo, "commit", "-q", "-m", "tools");
+    const wt = join(repo, "..", `${repo.split("/").pop()}-wt`);
+    temps.push(wt);
+    git(repo, "worktree", "add", "-q", "-b", "t-1", wt);
+    writeTools(wt, barrel(`  { name: "v", summary: "worktree", run: () => { console.log(JSON.stringify([process.cwd(), process.env.WARDEN_MAIN_ROOT])); return 0; } },`, ""));
+    expect(tools([]).json.tools).toEqual([{ name: "v", summary: "main" }]);
+    expect(tools([], wt).json.tools).toEqual([{ name: "v", summary: "worktree" }]);
+    expect(tools(["v"], wt).json).toEqual([realpathSync(wt), repo]);
   });
 });

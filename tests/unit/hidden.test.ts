@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const pluginRoot = resolve(import.meta.dir, "../../plugins/warden");
-const scannedDirs = ["skills", "agents", "registry", "src"];
+const scannedDirs = ["skills", "agents", "templates", "src"];
 
 // What the CPA must never read in the shipped plugin (spec 2, notes).
 const forbidden = ["github.com/thucxuong", "thucxuong/warden", "WD-", "issue #"];

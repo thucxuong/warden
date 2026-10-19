@@ -1,6 +1,0 @@
-{
-  "name": "e2e",
-  "version": "0.1.1",
-  "needs": ["npx"],
-  "description": "Run Playwright end-to-end tests on a free port and print a short summary."
-}

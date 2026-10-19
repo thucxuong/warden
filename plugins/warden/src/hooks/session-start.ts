@@ -3,7 +3,6 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { reportStatusChanges } from "../commands/report.ts";
 import { type CheckRow, checksDueLine, checksFailedLine, listChecks, mainCheckoutBusy, startCheckInBackground } from "../commands/checks.ts";
-import { pendingToolFixes, toolFixesLine } from "../commands/tools.ts";
 import { newerVersionNotice, upgradeNotice } from "../commands/upgrade.ts";
 import { ensureGate } from "../engine/machine.ts";
 import { reportSyncLine } from "../lib/reports-git.ts";
@@ -100,8 +99,6 @@ export async function sessionStart(call: HookCall): Promise<string | null> {
   const newer = guarded(call, "newer version", () => newerVersionNotice(call.ctx.root));
   if (newer) lines.push(newer);
   lines.push(...checkLines(call));
-  const fixes = guarded(call, "tool fixes line", () => toolFixesLine(pendingToolFixes(call.main, call.ctx.root)));
-  if (fixes) lines.push(fixes);
   lines.push(...(guarded(call, "orchestrate lines", () => orchestrateLines(call.main)) ?? []));
   // "sent" again means this project answered a question: no news for it.
   const changes = reportStatusChanges(machineCtx(call));

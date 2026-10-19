@@ -84,7 +84,7 @@ describe("help", () => {
       "warden report --kind bug|enhancement --title <t> --body <b>|--file <p> | warden report --status [--all | --write] | warden report reply <id> --body <answer> | warden report sync [--background] | warden report inbox [--all] | warden report set <key|file> --status <s> [--note <t>] [--fixed-in <v>] | warden report ask <key> --question <q>",
     );
     expect(HELP.docs).toBe("warden docs check");
-    expect(HELP.tools).toBe("warden tools list | add <name> | fixes [<tool>] | applied <tool> <version>");
+    expect(HELP.tools).toBe("warden tools [--check [<name>] | --init] | warden tools <name|role> [args...]");
   });
 });
 

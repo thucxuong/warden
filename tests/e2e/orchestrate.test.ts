@@ -1,11 +1,12 @@
 // End-to-end test (spec-0.3 section 15): the ticket tool, the plan and one orchestrated start.
 // Runs bin/warden as a subprocess in its own temp repo; see helpers.ts.
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { cleanupAll, commitFiles, createCp, git, warden, wtOf } from "./helpers.ts";
 
 setDefaultTimeout(120_000);
+const BACKLOG = resolve(import.meta.dir, "../fixtures/tools/backlog-tickets.ts");
 afterAll(cleanupAll);
 
 function ticket(id: string, title: string, blockedBy: string[], epic = "T-100"): string {
@@ -19,16 +20,20 @@ describe("orchestrate", () => {
   test("plan, start --ticket, status and set-status on a backlog epic", () => {
     const cp = createCp();
 
-    // The backlog tool is copied into the CP and named in steps.json.
-    const added = warden(cp, ["tools", "add", "backlog"]);
-    expect(added.code).toBe(0);
-    expect(added.json.added).toBe("backlog");
-    expect(existsSync(join(cp.main, ".claude", "skills", "backlog", "bin", "tickets.ts"))).toBe(true);
-
-    const stepsFile = join(cp.main, ".warden", "steps.json");
-    const steps = JSON.parse(readFileSync(stepsFile, "utf8"));
-    steps.tickets = { tool: "backlog" };
-    writeFileSync(stepsFile, JSON.stringify(steps, null, 2) + "\n");
+    // The project's backlog tool, listed in the barrel and named by the tickets role.
+    const init = warden(cp, ["tools", "--init"]);
+    expect(init.code, init.err).toBe(0);
+    mkdirSync(join(cp.main, ".warden", "tools", "backlog"), { recursive: true });
+    copyFileSync(BACKLOG, join(cp.main, ".warden", "tools", "backlog", "tickets.ts"));
+    writeFileSync(join(cp.main, ".warden", "tools", "index.ts"), [
+      'import { command, type Tool } from "./tool";', "",
+      "const tools: Tool[] = [",
+      '  { name: "backlog", summary: "Markdown tickets in backlog/", run: command("bun .warden/tools/backlog/tickets.ts") },',
+      "];", "export default tools;", "",
+    ].join("\n"));
+    writeFileSync(join(cp.main, ".warden", "tools", "roles.json"), JSON.stringify({ tickets: "backlog" }) + "\n");
+    const listed = warden(cp, ["tools"]);
+    expect(listed.json, listed.err).toEqual({ tools: [{ name: "backlog", summary: "Markdown tickets in backlog/" }], roles: { tickets: "backlog" } });
 
     // One epic and six tickets: T-001, T-002 | T-003, T-004 | T-005, T-006.
     commitFiles(cp.main, {

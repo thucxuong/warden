@@ -1,12 +1,12 @@
 #!/usr/bin/env bun
-// Ticket tool for local Markdown tickets in backlog/*.md.
+// Test fixture (the 0.5 registry backlog tool): ticket tool for local Markdown tickets in backlog/*.md.
 //   tickets.ts dag [<epic>] | show <id> | set-status <id> <status>
 // Stdout is one JSON value, errors go to stderr. Exit: 0 ok, 1 data error, 2 usage, 3 unknown ticket.
 import { existsSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { spawnSync } from "node:child_process";
 
-// Output helpers, not the console object: copies in .claude/ are often linted with a no-console rule
+// Output helpers, not the console object: project tools are often linted with a no-console rule
 const writeOut = (s: string): void => void process.stdout.write(s + "\n");
 const writeErr = (s: string): void => void process.stderr.write(s + "\n");
 

@@ -70,11 +70,13 @@ Each step waits for you. Run `/warden:work` to drive the loop, or `warden next` 
 
 ## Tools
 
-Warden ships with tools: `git-pr`, `backlog`, `github-issues`, `ado`, `e2e`, `ci-status`, `graph`. Add one to your project with `/warden:tools add <name>`.
+Your project writes and owns its tools in `.warden/tools/`. Warden ships no tools and sends no fixes for them.
 
-Ticket tools (`backlog`, `github-issues`, `ado`) read and write your tickets. To use them with `/warden:orchestrate`, add `"tickets": {"tool": "<name>"}` to `.warden/steps.json`.
+- `index.ts` lists the tools. `tool.ts` holds the types and a `command()` helper. `warden tools --init` writes both, plus `roles.json`.
+- `roles.json` maps a role to a tool name. Warden uses three roles: `tickets` (needed for `/warden:orchestrate`), `graph` (asked before a broad search of the repo) and `pr` (its `create` and `merge` count as pull request commands).
+- `warden tools` lists the tools and roles. `warden tools <name> <args>` runs one. `warden tools --check` checks the list and the roles and runs each tool's probe.
 
-When new versions of copied tools have fixes, session start says so. Run `/warden:fix` to apply them.
+Run `/warden:tools <name>` to have Claude write or change a tool.
 
 ## Work an epic
 
@@ -111,7 +113,7 @@ Then:
 - `warden checks` — list the periodic checks and which are due. `warden checks run <name>` runs one; `warden checks done <name>` marks an agent check done.
 - `warden orchestrate plan <epic>` — read the ticket DAG and print waves to work on.
 - `warden orchestrate status <epic>` — show the current phase of each ticket in the epic.
-- `warden tools fixes [<tool>]` — show pending fix notes for copied tools.
+- `warden tools` — list this project's tools and roles. `warden tools <name> <args>` runs one; `warden tools --check` checks them.
 - `warden site` — open the task dashboard at http://127.0.0.1:4400.
 - `warden docs check` — check that every file in `.warden/context`, `rules`, `decisions`, `knowledge`, `checks` and `retros` has an INDEX line, and no file exceeds 200 lines.
 - `warden report sync` — send reports to the warden repo and fetch status updates from other machines now (runs by itself in the background).

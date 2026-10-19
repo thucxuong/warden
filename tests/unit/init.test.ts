@@ -137,7 +137,8 @@ describe("init --write", () => {
   test("creates every file and the gitignore line", async () => {
     const { out } = await call(["--write", "--file", payloadFile()]);
     expect(out.written).toEqual(expect.arrayContaining([
-      ".warden/warden.json", ".warden/steps.json", ".warden/triage-rules.json", ".warden/reports.md", ".warden/tools.md",
+      ".warden/warden.json", ".warden/steps.json", ".warden/triage-rules.json", ".warden/reports.md",
+      ".warden/tools/index.ts", ".warden/tools/tool.ts", ".warden/tools/roles.json",
       ".warden/context/overview.md", ".warden/context/stack.md", ".warden/checks/retro.md", ".warden/checks/warden-docs.md", "scripts/warden-setup.sh", ".gitignore",
       ...["context", "rules", "decisions", "knowledge", "checks", "retros", "fixes", "flows"].map((d) => `.warden/${d}/INDEX.md`),
     ]));
@@ -155,7 +156,9 @@ describe("init --write", () => {
     expect(steps.review.model).toBe("sonnet"); // defaults filled
     expect(JSON.parse(readFileSync(join(repo, ".warden/triage-rules.json"), "utf8"))).toEqual({ schema: 1, rules: [] });
     expect(readFileSync(join(repo, ".warden/reports.md"), "utf8")).toContain("| ID | Title | Status | Fixed in |");
-    expect(readFileSync(join(repo, ".warden/tools.md"), "utf8")).toContain("| Name | Version | Customized | Fixes applied |");
+    expect(existsSync(join(repo, ".warden/tools.md"))).toBe(false);
+    expect(JSON.parse(readFileSync(join(repo, ".warden/tools/roles.json"), "utf8"))).toEqual({});
+    expect(readFileSync(join(repo, ".warden/tools/index.ts"), "utf8")).toContain("export default tools;");
     expect(readFileSync(join(repo, ".warden/context/INDEX.md"), "utf8")).toContain("- overview.md: Overview");
     expect(readFileSync(join(repo, "scripts/warden-setup.sh"), "utf8")).toBe("set -e\npnpm install --frozen-lockfile\n");
     expect(readFileSync(join(repo, ".gitignore"), "utf8")).toBe(".warden/state/\n");
@@ -172,16 +175,19 @@ describe("init --write", () => {
     expect(out.written).not.toContain(".gitignore");
   });
 
-  test("refuses a second time, then --force overwrites but keeps triage rules and report rows", async () => {
+  test("refuses a second time, then --force overwrites but keeps triage rules, report rows and tool files", async () => {
     await call(["--write", "--file", payloadFile()]);
     expect((await call(["--write", "--file", payloadFile()])).code).toBe(1);
 
     put(".warden/reports.md", "| ID | Title | Status | Fixed in |\n|---|---|---|---|\n| R-0001 | kept | sent | — |\n");
+    put(".warden/tools/roles.json", '{"tickets":"mine"}');
     const { out } = await call(["--write", "--force", "--file", payloadFile({ warden: { projectId: "other", taskIdPattern: "^X-\\d+$" } })]);
     expect(out.written).toContain(".warden/warden.json");
     expect(out.written).not.toContain(".warden/reports.md");
     expect(JSON.parse(readFileSync(join(repo, ".warden/warden.json"), "utf8")).projectId).toBe("other");
     expect(readFileSync(join(repo, ".warden/reports.md"), "utf8")).toContain("R-0001");
+    expect(out.written.filter((p: string) => p.startsWith(".warden/tools/"))).toEqual([]);
+    expect(readFileSync(join(repo, ".warden/tools/roles.json"), "utf8")).toBe('{"tickets":"mine"}');
   });
 
   test("an existing setup script is refused without --force and nothing is written", async () => {
@@ -201,7 +207,7 @@ describe("init --write", () => {
     expect(out.written).toContain(".warden/steps.json");
     const steps = JSON.parse(readFileSync(join(repo, ".warden/steps.json"), "utf8"));
     expect(steps.fix.scope).toEqual([
-      "scripts/**", ".claude/skills/**", ".warden/triage-rules.json", ".warden/fixes/**", ".warden/knowledge/**", "docs/**", ".env.example",
+      "scripts/**", ".warden/tools/**", ".warden/triage-rules.json", ".warden/fixes/**", ".warden/knowledge/**", "docs/**", ".env.example",
       "docker-compose*.yml",
     ]);
   });

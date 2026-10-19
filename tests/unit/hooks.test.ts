@@ -100,6 +100,8 @@ describe("PreToolUse: Edit and Write", () => {
     expect(reason(await editAt(join(main, ".warden/flows/mine.json")))).toBe(msg);
     expect(reason(await editAt(join(wt, ".warden/triage-rules.json")))).toBe(msg);
     expect(reason(await editAt(join(wt, ".warden/warden.json")))).toBe(msg);
+    expect(reason(await editAt(join(main, ".warden/tools/roles.json")))).toBe(msg);
+    expect(await editAt(join(main, ".warden/tools/graph.ts"))).toBeNull();
   });
 
   test("E4: a file outside every run worktree is allowed", async () => {
@@ -157,6 +159,7 @@ describe("PreToolUse: Bash", () => {
     expect(reason(await bash("echo x > .warden/steps.json"))).toBe(msg);
     expect(reason(await bash("sed -i '' s/a/b/ .warden/flows/x.json"))).toBe(msg);
     expect(reason(await bash("git checkout main -- .warden/triage-rules.json"))).toBe(msg);
+    expect(reason(await bash(`echo '{}' > ${join(main, ".warden/tools/roles.json")}`))).toBe(msg);
     expect(await bash("cat .warden/steps.json")).toBeNull();
     expect(await bash(`warden next ${T} > /tmp/next-${T}.json; true .warden/state`)).toBeNull();
     const fixWt = atFix();
@@ -182,13 +185,19 @@ describe("PreToolUse: Bash", () => {
     expect(reason(await bash("git push origin t-1", fixer))).toBe(msg);
     expect(reason(await bash(`gh pr merge ${branch} --squash`, fixer))).toBe(msg);
     expect(await bash(`gh pr merge ${branch} --squash`, fixer, { PROJECT_AGENT: "1" })).toBeNull();
+    // 0.6: a project pr tool is a PR command, and its merge is a merge.
+    expect(await bash(`bun .warden/tools/git-pr/bin/pr.ts create --head ${branch}`, fixer)).toBeNull();
+    expect(reason(await bash(`bun .warden/tools/git-pr/bin/pr.ts merge ${branch}`, fixer))).toBe(msg);
+    expect(reason(await bash(`warden tools pr merge ${branch}`, fixer))).toBe(msg);
+    expect(await bash(`warden tools pr merge ${branch}`, fixer, { PROJECT_AGENT: "1" })).toBeNull();
   });
 
   test("B6: push, PR and merge only at ship with all gates proven", async () => {
     await startFlow(FEATURE);
     const msg = `warden: push/PR/merge is allowed only in the ship step after all gates pass for HEAD (${T} at plan)`;
     for (const cmd of [
-      "git push", "git --no-pager push origin t-1", `git -C ${wt} push`, ".claude/skills/git-pr/bin/pr.ts create --title x",
+      "git push", "git --no-pager push origin t-1", `git -C ${wt} push`, "bun .warden/tools/git-pr/bin/pr.ts create --title x",
+      "warden tools pr create --title x", "warden tools pr merge 3",
       "gh pr create --fill", "az repos pr create", "glab mr merge 3", "git checkout main && git merge t-1", `git -C ${main} merge t-1`,
     ]) {
       expect(reason(await bash(cmd))).toBe(msg);
@@ -202,12 +211,32 @@ describe("PreToolUse: Bash", () => {
     await drive();
     expect(run().current.id).toBe("ship");
     expect(await bash("git push -u origin t-1")).toBeNull();
-    expect(await bash("bun .claude/skills/git-pr/bin/pr.ts create --title x")).toBeNull();
+    expect(await bash("bun .warden/tools/git-pr/bin/pr.ts create --title x")).toBeNull();
+    expect(await bash("warden tools pr create --title x")).toBeNull();
     sh(wt, "add", `.warden/history/${T}`);
     sh(wt, "commit", "-q", "-m", "chore: run record");
     expect(await bash("git push")).toBeNull();
     commit(wt, { "src/late.ts": "export const late = 1;\n" });
     expect(reason(await bash("git push"))).toBe(`warden: push/PR/merge is allowed only in the ship step after all gates pass for HEAD (${T} at ship)`);
+  });
+
+  test("B6 (0.6): warden tools <pr role> create|merge is a PR command; other tools are not", async () => {
+    await startFlow(FEATURE);
+    const msg = `warden: push/PR/merge is allowed only in the ship step after all gates pass for HEAD (${T} at plan)`;
+    expect(await bash("warden tools git-pr merge 3")).toBeNull();
+    write(main, ".warden/tools/roles.json", JSON.stringify({ pr: "git-pr" }));
+    expect(reason(await bash("warden tools git-pr merge 3"))).toBe(msg);
+    expect(reason(await bash("warden tools git-pr create --fill"))).toBe(msg);
+    expect(reason(await bash("warden tools pr create --fill"))).toBe(msg);
+    expect(await bash("warden tools db create")).toBeNull();
+    expect(await bash("warden tools git-pr status")).toBeNull();
+    write(main, ".warden/tools/roles.json", JSON.stringify({ pr: "git-pr", ship: "git-pr", alias: "pr", graph: "graph" }));
+    expect(reason(await bash("warden tools ship merge 3"))).toBe(msg);
+    expect(reason(await bash("warden tools alias create --fill"))).toBe(msg);
+    expect(await bash("warden tools graph merge 3")).toBeNull();
+    write(main, ".warden/tools/roles.json", "{broken");
+    expect(reason(await bash("warden tools pr create"))).toBe(msg);
+    expect(await bash("warden tools git-pr merge 3")).toBeNull();
   });
 
   test("B6: a done run may push while its proofs hold, not after a new commit", async () => {
@@ -317,14 +346,10 @@ describe("PreToolUse: Bash, chained and compound commands", () => {
 });
 
 describe("SessionStart: line order of spec 0.3 section 10", () => {
-  // A plugin root with the current version and one registry tool that has a fix note newer than the project's copy.
+  // A plugin root with the current version.
   function fakeRoot(): string {
     const root = join(base, "plugin-root");
     write(root, ".claude-plugin/plugin.json", JSON.stringify({ name: "warden", version: VERSION }));
-    write(root, "registry/demo/tool.json", JSON.stringify({ name: "demo", version: "1.2.0", needs: [], description: "demo tool" }));
-    write(root, "registry/demo/SKILL.md", "# demo\n");
-    write(root, "registry/demo/fixes/v1.1.0.md", "# demo v1.1.0\n## What changed\n");
-    write(root, "registry/demo/fixes/v1.2.0.md", "# demo v1.2.0\n## What changed\n");
     return root;
   }
 
@@ -336,10 +361,9 @@ describe("SessionStart: line order of spec 0.3 section 10", () => {
     });
   }
 
-  test("run line, checks, tool fixes, orchestration, then report changes and the refresh line", async () => {
+  test("run line, checks, orchestration, then report changes and the refresh line", async () => {
     await startFlow([IMPL, CHECK]);
     const root = fakeRoot();
-    write(main, ".warden/tools.md", "| Name | Version | Customized | Fixes applied |\n|---|---|---|---|\n| demo | 1.0.0 | no | — |\n");
     check("docs-review", "every: 7d\nkind: agent\nlast: never");
     write(main, ".warden/state/_orchestrate/EP-1.json", plan([{ id: T, phase: "running" }, { id: "T-9", phase: "todo" }]));
     write(main, ".warden/reports.md", "| ID | Title | Status | Fixed in |\n|---|---|---|---|\n| R-0001 | Flaky login | sent | — |\n");
@@ -349,17 +373,14 @@ describe("SessionStart: line order of spec 0.3 section 10", () => {
     }));
 
     const lines = (await hookWithRoot(root, "session-start"))!.split("\n");
-    expect(lines.length).toBe(6);
+    expect(lines.length).toBe(5);
     expect(lines[0]).toStartWith(`warden: ${T} stopped at implement`);
     expect(lines[1]).toStartWith("warden: checks due: docs-review");
     expect(lines[2]).toBe(
-      "warden: tool fixes available: demo v1.1.0 v1.2.0. When the user's current request is done, offer them in one short line; with their OK, run /warden:fix.",
-    );
-    expect(lines[3]).toBe(
       "warden: orchestration of EP-1 stopped with 2 tickets left. When the user's current request is done, offer to go on; with their OK, run /warden:orchestrate EP-1.",
     );
-    expect(lines[4]).toBe('warden: report R-0001 "Flaky login" is now accepted.');
-    expect(lines[5]).toStartWith("warden: when the user's current request is done, run warden report --status --write");
+    expect(lines[3]).toBe('warden: report R-0001 "Flaky login" is now accepted.');
+    expect(lines[4]).toStartWith("warden: when the user's current request is done, run warden report --status --write");
   });
 
   // A sync state that is fresh, so session start only reads it and starts nothing.
@@ -409,9 +430,8 @@ describe("SessionStart: line order of spec 0.3 section 10", () => {
     expect(JSON.parse(readFileSync(join(ctx.data, "reports-sync.json"), "utf8")).told).toBe(false);
   });
 
-  test("no tool fix line when the copy is current, no orchestration line when complete or no ticket has a live run", async () => {
+  test("no orchestration line when complete or no ticket has a live run", async () => {
     const root = fakeRoot();
-    write(main, ".warden/tools.md", "| Name | Version | Customized | Fixes applied |\n|---|---|---|---|\n| demo | 1.2.0 | no | — |\n");
     write(main, ".warden/state/_orchestrate/EP-1.json", plan([{ id: "T-9", phase: "todo" }]));
     expect(await hookWithRoot(root, "session-start")).toBeNull();
 
@@ -420,9 +440,8 @@ describe("SessionStart: line order of spec 0.3 section 10", () => {
     expect((await hookWithRoot(root, "session-start"))!.split("\n")).toHaveLength(1);
   });
 
-  test("a broken plan cache or tools.md never breaks session start", async () => {
+  test("a broken plan cache never breaks session start", async () => {
     const root = fakeRoot();
-    write(main, ".warden/tools.md", "garbage\n| demo |\n");
     write(main, ".warden/state/_orchestrate/EP-1.json", "{not json");
     expect(await hookWithRoot(root, "session-start")).toBeNull();
   });

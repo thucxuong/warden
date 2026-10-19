@@ -88,6 +88,16 @@ describe("upgrade --notes", () => {
     expect((await call(["--notes"])).out.notes).toContain("No layout changes.");
   });
 
+  test("the real plugin gives a 0.5.2 project the v0.6.0 note", async () => {
+    pluginRoot = join(import.meta.dir, "../../plugins/warden");
+    setProjectVersion("0.5.2");
+    const { out } = await call(["--notes"]);
+    expect(out.from).toBe("0.5.2");
+    expect(out.notes).toContain("# Upgrade to 0.6.0");
+    expect(out.notes).toContain("warden tools --init");
+    expect(out.notes).not.toContain("# Upgrade to 0.5.2");
+  });
+
   test("an uninitialised project exits 3; no flag exits 2", async () => {
     setPluginVersion("0.1.0");
     expect((await call(["--notes"])).code).toBe(3);

@@ -1,16 +1,17 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  buildPlan, cacheFile, dagRowProblem, orchestrateLines, readPlans, refreshPlan, runTicketTool, shellQuote, showTicket,
-  templateFor, ticketPhase, ticketsConfig,
+  buildPlan, cacheFile, dagRowProblem, orchestrateLines, readPlans, refreshPlan, runTicketTool, showTicket,
+  templateFor, ticketPhase, ticketsTool,
 } from "../../plugins/warden/src/engine/tickets.ts";
 import { WardenError } from "../../plugins/warden/src/lib/exit.ts";
 import { writeJsonAtomic } from "../../plugins/warden/src/lib/json.ts";
 import { taskDir } from "../../plugins/warden/src/state/paths.ts";
 import { appendEvent, writeRun } from "../../plugins/warden/src/state/store.ts";
 import type { DagTicket, RunJson, ShipOutput } from "../../plugins/warden/src/types.ts";
+import { barrel, writeRoles, writeTools } from "../helpers/tools-fixture.ts";
 
 const bases: string[] = [];
 afterAll(() => bases.forEach((b) => rmSync(b, { recursive: true, force: true })));
@@ -282,38 +283,64 @@ describe("overlay and cache", () => {
 
 // ---- running the tool ----
 
+const PLUGIN = join(import.meta.dir, "../../plugins/warden");
+const FAKE = barrel(`  {
+    name: "fake", summary: "fake ticket tool",
+    run: async (argv) => {
+      const [mode, ...rest] = argv;
+      if (mode === "echo") {
+        console.log(JSON.stringify({ args: rest, agent: process.env.PROJECT_AGENT ?? "unset", cwd: process.cwd(), path: process.env.PATH }));
+        return 0;
+      }
+      if (mode === "fail") {
+        console.error("first");
+        console.error("boom");
+        return 3;
+      }
+      if (mode === "sleep") await Bun.sleep(5000);
+      if (mode === "text") console.log("hello");
+      if (mode === "show") {
+        const body = rest[0] === "A" ? { body: "hi" } : {};
+        console.log(JSON.stringify({ id: rest[0], title: "T", status: "todo", blocked_by: [], ...body }));
+      }
+      return 0;
+    },
+  },
+  { name: "tickets", summary: "not the role's tool", run: () => { console.log(JSON.stringify({ who: "tickets" })); return 0; } },
+  { name: "late", summary: "works in a shell under command()", run: command("sleep 1.5; touch late-write; echo '[]'") },`);
+
 describe("runTicketTool", () => {
   let main: string;
   beforeEach(() => {
     main = tmp();
+    Bun.spawnSync(["git", "init", "-q", "-b", "main"], { cwd: main });
     mkdirSync(join(main, ".warden"), { recursive: true });
+    writeFileSync(join(main, ".warden/warden.json"), "{}");
+    writeTools(main, FAKE, { tickets: "fake" });
   });
 
-  function script(body: string): string {
-    const file = join(main, "tool.sh");
-    writeFileSync(file, `#!/bin/sh\n${body}\n`);
-    chmodSync(file, 0o755);
-    return `sh ${file}`;
-  }
-  const cfg = (command: string) => ({ tool: "fake", command });
-
-  test("shellQuote", () => {
-    expect(shellQuote("a b")).toBe("'a b'");
-    expect(shellQuote("it's")).toBe(`'it'\\''s'`);
-  });
-
-  test("parsed stdout, args quoted, PROJECT_AGENT removed", () => {
+  test("args pass through with no shell, in the main checkout, without PROJECT_AGENT, bin first on PATH", () => {
     process.env.PROJECT_AGENT = "1";
+    const args = ["a b; echo hi", `it's "q"`, "$HOME", "*"];
     try {
-      const out = runTicketTool(main, cfg(script('printf \'{"args":"%s|%s","agent":"%s"}\' "$1" "$2" "${PROJECT_AGENT-unset}"')), ["dag", "a b; echo hi"], 5);
-      expect(out).toEqual({ args: "dag|a b; echo hi", agent: "unset" });
+      const out = runTicketTool(main, PLUGIN, ["echo", ...args], 10) as Record<string, unknown>;
+      expect(out.args).toEqual(args);
+      expect(out.agent).toBe("unset");
+      expect(out.cwd).toBe(main);
+      expect(String(out.path).startsWith(`${join(PLUGIN, "bin")}:`)).toBe(true);
     } finally {
       delete process.env.PROJECT_AGENT;
     }
   });
 
+  test("roles.tickets is used even when a tool named tickets exists", () => {
+    expect((runTicketTool(main, PLUGIN, ["echo"], 10) as { args: string[] }).args).toEqual([]);
+    writeRoles(main, { tickets: "tickets" });
+    expect(runTicketTool(main, PLUGIN, ["dag"], 10)).toEqual({ who: "tickets" });
+  });
+
   test("non-zero exit reports the last stderr line", () => {
-    const run = () => runTicketTool(main, cfg(script("echo first >&2; echo boom >&2; exit 3")), ["dag"], 5);
+    const run = () => runTicketTool(main, PLUGIN, ["fail"], 10);
     expect(run).toThrow("ticket tool failed (exit 3): boom");
     try {
       run();
@@ -323,40 +350,41 @@ describe("runTicketTool", () => {
   });
 
   test("a timeout is a failure", () => {
-    expect(() => runTicketTool(main, cfg(script("sleep 5")), ["dag"], 0.3)).toThrow(/^ticket tool failed \(exit 124\)/);
+    expect(() => runTicketTool(main, PLUGIN, ["sleep"], 0.5)).toThrow(/^ticket tool failed \(exit 124\)/);
+  });
+
+  test("a timeout also kills what the tool started", async () => {
+    writeRoles(main, { tickets: "late" });
+    expect(() => runTicketTool(main, PLUGIN, ["dag"], 0.5)).toThrow(/^ticket tool failed \(exit 124\)/);
+    await Bun.sleep(2000);
+    expect(existsSync(join(main, "late-write"))).toBe(false);
   });
 
   test("stdout that is not JSON", () => {
-    expect(() => runTicketTool(main, cfg(script("echo hello")), ["dag"], 5)).toThrow("ticket tool printed no JSON");
-  });
-
-  test("default command with the tool folder missing is exit 3", () => {
-    try {
-      runTicketTool(main, { tool: "backlog", command: "bun .claude/skills/backlog/bin/tickets.ts" }, ["dag"], 5);
-      throw new Error("did not throw");
-    } catch (err) {
-      expect((err as WardenError).code).toBe(3);
-      expect((err as WardenError).message).toBe("ticket tool backlog is not in .claude/skills/; run /warden:tools add backlog");
-    }
+    expect(() => runTicketTool(main, PLUGIN, ["text"], 10)).toThrow("ticket tool printed no JSON");
   });
 
   test("showTicket checks the shape", () => {
-    expect(showTicket(main, cfg(script('echo \'{"id":"A","title":"T","status":"todo","blocked_by":[],"body":"hi"}\'')), "A").body).toBe("hi");
-    expect(() => showTicket(main, cfg(script('echo \'{"id":"A","title":"T","status":"todo","blocked_by":[]}\'')), "A")).toThrow("body");
+    expect(showTicket(main, PLUGIN, "A").body).toBe("hi");
+    expect(() => showTicket(main, PLUGIN, "B")).toThrow("body");
   });
 
-  test("ticketsConfig: missing warden.json and missing tickets are exit 3", () => {
-    expect(() => ticketsConfig(main)).toThrow(WardenError);
+  test("ticketsTool: missing warden.json and a missing tickets role are exit 3", () => {
+    rmSync(join(main, ".warden/warden.json"));
+    expect(() => ticketsTool(main)).toThrow(WardenError);
     writeFileSync(join(main, ".warden/warden.json"), "{}");
-    writeJsonAtomic(join(main, ".warden/steps.json"), {
-      schema: 1, mainBranch: "main", setup: { commands: [] }, check: { default: { commands: [{ name: "c", run: "true" }] } }, fix: { scope: [] },
-    });
-    try {
-      ticketsConfig(main);
-      throw new Error("did not throw");
-    } catch (err) {
-      expect((err as WardenError).code).toBe(3);
+    expect(ticketsTool(main)).toBe("fake");
+    for (const roles of [{}, null]) {
+      if (roles) writeRoles(main, roles);
+      else rmSync(join(main, ".warden/tools/roles.json"));
+      try {
+        ticketsTool(main);
+        throw new Error("did not throw");
+      } catch (err) {
+        expect((err as WardenError).code).toBe(3);
+        expect((err as WardenError).message).toBe('no tickets tool: set "tickets" in .warden/tools/roles.json');
+      }
     }
-    expect(readFileSync(join(main, ".warden/steps.json"), "utf8")).not.toContain("tickets");
+    expect(() => runTicketTool(main, PLUGIN, ["dag"], 10)).toThrow("no tickets tool");
   });
 });

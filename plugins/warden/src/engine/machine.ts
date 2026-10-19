@@ -80,9 +80,11 @@ export function effectiveLimits(flow: FlowJson): Limits {
   return { fixerRounds: pick("fixerRounds"), reviewRounds: pick("reviewRounds"), codeStrikes: pick("codeStrikes") };
 }
 
-// The worker env (5.4): no PROJECT_AGENT, and the reviewer override only in test mode.
+// The worker env (5.4): no PROJECT_AGENT, the plugin's bin first on PATH, and the reviewer override only in test mode.
 export function workerEnv(ctx: Ctx): Record<string, string | undefined> {
-  const env: Record<string, string | undefined> = { ...ctx.env, WARDEN_ROOT: ctx.root, WARDEN_DATA: ctx.data };
+  const env: Record<string, string | undefined> = {
+    ...ctx.env, PATH: proc.pathWithBin(ctx.root, ctx.env.PATH), WARDEN_ROOT: ctx.root, WARDEN_DATA: ctx.data,
+  };
   delete env.PROJECT_AGENT;
   if (env.WARDEN_TEST_MODE !== "1") delete env.WARDEN_CLAUDE_BIN;
   return env;

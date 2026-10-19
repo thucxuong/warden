@@ -47,11 +47,12 @@ export async function recordEvent(ctx: GateContext, type: EventType, data: Recor
   });
 }
 
-// Env for one check command. warden never sets CI.
+// Env for one check command, with the plugin's bin first on PATH. warden never sets CI.
 export function commandEnv(ctx: GateContext, cmd: CommandDef, worktree: string): Env {
+  const env = { ...ctx.env, ...cmd.env };
   return {
-    ...ctx.env,
-    ...cmd.env,
+    ...env,
+    PATH: proc.pathWithBin(ctx.env.WARDEN_ROOT ?? proc.PLUGIN_ROOT, env.PATH),
     WARDEN_TASK: ctx.run.task,
     WARDEN_MAIN_ROOT: ctx.main,
     WARDEN_WORKTREE: worktree,

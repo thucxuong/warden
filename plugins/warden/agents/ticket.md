@@ -37,6 +37,6 @@ Rules
 - Never push, open a pull request or merge outside the ship step.
 - Never set `PROJECT_AGENT` or any other `WARDEN_*` variable on a command. Never start a nested `claude -p`.
 - When something surprises you, add a line to `.warden/knowledge/<area>.md`. When you make a choice, write `.warden/decisions/NNNN-<slug>.md`.
-- If `.claude/skills/graph/` exists, ask the code graph (`bun .claude/skills/graph/bin/graph.ts query "<question>"`) before a broad search of the repo.
+- Run `warden tools` to see this project's tools and roles. Run one with `warden tools <name> <args>` (`-h` for usage). If a `graph` role is listed, run `warden tools graph query "<question>"` before a broad search of the repo.
 
 Reply with one line only. The orchestrator trusts `warden orchestrate status`, not your reply, except for `ASK`.

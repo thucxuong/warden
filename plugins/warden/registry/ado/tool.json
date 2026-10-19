@@ -1,7 +1,0 @@
-{
-  "name": "ado",
-  "version": "0.1.1",
-  "kind": "tickets",
-  "needs": ["az"],
-  "description": "Ticket tool for Azure DevOps work items: read the dependency graph, show a ticket, set its state."
-}

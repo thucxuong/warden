@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { base, cli, installCommandsFixture, main, wt } from "../helpers/commands-fixture.ts";
+import { barrel, writeRoles, writeTools } from "../helpers/tools-fixture.ts";
 
 installCommandsFixture();
 
@@ -32,18 +33,15 @@ case "$1" in
   set-status) if [ -f '${fx}'/bad-set ]; then echo '{}'; else printf '{"id":"%s","status":"%s","changed":["backlog/%s.md"]}' "$2" "$3" "$2"; fi ;;
 esac
 `);
-  setTickets(`sh ${script}`);
+  writeTools(main, barrel(`  { name: "fake", summary: "fixture ticket tool", run: command(${JSON.stringify(`sh '${script}'`)}) },`));
+  setTickets(true);
   put("dag-E-1.json", [row("T-1"), row("T-2", ["T-1"]), row("T-3", ["T-1"], "todo", { type: "bug" })]);
   put("all.json", [row("T-1"), row("T-2", ["T-1"]), row("T-3", ["T-1"]), row("T-50", [], "done"), row("T-60", [], "doing")]);
   put("show-T-1.json", { ...row("T-1"), body: "Do the thing.\n\n- a\n- b" });
 });
 
-function setTickets(command: string | null): void {
-  const file = join(main, ".warden", "steps.json");
-  const steps = JSON.parse(readFileSync(file, "utf8"));
-  if (command === null) delete steps.tickets;
-  else steps.tickets = { tool: "fake", command };
-  writeFileSync(file, JSON.stringify(steps));
+function setTickets(on: boolean): void {
+  writeRoles(main, on ? { tickets: "fake" } : {});
 }
 
 describe("orchestrate plan", () => {
@@ -86,8 +84,8 @@ describe("orchestrate plan", () => {
     expect(bad.err).toContain("ticket tool printed no JSON");
   });
 
-  test("no tickets config is exit 3, for every subcommand", () => {
-    setTickets(null);
+  test("no tickets role is exit 3, for every subcommand", () => {
+    setTickets(false);
     for (const args of [["plan", "E-1"], ["status", "E-1"], ["set-status", "T-1", "done"]]) {
       expect(cli(["orchestrate", ...args]).code).toBe(3);
     }
@@ -159,11 +157,11 @@ describe("start --ticket", () => {
     expect(calls()).toEqual([]);
   });
 
-  test("no tickets config is exit 3", () => {
-    setTickets(null);
+  test("no tickets role is exit 3", () => {
+    setTickets(false);
     const r = cli(["start", "T-1", "--template", "chore", "--ticket", "--worktree"]);
     expect(r.code).toBe(3);
-    expect(r.err).toContain('no ticket tool: add "tickets" to .warden/steps.json');
+    expect(r.err).toContain('no tickets tool: set "tickets" in .warden/tools/roles.json');
   });
 
   test("the chore template is accepted", () => {

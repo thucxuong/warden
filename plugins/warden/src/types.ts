@@ -42,11 +42,6 @@ export interface CommandDef {
   env?: Record<string, string>; // added to the inherited env
 }
 
-export interface TicketsConfig {
-  tool: string;                                // /^[a-z][a-z0-9-]{0,40}$/, folder in .claude/skills/
-  command: string;                             // non-empty string; default "bun .claude/skills/<tool>/bin/tickets.ts"
-}
-
 export interface StepsJson {
   schema: 1;
   mainBranch: string;                          // e.g. "main"
@@ -68,7 +63,6 @@ export interface StepsJson {
   };
   triage: { branchReruns: number };            // 1..3, default 2
   fix: { scope: string[] };                    // Bun.Glob patterns the fixer may change
-  tickets?: TicketsConfig;                     // optional: ticket tool config for orchestrate
 }
 
 // ---------------------------------------------------------------------------
@@ -379,6 +373,21 @@ export interface HistorySummary {
   findings: { blocking: number; minor: number; dropped: number; leftovers: number };
   tokens: StepSummary["tokens"]; costUsd: number;  // costUsd is an estimate
   author: { name: string; email: string }; commit: string; pr: string | null; branch: string;
+}
+
+// ---------------------------------------------------------------------------
+// 0.6: project tools in .warden/tools/ (the CP's tool.ts holds the same shapes)
+// ---------------------------------------------------------------------------
+
+export type ToolCheckStatus = "OK" | "FAIL" | "WARN" | "SKIP";
+export interface ToolCheck { status: ToolCheckStatus; label: string; detail: string }
+
+export interface ProjectTool {
+  name: string;                                   // /^[a-z][a-z0-9-]{0,40}$/, unique in the barrel
+  summary: string;                                // one line, shown by `warden tools`
+  usage?: string;                                 // shown by `warden tools <name> -h`
+  probe?: () => ToolCheck[] | Promise<ToolCheck[]>; // run by `warden tools --check`
+  run: (argv: string[]) => number | Promise<number>; // the exit code
 }
 
 // ---------------------------------------------------------------------------

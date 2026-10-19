@@ -1,6 +1,0 @@
-{
-  "name": "graph",
-  "version": "0.1.1",
-  "needs": ["graphify", "git"],
-  "description": "Build and query a code graph of the repository with graphify."
-}

@@ -2,7 +2,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { closeSync, appendFileSync, mkdirSync, openSync } from "node:fs";
 import { constants } from "node:os";
-import { dirname } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 export interface RunOptions {
   cwd: string;
@@ -15,7 +15,18 @@ export interface RunOptions {
 export const TIMEOUT_EXIT = 124;
 const DEFAULT_KILL_GRACE_MS = 10_000;
 
-function killGroup(pid: number, signal: NodeJS.Signals): void {
+// The plugin root: this file is <root>/src/lib/proc.ts.
+export const PLUGIN_ROOT = resolve(import.meta.dir, "..", "..");
+
+// PATH with the plugin's bin first, so `run: warden ...` and `warden tools ...` work whatever PATH the caller had.
+// A PATH that already starts with it is kept as it is.
+export function pathWithBin(root: string, path: string | undefined): string {
+  const bin = join(root, "bin");
+  const rest = path ?? process.env.PATH ?? "";
+  return rest === bin || rest.startsWith(`${bin}:`) ? rest : `${bin}:${rest}`;
+}
+
+export function killGroup(pid: number, signal: NodeJS.Signals): void {
   try {
     process.kill(-pid, signal);
   } catch {

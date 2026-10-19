@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0 — 2026-10-19
+
+- Tools belong to the project now. They live in `.warden/tools/`: `index.ts` lists them, `roles.json` names the ones warden uses (`tickets`, `graph`, `pr`). Warden no longer ships tools or fix notes, and `/warden:fix`, `warden tools add | fixes | applied` and `.warden/tools.md` are gone.
+- `warden tools` lists the tools, `warden tools <name> <args>` runs one, `warden tools --check` checks them and `warden tools --init` writes the starting files. `/warden:tools` writes or changes a tool.
+- Orchestrate reads the ticket tool from the `tickets` role in place of `tickets` in `.warden/steps.json`.
+- Every command warden runs (checks, setup, triage) finds `warden` on its PATH.
+- Run `/warden:upgrade`: it moves the tools from `.claude/skills/` to `.warden/tools/`.
+
 ## 0.5.2 — 2026-10-19
 
 - `warden report --status` is short: only open reports (sent, accepted, needs-info) with id, title, status, fixed-in and note, plus a count of closed ones. `--all` lists every report. `--write` prints only counts.

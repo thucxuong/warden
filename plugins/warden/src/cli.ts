@@ -26,7 +26,7 @@ export const HELP: Record<string, string> = {
   report: "warden report --kind bug|enhancement --title <t> --body <b>|--file <p> | warden report --status [--all | --write] | warden report reply <id> --body <answer> | warden report sync [--background] | warden report inbox [--all] | warden report set <key|file> --status <s> [--note <t>] [--fixed-in <v>] | warden report ask <key> --question <q>",
   retro: "warden retro --done [--date YYYY-MM-DD]",
   upgrade: "warden upgrade --notes | --done",
-  tools: "warden tools list | add <name> | fixes [<tool>] | applied <tool> <version>",
+  tools: "warden tools [--check [<name>] | --init] | warden tools <name|role> [args...]",
   site: "warden site [--port <n>]",
   orchestrate: "warden orchestrate plan <epic> | status <epic> | set-status <id> <status>",
   checks: "warden checks | warden checks run <name> [--background] | warden checks done <name> [--date YYYY-MM-DD] [--note <t>]",
@@ -69,7 +69,9 @@ export async function main(argv: string[], ctx: Ctx): Promise<number> {
     return EXIT.USAGE;
   }
   const args = argv.slice(3);
-  if ((args.includes("--help") || args.includes("-h")) && HELP[name]) {
+  // A tool's own args are its own: `warden tools <name> -h` is the tool's usage, not warden's.
+  const helpArgs = name === "tools" ? args.slice(0, 1) : args;
+  if ((helpArgs.includes("--help") || helpArgs.includes("-h")) && HELP[name]) {
     console.log(`usage: ${HELP[name]}`);
     return EXIT.OK;
   }

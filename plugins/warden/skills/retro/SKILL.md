@@ -23,7 +23,7 @@ Run this only when the user asked for a retro or agreed to one you offered (sess
 | Something missing that every project would want | The report skill, kind `enhancement` |
 | A mistake that keeps coming back | `.warden/rules/<topic>.md` |
 | A fact about the code | `.warden/knowledge/<area>.md` |
-| A missing tool | `.claude/skills/<tool>/` |
+| A missing tool | `.warden/tools/` (see `/warden:tools`) |
 | A choice that was made | `.warden/decisions/NNNN-<slug>.md` |
 
 4. Show the retro to the user. Wait for the user to say OK. Write nothing before that.

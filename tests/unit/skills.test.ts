@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 const pluginRoot = resolve(import.meta.dir, "../../plugins/warden");
 const skillsDir = join(pluginRoot, "skills");
 
-const expectedSkills = ["init", "compose", "work", "plan", "retro", "report", "upgrade", "tools", "orchestrate", "fix"];
+const expectedSkills = ["init", "compose", "work", "plan", "retro", "report", "upgrade", "tools", "orchestrate"];
 
 // Frontmatter extras from spec section 8 (string values, unquoted).
 const expectedExtras: Record<string, Record<string, string>> = {
@@ -13,9 +13,8 @@ const expectedExtras: Record<string, Record<string, string>> = {
   compose: { "argument-hint": "<task-id> [what to do]" },
   work: { "argument-hint": "[task-id]", "allowed-tools": "Bash(warden *)" },
   upgrade: {},
-  tools: { "argument-hint": "list | add <name>" },
+  tools: { "argument-hint": "[<name>]" },
   orchestrate: { "argument-hint": "<epic>" },
-  fix: { "argument-hint": "[tool]" },
 };
 
 function parseFrontmatter(text: string): Record<string, string> {
@@ -163,9 +162,16 @@ describe("shipped text", () => {
     }
   });
 
-  test("tools, work and compose carry the 0.3 text", () => {
-    expect(read(join(skillsDir, "tools", "SKILL.md"))).toContain("/warden:fix");
-    expect(read(join(skillsDir, "work", "SKILL.md"))).toContain("graph.ts query");
+  test("there is no fix skill (0.6)", () => {
+    expect(existsSync(join(skillsDir, "fix"))).toBe(false);
+  });
+
+  test("tools, work and compose carry the 0.6 and 0.3 text", () => {
+    const tools = read(join(skillsDir, "tools", "SKILL.md"));
+    expect(tools).toContain("warden tools --check");
+    expect(tools).not.toContain("/warden:fix");
+    expect(read(join(skillsDir, "work", "SKILL.md"))).toContain("warden tools graph query");
+    expect(read(join(pluginRoot, "agents", "ticket.md"))).toContain("warden tools graph query");
     const compose = read(join(skillsDir, "compose", "SKILL.md"));
     expect(compose).toContain("| A small change that must be merged, such as a chore ticket | `chore` |");
     expect(compose).toContain("`do`, `feature`, `bugfix` or `chore`");

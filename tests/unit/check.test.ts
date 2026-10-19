@@ -2,7 +2,7 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { runCheck, type GateContext } from "../../plugins/warden/src/gates/check.ts";
 import { taskDir } from "../../plugins/warden/src/state/paths.ts";
 import { readEvents, readRun, writeRun } from "../../plugins/warden/src/state/store.ts";
@@ -103,6 +103,16 @@ describe("runCheck", () => {
       if (previousCi !== undefined) process.env.CI = previousCi;
     }
     expect(readFileSync(stateFile("checks/1/env.log"), "utf8")).toBe(`${TASK}|${repo}|${repo}|x|w|unset\n`);
+  });
+
+  test("PATH starts with <root>/bin, so `warden tools ...` works in a gate", async () => {
+    const run = 'printf "%s" "$PATH"';
+    ctx.env = { WARDEN_ROOT: "/opt/warden-plugin", PATH: "/usr/bin:/bin" };
+    await runCheck({ commands: [cmd("path", run)] }, ctx);
+    expect(readFileSync(stateFile("checks/1/path.log"), "utf8")).toBe("/opt/warden-plugin/bin:/usr/bin:/bin");
+    ctx.env = { PATH: "/usr/bin:/bin" };
+    await runCheck({ commands: [cmd("path", run)] }, ctx);
+    expect(readFileSync(stateFile("checks/2/path.log"), "utf8")).toBe(`${resolve(import.meta.dir, "../../plugins/warden/bin")}:/usr/bin:/bin`);
   });
 
   test("a command that leaves files stops the set with leftFiles", async () => {

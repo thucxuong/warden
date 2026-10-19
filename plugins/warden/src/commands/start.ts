@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import { loadStepsJson, loadWardenJson, parseStepsJson } from "../config/config.ts";
 import { lintFlow } from "../engine/flow-lint.ts";
 import { start } from "../engine/machine.ts";
-import { showTicket, ticketsConfig } from "../engine/tickets.ts";
+import { showTicket } from "../engine/tickets.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
 import { branchExists, currentBranch, fetchMain, showFile, worktreeAdd, worktreeList } from "../lib/git.ts";
 import { readJson, writeJsonAtomic } from "../lib/json.ts";
@@ -36,8 +36,8 @@ function chooseFlow(ctx: Ctx, parsed: ParsedArgs): FlowJson {
 }
 
 // 0.3 spec 4.2: the task text comes from the ticket tool.
-function ticketText(main: string, task: string): string {
-  const ticket = showTicket(main, ticketsConfig(main), task);
+function ticketText(main: string, root: string, task: string): string {
+  const ticket = showTicket(main, root, task);
   if (ticket.id !== task) throw new WardenError(`ticket tool returned ${ticket.id} for ${task}`);
   return `# ${ticket.id}: ${ticket.title}\n\n${ticket.body}\n`;
 }
@@ -146,7 +146,7 @@ export async function run(args: string[], ctx: Ctx): Promise<void> {
 
   const main = mainRoot(ctx.cwd);
   checkTaskId(task, loadWardenJson(join(main, ".warden", "warden.json")).taskIdPattern);
-  if (parsed.switches.has("--ticket")) taskText = ticketText(main, task);
+  if (parsed.switches.has("--ticket")) taskText = ticketText(main, ctx.root, task);
   const { mainBranch } = loadStepsJson(join(main, ".warden", "steps.json"));
   const ref = fetchRef(main, mainBranch);
 

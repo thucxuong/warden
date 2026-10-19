@@ -154,6 +154,7 @@ async function runInCleanCopy(job: Job): Promise<CleanResult> {
   const { ctx, cleanPath } = job;
   const setupEnv: Env = {
     ...ctx.env,
+    PATH: proc.pathWithBin(ctx.env.WARDEN_ROOT ?? proc.PLUGIN_ROOT, ctx.env.PATH),
     WARDEN_TASK: ctx.run.task,
     WARDEN_MAIN_ROOT: ctx.main,
     WARDEN_WORKTREE: cleanPath,

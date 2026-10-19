@@ -354,11 +354,12 @@ describe("fix", () => {
   test("branch, scope, forbidden files, headings", () => {
     commit(fixWt, {
       [NOTE]: NOTE_TEXT.replace("## Test\n", ""), ".warden/triage-rules.json": rule("^error: boom$"),
-      "src/app.ts": "x\n", ".warden/steps.json": "{}\n{}\n", "bun.lock": "x\n",
+      "src/app.ts": "x\n", ".warden/steps.json": "{}\n{}\n", ".warden/tools/roles.json": "{}\n", "bun.lock": "x\n",
     });
     expect(errorsFor(fixRun(), fixed({ branch: "other" }))).toEqual([
       `branch: must be ${branch}`,
       ".warden/steps.json: the fixer may not change this file",
+      ".warden/tools/roles.json: the fixer may not change this file",
       "bun.lock: the fixer may not change this file",
       "src/app.ts: outside fix.scope",
       `${NOTE}: missing heading "## Test"`,

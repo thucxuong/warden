@@ -1,202 +1,249 @@
-// warden tools list | add <name> | fixes [<tool>] | applied <tool> <version>: registry tools shipped with the plugin
-// (spec 3.2, 8.5; 0.3 §9).
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+// warden tools [--check [<name>] | --init] | warden tools <name|role> [args...] (0.6): the project's own tools.
+// They live in <checkout>/.warden/tools/: index.ts lists them, roles.json maps role names to tool names.
+import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { EXIT, WardenError } from "../lib/exit.ts";
-import { readJson } from "../lib/json.ts";
-import { compareSemver } from "../lib/version.ts";
-import { worktreeRoot } from "../state/paths.ts";
-import type { Ctx } from "../types.ts";
-import { appendRow } from "./report.ts";
+import { pathWithBin } from "../lib/proc.ts";
+import { mainRoot, worktreeRoot } from "../state/paths.ts";
+import type { Ctx, ProjectTool, ToolCheck } from "../types.ts";
 
-export const TOOLS_HEADER = "| Name | Version | Customized | Fixes applied |\n|---|---|---|---|\n";
+export const TOOL_NAME = /^[a-z][a-z0-9-]{0,40}$/;
+const TOOL_FILES = ["index.ts", "tool.ts", "roles.json"];
+const STATUSES = ["OK", "FAIL", "WARN", "SKIP"];
+const USAGE = "warden tools [--check [<name>] | --init] | warden tools <name|role> [args...]";
 
-interface ToolManifest {
-  name: string;
-  version: string;
-  needs: string[];
-  kind?: string;
-  description?: string;
-}
+export type Roles = Record<string, string>;
+export interface LoadedTools { root: string; tools: ProjectTool[]; roles: Roles }
+interface CheckRow extends ToolCheck { tool: string }
 
-interface ToolInfo extends Omit<ToolManifest, "kind" | "description"> {
-  missing: string[];
-  installed: boolean;
-  kind: string | null;
-  description: string;
-}
-
-function registryDir(ctx: Ctx): string {
-  return join(ctx.root, "registry");
-}
-
-function readManifests(ctx: Ctx): ToolManifest[] {
-  const dir = registryDir(ctx);
-  if (!existsSync(dir)) return [];
-  return readdirSync(dir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && existsSync(join(dir, entry.name, "tool.json")))
-    .map((entry) => readJson<ToolManifest>(join(dir, entry.name, "tool.json")))
-    .sort((a, b) => a.name.localeCompare(b.name));
-}
-
-function describeTool(manifest: ToolManifest, root: string): ToolInfo {
-  const needs = manifest.needs ?? [];
-  return {
-    name: manifest.name,
-    version: manifest.version,
-    needs,
-    missing: needs.filter((program) => Bun.which(program) === null),
-    installed: existsSync(join(root, ".claude", "skills", manifest.name)),
-    kind: manifest.kind ?? null,
-    description: manifest.description ?? "",
-  };
-}
-
-function list(ctx: Ctx): void {
-  const root = worktreeRoot(ctx.cwd);
-  console.log(JSON.stringify({ tools: readManifests(ctx).map((m) => describeTool(m, root)) }));
-}
-
-function projectRoot(ctx: Ctx): string {
-  const root = worktreeRoot(ctx.cwd);
-  if (!existsSync(join(root, ".warden", "warden.json"))) {
-    throw new WardenError("this project is not set up for warden; run /warden:init first", EXIT.NOT_FOUND);
+// Thrown when index.ts or roles.json is broken; one problem per line.
+class ToolsError extends WardenError {
+  constructor(readonly problems: string[]) {
+    super(problems.join("\n"), EXIT.REJECTED);
   }
-  return root;
 }
 
-function add(name: string | undefined, ctx: Ctx): void {
-  if (!name) throw new WardenError("usage: warden tools add <name>", EXIT.USAGE);
-  const manifest = readManifests(ctx).find((m) => m.name === name);
-  if (!manifest) throw new WardenError(`no such tool: ${name}`, EXIT.NOT_FOUND);
+export function toolsDir(root: string): string {
+  return join(root, ".warden", "tools");
+}
 
-  const root = projectRoot(ctx);
-  const info = describeTool(manifest, root);
-  if (info.missing.length > 0) throw new WardenError(`${name} needs: ${info.missing.join(", ")}`, EXIT.REJECTED);
-  if (info.installed) throw new WardenError(`.claude/skills/${name}/ already exists`, EXIT.REJECTED);
+function describe(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "an array";
+  return typeof value;
+}
 
-  const source = join(registryDir(ctx), name);
-  const target = join(root, ".claude", "skills", name);
-  mkdirSync(target, { recursive: true });
-  cpSync(join(source, "SKILL.md"), join(target, "SKILL.md"));
-  if (existsSync(join(source, "bin"))) cpSync(join(source, "bin"), join(target, "bin"), { recursive: true });
+// Problems of one roles.json value; [] when it is valid.
+function rolesProblems(value: unknown): string[] {
+  const file = ".warden/tools/roles.json";
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return [`${file}: must be an object, got ${describe(value)}`];
+  const problems: string[] = [];
+  for (const [role, tool] of Object.entries(value)) {
+    if (!TOOL_NAME.test(role)) problems.push(`${file}: role ${JSON.stringify(role)} must match ${TOOL_NAME}`);
+    if (typeof tool !== "string" || !TOOL_NAME.test(tool)) problems.push(`${file}: ${role}: must be a tool name matching ${TOOL_NAME}`);
+  }
+  return problems;
+}
 
-  appendRow(join(root, ".warden", "tools.md"), TOOLS_HEADER, `| ${name} | ${manifest.version} | no | — |`);
-  console.log(JSON.stringify({ added: name, path: `.claude/skills/${name}`, kind: info.kind }));
-  // stderr, so stdout stays one JSON value.
-  console.error(`If your lint or format checks scan .claude/, exclude .claude/skills/${name} or keep the copy formatted`);
+// The roles of a checkout; {} when roles.json is missing. Throws ToolsError when it is broken.
+export function readRoles(root: string): Roles {
+  const path = join(toolsDir(root), "roles.json");
+  if (!existsSync(path)) return {};
+  let value: unknown;
+  try {
+    value = JSON.parse(readFileSync(path, "utf8"));
+  } catch (err) {
+    throw new ToolsError([`.warden/tools/roles.json: not valid JSON: ${(err as Error).message}`]);
+  }
+  const problems = rolesProblems(value);
+  if (problems.length > 0) throw new ToolsError(problems);
+  return value as Roles;
+}
+
+// Problems of the barrel's default export (section 2). Warden checks the shape itself, so a changed tool.ts cannot break it.
+function barrelProblems(value: unknown): string[] {
+  const file = ".warden/tools/index.ts";
+  if (!Array.isArray(value)) return [`${file}: the default export must be an array of tools, got ${describe(value)}`];
+  const problems: string[] = [];
+  const seen = new Set<string>();
+  value.forEach((entry: unknown, i) => {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return void problems.push(`${file}: [${i}]: must be an object, got ${describe(entry)}`);
+    const t = entry as Record<string, unknown>;
+    const at = `${file}: [${i}]${typeof t.name === "string" ? ` (${t.name})` : ""}`;
+    if (typeof t.name !== "string" || !TOOL_NAME.test(t.name)) problems.push(`${at}: name must match ${TOOL_NAME}`);
+    else if (seen.has(t.name)) problems.push(`${at}: name ${t.name} is used twice`);
+    else seen.add(t.name);
+    if (typeof t.summary !== "string" || t.summary.trim() === "") problems.push(`${at}: summary must be a non-empty string`);
+    if (typeof t.run !== "function") problems.push(`${at}: run must be a function`);
+    if (t.usage !== undefined && typeof t.usage !== "string") problems.push(`${at}: usage must be a string`);
+    if (t.probe !== undefined && typeof t.probe !== "function") problems.push(`${at}: probe must be a function`);
+  });
+  return problems;
+}
+
+// Loads <root>/.warden/tools/index.ts and roles.json. Exit 3 when index.ts is missing, ToolsError when either is broken.
+export async function loadTools(root: string): Promise<LoadedTools> {
+  const index = join(toolsDir(root), "index.ts");
+  if (!existsSync(index)) throw new WardenError("no project tools: run warden tools --init", EXIT.NOT_FOUND);
+  let mod: { default?: unknown };
+  try {
+    mod = (await import(pathToFileURL(index).href)) as { default?: unknown };
+  } catch (err) {
+    throw new ToolsError([`.warden/tools/index.ts: cannot load: ${err instanceof Error ? err.message : String(err)}`]);
+  }
+  const problems = barrelProblems(mod.default);
+  let roles: Roles = {};
+  try {
+    roles = readRoles(root);
+  } catch (err) {
+    if (!(err instanceof ToolsError)) throw err;
+    problems.push(...err.problems);
+  }
+  if (problems.length > 0) throw new ToolsError(problems);
+  return { root, tools: mod.default as ProjectTool[], roles };
+}
+
+// A word is a tool name first, then a role. null when it is neither, or the role names a missing tool.
+export function resolveTool(loaded: LoadedTools, word: string): ProjectTool | null {
+  const byName = (name: string | undefined) => loaded.tools.find((t) => t.name === name) ?? null;
+  return byName(word) ?? (Object.hasOwn(loaded.roles, word) ? byName(loaded.roles[word]) : null);
+}
+
+// Writes the missing files of .warden/tools/ from the plugin's templates. Never overwrites. Returns the repo paths written.
+export function writeToolFiles(root: string, pluginRoot: string): string[] {
+  const dir = toolsDir(root);
+  mkdirSync(dir, { recursive: true });
+  const written: string[] = [];
+  for (const name of TOOL_FILES) {
+    const target = join(dir, name);
+    if (existsSync(target)) continue;
+    copyFileSync(join(pluginRoot, "templates", "tools", name), target);
+    written.push(`.warden/tools/${name}`);
+  }
+  return written;
 }
 
 // ---------------------------------------------------------------------------
-// Fix notes (0.3 §9): registry/<tool>/fixes/v<X.Y.Z>.md, applied to a copy with /warden:fix
+// --check
 // ---------------------------------------------------------------------------
 
-interface ToolRow {
-  index: number;      // line index in tools.md
-  name: string;
-  version: string;
-  customized: string;
-  applied: string;
-}
-
-function readRows(root: string): { lines: string[]; rows: ToolRow[] } {
-  const path = join(root, ".warden", "tools.md");
-  if (!existsSync(path)) return { lines: [], rows: [] };
-  const lines = readFileSync(path, "utf8").split("\n");
-  const sep = lines.findIndex((line) => /^\|\s*:?-{3,}/.test(line));
-  const rows: ToolRow[] = [];
-  if (sep >= 0) {
-    for (let i = sep + 1; i < lines.length; i++) {
-      if (!lines[i]!.startsWith("|")) continue;
-      const cells = lines[i]!.split("|").slice(1, -1).map((c) => c.trim());
-      if (cells.length < 4 || !cells[0]) continue;
-      rows.push({ index: i, name: cells[0], version: cells[1]!, customized: cells[2]!, applied: cells[3]! });
+function checkProblem(value: unknown): string | null {
+  if (!Array.isArray(value)) return `probe must return an array, got ${describe(value)}`;
+  for (const row of value as unknown[]) {
+    const r = (typeof row === "object" && row !== null ? row : {}) as Record<string, unknown>;
+    if (!STATUSES.includes(r.status as string) || typeof r.label !== "string" || typeof r.detail !== "string") {
+      return "probe must return {status, label, detail} rows with status OK, FAIL, WARN or SKIP";
     }
   }
-  return { lines, rows };
+  return null;
 }
 
-function validVersion(v: string): boolean {
+async function probeRows(tool: ProjectTool): Promise<CheckRow[]> {
+  if (!tool.probe) return [{ tool: tool.name, status: "SKIP", label: "probe", detail: "no probe" }];
   try {
-    compareSemver(v, "0.0.0");
-    return true;
-  } catch {
-    return false;
+    const out: unknown = await tool.probe();
+    const problem = checkProblem(out);
+    if (problem) return [{ tool: tool.name, status: "FAIL", label: "probe", detail: problem }];
+    return (out as ToolCheck[]).map((c) => ({ tool: tool.name, status: c.status, label: c.label, detail: c.detail }));
+  } catch (err) {
+    return [{ tool: tool.name, status: "FAIL", label: "probe", detail: err instanceof Error ? err.message : String(err) }];
   }
 }
 
-// Fix note versions of a registry tool above `above`, ascending.
-function pendingVersions(pluginRoot: string, tool: string, above: string): string[] {
-  const dir = join(pluginRoot, "registry", tool, "fixes");
-  if (!validVersion(above) || !existsSync(join(pluginRoot, "registry", tool)) || !existsSync(dir)) return [];
-  return readdirSync(dir)
-    .map((file) => /^v(\d+\.\d+\.\d+)\.md$/.exec(file)?.[1])
-    .filter((v): v is string => v !== undefined && compareSemver(v, above) > 0)
-    .sort(compareSemver);
-}
-
-export function pendingToolFixes(main: string, pluginRoot: string): { tool: string; versions: string[] }[] {
+// Warden's own rows: roles against the barrel, and files left over from 0.5.
+function wardenRows(loaded: LoadedTools): CheckRow[] {
+  const rows: CheckRow[] = [];
+  const row = (status: ToolCheck["status"], label: string, detail: string) => rows.push({ tool: "warden", status, label, detail });
+  row("OK", "index.ts", `${loaded.tools.length} tools`);
+  const names = new Set(loaded.tools.map((t) => t.name));
+  for (const [role, tool] of Object.entries(loaded.roles)) {
+    if (!names.has(tool)) row("FAIL", `role ${role}`, `names ${tool}, which is not in .warden/tools/index.ts`);
+    else if (names.has(role) && role !== tool) row("WARN", `role ${role}`, `${role} is also a tool name; warden tools ${role} runs the tool ${role}, not ${tool}`);
+    else row("OK", `role ${role}`, tool);
+  }
+  if (existsSync(join(loaded.root, ".warden", "tools.md"))) {
+    row("WARN", "tools.md", ".warden/tools.md is left over from 0.5; run /warden:upgrade");
+  }
   try {
-    const out: { tool: string; versions: string[] }[] = [];
-    for (const row of readRows(main).rows) {
-      const versions = pendingVersions(pluginRoot, row.name, row.version);
-      if (versions.length > 0) out.push({ tool: row.name, versions });
+    const steps = JSON.parse(readFileSync(join(loaded.root, ".warden", "steps.json"), "utf8")) as Record<string, unknown>;
+    if (steps && typeof steps === "object" && "tickets" in steps) {
+      row("WARN", "steps.json tickets", 'the tickets key is left over from 0.5; set "tickets" in .warden/tools/roles.json and run /warden:upgrade');
     }
-    return out;
   } catch {
-    return [];
+    // no steps.json, or one the config loader reports itself
   }
+  return rows;
 }
 
-export function toolFixesLine(pending: { tool: string; versions: string[] }[]): string | null {
+async function check(loaded: LoadedTools, word: string | undefined): Promise<number> {
+  let tools = loaded.tools;
+  if (word !== undefined) {
+    const tool = resolveTool(loaded, word);
+    if (!tool) return notFound(word);
+    tools = [tool];
+  }
+  const checks = wardenRows(loaded);
+  for (const tool of tools) checks.push(...(await probeRows(tool)));
+  console.log(JSON.stringify({ checks }));
+  return checks.some((c) => c.status === "FAIL") ? EXIT.REJECTED : EXIT.OK;
+}
+
+// ---------------------------------------------------------------------------
+// Run
+// ---------------------------------------------------------------------------
+
+function notFound(word: string): number {
+  console.error(`warden tools: no tool or role named ${word}`);
+  return EXIT.NOT_FOUND;
+}
+
+// Warden prints nothing to stdout here: it belongs to the tool.
+async function runTool(tool: ProjectTool, argv: string[]): Promise<number> {
+  if (argv.length === 1 && (argv[0] === "-h" || argv[0] === "--help")) {
+    console.log(tool.usage ?? tool.summary);
+    return EXIT.OK;
+  }
   try {
-    if (pending.length === 0) return null;
-    const list = pending.map((p) => `${p.tool} ${p.versions.map((v) => `v${v}`).join(" ")}`).join(", ");
-    return `warden: tool fixes available: ${list}. When the user's current request is done, offer them in one short line; with their OK, run /warden:fix.`;
-  } catch {
-    return null;
+    const code: unknown = await tool.run(argv);
+    return typeof code === "number" && Number.isInteger(code) && code >= 0 && code <= 255 ? code : EXIT.REJECTED;
+  } catch (err) {
+    console.error(`warden tools ${tool.name}: ${err instanceof Error ? err.message : String(err)}`);
+    return EXIT.REJECTED;
   }
 }
 
-function findRow(root: string, tool: string): { lines: string[]; row: ToolRow } {
-  const { lines, rows } = readRows(root);
-  const row = rows.find((r) => r.name === tool);
-  if (!row) throw new WardenError(`${tool} is not in .warden/tools.md`, EXIT.NOT_FOUND);
-  return { lines, row };
-}
+export async function run(args: string[], ctx: Ctx): Promise<number> {
+  const [first, ...rest] = args;
+  const root = worktreeRoot(ctx.cwd);
 
-function fixes(tool: string | undefined, ctx: Ctx): void {
-  const root = projectRoot(ctx);
-  const rows = tool ? [findRow(root, tool).row] : readRows(root).rows;
-  const out: unknown[] = [];
-  for (const row of rows) {
-    for (const version of pendingVersions(ctx.root, row.name, row.version)) {
-      const note = readFileSync(join(ctx.root, "registry", row.name, "fixes", `v${version}.md`), "utf8");
-      out.push({ tool: row.name, from: row.version, version, customized: row.customized.toLowerCase() === "yes", note });
-    }
+  if (first === "--init") {
+    if (rest.length > 0) throw new WardenError(`usage: ${USAGE}`, EXIT.USAGE);
+    console.log(JSON.stringify({ written: writeToolFiles(root, ctx.root) }));
+    return EXIT.OK;
   }
-  console.log(JSON.stringify({ fixes: out }));
-}
+  if (first?.startsWith("-") && first !== "--check") throw new WardenError(`usage: ${USAGE}`, EXIT.USAGE);
+  if (first === "--check" && (rest.length > 1 || rest[0]?.startsWith("-"))) throw new WardenError(`usage: ${USAGE}`, EXIT.USAGE);
 
-function applied(tool: string | undefined, version: string | undefined, ctx: Ctx): void {
-  if (!tool || !version) throw new WardenError("usage: warden tools applied <tool> <version>", EXIT.USAGE);
-  const root = projectRoot(ctx);
-  const { lines, row } = findRow(root, tool);
-  const pending = pendingVersions(ctx.root, tool, row.version);
-  if (!pending.includes(version)) throw new WardenError(`no pending fix v${version}`, EXIT.REJECTED);
-  if (version !== pending[0]) throw new WardenError(`apply v${pending[0]} first`, EXIT.REJECTED);
+  // Tools and probes run in the checkout root, with the main checkout known and warden on PATH.
+  process.env.WARDEN_MAIN_ROOT = mainRoot(root);
+  process.env.PATH = pathWithBin(ctx.root, process.env.PATH);
+  process.chdir(root);
 
-  const done = row.applied.split(",").map((v) => v.trim()).filter((v) => v !== "" && v !== "—");
-  done.push(version);
-  lines[row.index] = `| ${row.name} | ${version} | ${row.customized} | ${done.join(", ")} |`;
-  writeFileSync(join(root, ".warden", "tools.md"), lines.join("\n"));
-  console.log(JSON.stringify({ tool, version, fixesApplied: done }));
-}
+  let loaded: LoadedTools;
+  try {
+    loaded = await loadTools(root);
+  } catch (err) {
+    if (!(err instanceof ToolsError)) throw err;
+    for (const problem of err.problems) console.error(problem);
+    return EXIT.REJECTED;
+  }
 
-export async function run(args: string[], ctx: Ctx): Promise<void> {
-  if (args[0] === "list") return list(ctx);
-  if (args[0] === "add") return add(args[1], ctx);
-  if (args[0] === "fixes") return fixes(args[1], ctx);
-  if (args[0] === "applied") return applied(args[1], args[2], ctx);
-  throw new WardenError("usage: warden tools list | add <name> | fixes [<tool>] | applied <tool> <version>", EXIT.USAGE);
+  if (first === undefined) {
+    console.log(JSON.stringify({ tools: loaded.tools.map((t) => ({ name: t.name, summary: t.summary })), roles: loaded.roles }));
+    return EXIT.OK;
+  }
+  if (first === "--check") return check(loaded, rest[0]);
+  const tool = resolveTool(loaded, first);
+  return tool ? runTool(tool, rest) : notFound(first);
 }

@@ -13,7 +13,7 @@ import type { CommandDef, Ctx, InitPayload, InitScan, StepsJson, WardenJson } fr
 import { RETRO_CHECK } from "./checks.ts";
 import { DOCS_CHECK } from "./docs.ts";
 import { REPORTS_HEADER } from "./report.ts";
-import { TOOLS_HEADER } from "./tools.ts";
+import { writeToolFiles } from "./tools.ts";
 
 type PackageManager = NonNullable<InitScan["packageManager"]>;
 type Obj = Record<string, unknown>;
@@ -25,7 +25,7 @@ const INDEX_DIRS = ["context", "rules", "decisions", "knowledge", "checks", "ret
 const MAX_DOCS = 50;
 // The default fix.scope (spec 4.2), used when the payload's steps has no fix.
 export const DEFAULT_FIX_SCOPE = [
-  "scripts/**", ".claude/skills/**", ".warden/triage-rules.json", ".warden/fixes/**", ".warden/knowledge/**", "docs/**", ".env.example",
+  "scripts/**", ".warden/tools/**", ".warden/triage-rules.json", ".warden/fixes/**", ".warden/knowledge/**", "docs/**", ".env.example",
   "docker-compose*.yml",
 ];
 // Marketplace source kinds a teammate's machine can resolve. A local directory or file path cannot.
@@ -327,7 +327,7 @@ async function write(args: string[], ctx: Ctx): Promise<{ written: string[]; not
   out.json(".warden/steps.json", payload.steps);
   out.fileIfMissing(".warden/triage-rules.json", JSON.stringify({ schema: 1, rules: [] }, null, 2) + "\n");
   out.fileIfMissing(".warden/reports.md", REPORTS_HEADER);
-  out.fileIfMissing(".warden/tools.md", TOOLS_HEADER);
+  out.written.push(...writeToolFiles(root, ctx.root));
   for (const [slug, text] of Object.entries(payload.context)) {
     out.file(`.warden/context/${slug}.md`, text.endsWith("\n") ? text : text + "\n");
   }

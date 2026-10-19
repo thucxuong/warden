@@ -20,7 +20,7 @@ Do these steps in order. Ask one question per message. Prefer multiple choice.
    - If the project has an aggregate script such as `test:all` or `ci`, ask the user about it. Do not add it on your own.
    - `setup.commands` is always `["sh scripts/warden-setup.sh"]`.
    - Draft the script body as `setupScript`. Start with `set -e`. Then add the install command, for example `<package manager> install --frozen-lockfile`. Add any step the docs say a fresh checkout needs, for example copying `.env.example`. Ask the user to confirm it.
-   - Take `mainBranch` from the scan. Leave out `review` and `fix`: `warden init --write` fills in the defaults. The default `fix.scope` is `scripts/**`, `.claude/skills/**`, `.warden/triage-rules.json`, `.warden/fixes/**`, `.warden/knowledge/**`, `docs/**`, `.env.example` and `docker-compose*.yml`.
+   - Take `mainBranch` from the scan. Leave out `review` and `fix`: `warden init --write` fills in the defaults. The default `fix.scope` is `scripts/**`, `.warden/tools/**`, `.warden/triage-rules.json`, `.warden/fixes/**`, `.warden/knowledge/**`, `docs/**`, `.env.example` and `docker-compose*.yml`.
 4. Ask the user for:
    - the task id format (show the regex, for example `^PG-\d{3}$`)
    - the project id
@@ -50,7 +50,8 @@ What `warden init --write` creates:
 - `.warden/warden.json`, `.warden/steps.json` and `.warden/triage-rules.json`
 - `.warden/checks/retro.md`, the built-in retro check, with `last` set to today so no retro is due right after setup
 - `.warden/checks/warden-docs.md`, the built-in docs check (runs by itself once a day)
-- `.warden/reports.md` and `.warden/tools.md`
+- `.warden/reports.md`
+- `.warden/tools/` with `index.ts`, `tool.ts` and `roles.json`, where this project writes its own tools (see `/warden:tools`). Files that exist are kept.
 - `.warden/context/<topic>.md` for each topic
 - an `INDEX.md` in each of `context/`, `rules/`, `decisions/`, `knowledge/`, `checks/`, `retros/`, `fixes/` and `flows/`
 - `scripts/warden-setup.sh`

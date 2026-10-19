@@ -447,7 +447,7 @@ Default `fix.scope`, written by init:
 ```
 
 Always forbidden to the fixer, whatever the scope says (the gates and the deps):
-- `.warden/steps.json`, `.warden/flows/**`, `.warden/warden.json`, `.warden/state/**`, `.warden/history/**`
+- `.warden/steps.json`, `.warden/flows/**`, `.warden/warden.json`, `.warden/tools/roles.json`, `.warden/state/**`, `.warden/history/**`
 - `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock`, `bun.lockb`
 - App and test code are outside the default scope. A failure that needs an app or test change is CODE (the change) or GAVE_UP (main is already red), never FIXED.
 

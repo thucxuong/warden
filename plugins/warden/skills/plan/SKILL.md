@@ -14,7 +14,7 @@ In a plan step you may only write files under `.warden/decisions/` and `.warden/
 ## Definitions
 
 - **Target**: the outcome to achieve. It comes from the task text.
-- **Existing Factors**: what exists when you start. This is the repo code, `.warden/context`, tools in `.claude/skills`, package dependencies and framework features. Do not assume anything outside this list.
+- **Existing Factors**: what exists when you start. This is the repo code, `.warden/context`, the tools `warden tools` lists, package dependencies and framework features. Do not assume anything outside this list.
 - **Factor Pool**: the Existing Factors plus the Unlocks of the tasks before this one. The pool grows as the plan is carried out.
 - **Unlocks**: what a task adds to the pool. Examples are a module, a route, a config value or a data set. Name them exactly.
 - **Satisfied**: a task can be done at its place in the chain. Every input it needs is in the pool. It needs no new platform feature. Its approach is one of `reuse`, `configure`, `compose`, `adopt` or `build`.
@@ -34,7 +34,7 @@ In a plan step you may only write files under `.warden/decisions/` and `.warden/
 
 Look in this order before you call something a true gap.
 
-1. Tools of this project in `.claude/skills/`
+1. Tools of this project: the tools `warden tools` lists
 2. Patterns already in the repo. Extend a similar file or module.
 3. Installed dependencies
 4. Framework features that are already wired up

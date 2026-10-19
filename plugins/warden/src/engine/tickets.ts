@@ -3,45 +3,45 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { loadStepsJson, loadWardenJson } from "../config/config.ts";
+import { readRoles } from "../commands/tools.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
 import { readJson, writeJsonAtomic } from "../lib/json.ts";
+import { killGroup, pathWithBin } from "../lib/proc.ts";
 import { mainRef, stateRoot, taskDir } from "../state/paths.ts";
 import { readEvents, readRun, runExists } from "../state/store.ts";
 import type {
   DagTicket, FlowJson, OrchestratePlan, OrchestrateTicket, RunJson, ShipOutput, TicketDetail, TicketPhase,
-  TicketRun, TicketsConfig, TicketStatus, TicketTemplate,
+  TicketRun, TicketStatus, TicketTemplate,
 } from "../types.ts";
 
 export const TICKET_STATUSES: TicketStatus[] = ["todo", "doing", "review", "done"];
 export const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const DAG_TIMEOUT_SEC = 300;
 const SHORT_TIMEOUT_SEC = 60;
-const NO_TICKETS = 'no ticket tool: add "tickets" to .warden/steps.json';
+const NO_TICKETS = 'no tickets tool: set "tickets" in .warden/tools/roles.json';
 
 // ---------------------------------------------------------------------------
-// 5.1 Running the ticket tool
+// 5.1 Running the ticket tool (0.6: the `tickets` role, through `warden tools`)
 // ---------------------------------------------------------------------------
 
-export function ticketsConfig(main: string): TicketsConfig {
+// The tool the `tickets` role names in the main checkout's .warden/tools/roles.json.
+export function ticketsTool(main: string): string {
   if (!existsSync(join(main, ".warden", "warden.json"))) throw new WardenError(`${main}/.warden/warden.json is missing; run /warden:init`, EXIT.NOT_FOUND);
-  const tickets = loadStepsJson(join(main, ".warden", "steps.json")).tickets;
-  if (!tickets) throw new WardenError(NO_TICKETS, EXIT.NOT_FOUND);
-  return tickets;
+  const tool = readRoles(main).tickets;
+  if (!tool) throw new WardenError(NO_TICKETS, EXIT.NOT_FOUND);
+  return tool;
 }
 
-export function shellQuote(s: string): string {
-  return `'${s.replace(/'/g, `'\\''`)}'`;
-}
-
-export function runTicketTool(main: string, cfg: TicketsConfig, args: string[], timeoutSec: number): unknown {
-  if (cfg.command === `bun .claude/skills/${cfg.tool}/bin/tickets.ts` && !existsSync(join(main, ".claude", "skills", cfg.tool))) {
-    throw new WardenError(`ticket tool ${cfg.tool} is not in .claude/skills/; run /warden:tools add ${cfg.tool}`, EXIT.NOT_FOUND);
-  }
-  const env = { ...process.env };
+// Runs `warden tools <tickets tool> <args>` in the main checkout, with no shell. `root` is the plugin root.
+// The child leads its own process group, so a timeout also kills what the tool started (a `command()` shell).
+export function runTicketTool(main: string, root: string, args: string[], timeoutSec: number): unknown {
+  const tool = ticketsTool(main);
+  const env: Record<string, string | undefined> = { ...process.env, PATH: pathWithBin(root, process.env.PATH), WARDEN_ROOT: root };
   delete env.PROJECT_AGENT;
-  const res = spawnSync("/bin/sh", ["-c", `${cfg.command} ${args.map(shellQuote).join(" ")}`], {
-    cwd: main, env, encoding: "utf8", timeout: timeoutSec * 1000, maxBuffer: 16 * 1024 * 1024,
-  });
+  // Bun honours `detached` in spawnSync; Node's types leave it out, hence the separate object.
+  const options = { cwd: main, env, encoding: "utf8" as const, timeout: timeoutSec * 1000, maxBuffer: 16 * 1024 * 1024, detached: true };
+  const res = spawnSync(process.execPath, [join(root, "src", "cli.ts"), "tools", tool, ...args], options);
+  if (res.status === null && res.pid) killGroup(res.pid, "SIGKILL"); // timed out or killed: stop the rest of the group
   if (res.status !== 0) {
     const exit = res.status ?? 124; // killed by the timeout, or could not start
     const last = (res.stderr ?? "").trim().split("\n").pop()?.trim() || res.error?.message || "";
@@ -67,8 +67,8 @@ export function dagRowProblem(row: unknown): string | null {
   return null;
 }
 
-export function showTicket(main: string, cfg: TicketsConfig, id: string): TicketDetail {
-  const out = runTicketTool(main, cfg, ["show", id], SHORT_TIMEOUT_SEC);
+export function showTicket(main: string, root: string, id: string): TicketDetail {
+  const out = runTicketTool(main, root, ["show", id], SHORT_TIMEOUT_SEC);
   const problem = dagRowProblem(out) ?? (typeof (out as { body?: unknown }).body !== "string" ? "body must be a string" : null);
   if (problem) throw new WardenError(`ticket tool: show ${id}: ${problem}`, EXIT.REJECTED);
   return out as TicketDetail;
@@ -257,15 +257,15 @@ export function cacheFile(main: string, epic: string): string {
 }
 
 // `warden orchestrate plan <epic>`: ask the tool, build, overlay, write the cache.
-export function createPlan(main: string, epic: string): OrchestratePlan {
-  const cfg = ticketsConfig(main);
-  const children = runTicketTool(main, cfg, ["dag", epic], DAG_TIMEOUT_SEC);
+export function createPlan(main: string, root: string, epic: string): OrchestratePlan {
+  const tool = ticketsTool(main);
+  const children = runTicketTool(main, root, ["dag", epic], DAG_TIMEOUT_SEC);
   const mainBranch = loadStepsJson(join(main, ".warden", "steps.json")).mainBranch;
   const plan = refreshPlan(main, buildPlan({
-    epic, tool: cfg.tool, mainBranch, mainRef: mainRef(main, mainBranch),
+    epic, tool, mainBranch, mainRef: mainRef(main, mainBranch),
     taskIdPattern: loadWardenJson(join(main, ".warden", "warden.json")).taskIdPattern,
     children,
-    allTickets: () => runTicketTool(main, cfg, ["dag"], DAG_TIMEOUT_SEC),
+    allTickets: () => runTicketTool(main, root, ["dag"], DAG_TIMEOUT_SEC),
   }));
   writeJsonAtomic(cacheFile(main, epic), plan);
   return plan;
@@ -278,8 +278,8 @@ export function statusPlan(main: string, epic: string): OrchestratePlan {
   return refreshPlan(main, readJson<OrchestratePlan>(file));
 }
 
-export function setTicketStatus(main: string, id: string, status: TicketStatus): { id: string; status: TicketStatus; changed: string[] } {
-  const out = runTicketTool(main, ticketsConfig(main), ["set-status", id, status], SHORT_TIMEOUT_SEC) as Record<string, unknown> | null;
+export function setTicketStatus(main: string, root: string, id: string, status: TicketStatus): { id: string; status: TicketStatus; changed: string[] } {
+  const out = runTicketTool(main, root, ["set-status", id, status], SHORT_TIMEOUT_SEC) as Record<string, unknown> | null;
   const ok = typeof out === "object" && out !== null && typeof out.id === "string" && typeof out.status === "string"
     && Array.isArray(out.changed) && out.changed.every((p) => typeof p === "string");
   if (!ok) throw new WardenError("ticket tool: set-status did not print {id, status, changed}", EXIT.REJECTED);

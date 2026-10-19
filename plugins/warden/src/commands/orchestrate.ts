@@ -1,7 +1,7 @@
 // warden orchestrate plan <epic> | status <epic> | set-status <id> <status> (0.3 spec 5). Works on the main checkout.
 import { EXIT, WardenError } from "../lib/exit.ts";
 import { mainRoot } from "../state/paths.ts";
-import { createPlan, ID_PATTERN, setTicketStatus, statusPlan, TICKET_STATUSES, ticketsConfig } from "../engine/tickets.ts";
+import { createPlan, ID_PATTERN, setTicketStatus, statusPlan, TICKET_STATUSES, ticketsTool } from "../engine/tickets.ts";
 import type { Ctx, TicketStatus } from "../types.ts";
 import { parseArgs, printJson } from "./next.ts";
 
@@ -24,16 +24,16 @@ export async function run(args: string[], ctx: Ctx): Promise<number> {
   }
 
   const main = mainRoot(ctx.cwd);
-  ticketsConfig(main); // exit 3 before anything else when orchestrate is not set up
+  ticketsTool(main); // exit 3 before anything else when orchestrate is not set up
   if (sub === "set-status") {
-    printJson(setTicketStatus(main, first, second as TicketStatus));
+    printJson(setTicketStatus(main, ctx.root, first, second as TicketStatus));
     return EXIT.OK;
   }
   if (sub === "status") {
     printJson(statusPlan(main, first));
     return EXIT.OK;
   }
-  const plan = createPlan(main, first);
+  const plan = createPlan(main, ctx.root, first);
   printJson(plan);
   return plan.errors.length > 0 ? EXIT.REJECTED : EXIT.OK;
 }
