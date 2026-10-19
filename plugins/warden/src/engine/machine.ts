@@ -1005,7 +1005,7 @@ export function statusLines(ctx: Ctx, all: boolean): StatusLine[] {
     if (!all && !LIVE.includes(run.status)) continue;
     lines.push({
       task, flow: run.flowName, status: run.status, step: run.current.id, stepIndex: run.stepIndex,
-      total: flowLength(main, task), worktree: run.worktree, updatedAt: run.updatedAt,
+      total: flowLength(main, task), worktree: existsSync(run.worktree) ? run.worktree : null, updatedAt: run.updatedAt,
     });
   }
   return lines;

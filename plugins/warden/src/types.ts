@@ -288,7 +288,7 @@ export interface NextResponse {
 }
 
 export interface DoneResponse { accepted: boolean; errors: string[]; next: NextResponse }
-export interface StatusLine { task: string; flow: string; status: RunStatus; step: string; stepIndex: number; total: number; worktree: string; updatedAt: string }
+export interface StatusLine { task: string; flow: string; status: RunStatus; step: string; stepIndex: number; total: number; worktree: string | null; updatedAt: string }  // worktree: null once the folder is gone
 
 // ---------------------------------------------------------------------------
 // 4.10 Triage

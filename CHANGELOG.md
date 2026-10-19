@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1 — 2026-10-19
+
+- `warden status --all` shows `worktree: null` for a run whose worktree folder is gone.
+- The answer run may look with `warden status`, and says so in its prompt.
+- Tests: an answer run in a test never sends to the real reports branch.
+
 ## 0.5.0 — 2026-10-19
 
 - Reports keep a conversation. When the maintainers need more information, they ask a question; this project's agent answers it at once, read-only, in a headless run in the project's main checkout (`warden report reply <id> --body "<answer>"`). The report then goes back to the maintainers. At most three questions per report.

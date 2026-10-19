@@ -84,8 +84,9 @@ beforeEach(() => {
   fakeClaude = join(tempDir("warden-bin-"), "claude");
   writeFileSync(fakeClaude, [
     "#!/bin/sh",
-    'id=$(printf "%s\\n" "$2" | sed -n "s/^warden report reply \\(R-[0-9a-f-]*\\) .*/\\1/p")',
-    'printf "%s|%s|%s\\n" "$PWD" "$WARDEN_ROLE" "$WARDEN_DATA" > "$WARDEN_DATA/answer-ran"',
+    'line=$(printf "%s\\n" "$2" | grep " report reply R-")',
+    'id=$(printf "%s\\n" "$line" | sed -n "s/^.* report reply \\(R-[0-9a-f-]*\\) .*/\\1/p")',
+    'printf "%s|%s|%s|%s\\n" "$PWD" "$WARDEN_ROLE" "$WARDEN_DATA" "$line" > "$WARDEN_DATA/answer-ran"',
     `exec "${process.execPath}" "${join(pluginRoot, "src", "cli.ts")}" report reply "$id" --body "We use pnpm 11 and Node 26."`,
     "",
   ].join("\n"));
@@ -107,13 +108,16 @@ describe("mergeThread", () => {
 describe("report ask and reply on this computer", () => {
   test("ask sets needs-info, a headless run in the project answers, the WA sees the answer and the report is sent again", async () => {
     putReport(dirA, { projectDir: project });
+    writeFileSync(join(dirA, "root"), pluginRoot); // written by the project's session start
     const key = `${machineId(dirA)}/R-0001`;
     const asked = await callAt(dirW, ["ask", key, "--question", "Which pnpm version does the project use?"], { WARDEN_TEST_MODE: "1", WARDEN_CLAUDE_BIN: fakeClaude });
     expect(asked.out).toMatchObject({ key, status: "needs-info", asks: 1, thread: 1, answering: true });
 
     await waitFor(() => outbox(dirA).status === "sent" && !existsSync(join(dirA, "reports", "R-0001.answer.lock")));
-    const [cwd, role, data] = readFileSync(join(dirA, "answer-ran"), "utf8").trim().split("|");
-    expect({ cwd, role, data }).toEqual({ cwd: project, role: "answer", data: dirA });
+    const [cwd, role, data, line] = readFileSync(join(dirA, "answer-ran"), "utf8").trim().split("|");
+    expect({ cwd, role, data, line }).toEqual({
+      cwd: project, role: "answer", data: dirA, line: `${pluginRoot}/bin/warden report reply R-0001 --body "<answer>"`,
+    });
 
     const record = outbox(dirA);
     expect(record.note).toBe("Which pnpm version does the project use?");
@@ -127,6 +131,11 @@ describe("report ask and reply on this computer", () => {
     const item = inbox.out.reports.find((r: any) => r.key === key);
     expect(item).toMatchObject({ status: "sent", asks: 1 });
     expect(item.thread.map((m: any) => m.from)).toEqual(["wa", "project"]);
+
+    // The answer's sync went to the test's repo, never to the real one.
+    await waitFor(() => !existsSync(join(dirA, "reports-sync.lock")));
+    const show = Bun.spawnSync(["git", "--git-dir", bare, "show", `reports:reports/demo/${machineId(dirA)}-R-0001.json`]);
+    expect((JSON.parse(show.stdout.toString()) as ReportRecord).thread!.map((m) => m.from)).toEqual(["wa", "project"]);
   });
 
   test("a report from before 0.5 has no project dir: the question waits for the project's next session", async () => {

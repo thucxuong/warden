@@ -1,6 +1,6 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, renameSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { machineId } from "../../plugins/warden/src/lib/reports-git.ts";
@@ -157,6 +157,10 @@ describe("views and reset", () => {
   test("statusLines, findRunForWorktree and reset", async () => {
     await atFix();
     expect(statusLines(ctx, false)).toEqual([expect.objectContaining({ task: T, flow: "test", status: "active", step: "fix-1", total: 2, worktree: wt })]);
+    const kept = `${wt}.kept`;
+    renameSync(wt, kept); // a removed worktree folder shows as null
+    expect(statusLines(ctx, false)[0]!.worktree).toBeNull();
+    renameSync(kept, wt);
     expect(findRunForWorktree(ctx, wt).task).toBe(T);
     expect(() => findRunForWorktree(ctx, main)).toThrow("no active run in this worktree");
     expect(() => findRunForWorktree(ctx, main, true)).toThrow("no active run in this worktree");
