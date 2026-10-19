@@ -6,9 +6,9 @@
   "title": "Stop hook blocks the turn when the run waits at ship for a user decision",
   "body": "What happened: at the ship step I stopped on purpose to ask the user whether to merge (the project how-to needs a status commit that would rerun the gates). The stop hook then blocked my turn twice with: PG-330 is at ship and needs you. Run: warden next. Expected: the hook lets the turn end when the agent is waiting for a user answer, or warden offers a way to mark that wait (a waiting status). Steps: reach the ship step, end the turn with a question to the user. Evidence: Stop hook blocking error: warden: PG-330 is at ship and needs you. Run: warden next (or warden wait while a gate runs).",
   "createdAt": "2026-10-19T00:58:01.401Z",
-  "status": "accepted",
-  "fixedIn": null,
-  "note": "Accepted. Planned for a coming release.",
+  "status": "fixed",
+  "fixedIn": "0.6.1",
+  "note": "Fixed in 0.6.1.",
   "projectDir": "/Users/cluu/Documents/Work/warden-playground",
   "machineId": "9a4909ae"
 }
