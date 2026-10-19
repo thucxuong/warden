@@ -4,3 +4,4 @@ plugins/warden/.data-dir
 triage/ledger.json
 triage/doorbell/
 triage/tmp/
+website/dist/

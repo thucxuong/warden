@@ -1,0 +1,17 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "Warden",
+  "description": "A delivery harness for Claude Code: each task runs as a fixed list of steps, and warden itself runs the checks, the review and the fixes.",
+  "folders": ["docs"],
+  "excludeFolders": ["docs/internal"],
+  "excludeFiles": ["CHANGELOG.md"],
+  "rules": [
+    "Follow the loop: run `warden next`, act on its `status`, hand in with `warden done --json '<one line of JSON>'`.",
+    "Never run the checks to prove a step; the engine runs them on the exact commit.",
+    "Never write under `.warden/state/` or `.warden/history/`.",
+    "Never push, open a pull request or merge outside the ship step.",
+    "`warden approve`, `warden retry` and `warden reset` are for a person; ask the user to type `approve` or `retry`.",
+    "A project's own tools live in `.warden/tools/` (index.ts barrel, roles.json); run them with `warden tools <name|role>`.",
+    "When a command is refused with a `warden:` message, read the whole message and do not work around it; load the `/warden:guide` skill."
+  ]
+}

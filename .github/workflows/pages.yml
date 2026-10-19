@@ -1,0 +1,37 @@
+name: pages
+on:
+  push:
+    branches: [stable]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  deploy:
+    # Skips while the repo is private, and deploys only from stable (the
+    # released docs). A manual run must pick stable under "Use workflow from".
+    if: ${{ !github.event.repository.private && github.ref == 'refs/heads/stable' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      # SITE_PUBLIC=1: the build fails if a page still says the repo is private.
+      - run: bun run site:build
+        env:
+          SITE_PUBLIC: "1"
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/dist
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -9,7 +9,7 @@ Warden is a Claude Code plugin. You install it once, set it up in your project w
 An AI agent that writes code will sometimes say "tests pass" when they do not, push before a review, or "fix" a failing test by changing the test. Warden takes those calls away from the agent:
 
 - **Warden runs the checks.** Your test, lint and build commands run in the background. The proof is tied to the exact commit (its git SHA), so a later edit cancels it.
-- **A second Claude reviews the change.** Blocking findings send the task back to implement.
+- **A second Claude reviews the change.** Blocking findings send the task back to implement. A change that weakens a test or a check counts as blocking.
 - **Failures are sorted before they are fixed.** A failed check is triaged as `CODE` (the change broke it), `OPS` (the setup broke it) or `UNCLEAR`. Code failures go back to the agent; the others go to a separate fixer agent that works on its own branch.
 - **Nothing ships unproven.** The ship step delivers the commit that passed the checks and the review, and nothing else.
 
@@ -25,13 +25,13 @@ An AI agent that writes code will sometimes say "tests pass" when they do not, p
 - **A record of every task.** Steps, time and tokens are kept per task and shown on a local dashboard (`warden site`).
 - **Periodic checks and retros.** Session start runs or offers the checks that are due.
 - **Questions mid-step.** The agent can pause a step with `warden ask`; your next message is the answer. See [Blocked and waiting runs](docs/guides/blocked-and-waiting-runs.md).
-- **Reports to the maintainers.** The agent can report a warden problem for you; status changes and maintainer questions come back at session start, and the agent answers the questions itself. See [Reports](docs/concepts/reports.md).
+- **Reports to the maintainers.** The agent can report a warden problem for you. Reports are kept on your machine; with write access to the warden repo they also reach the maintainers, and status changes and maintainer questions come back at session start. See [Reports](docs/concepts/reports.md).
 - **Guided upgrades.** Each version that changes your project's files ships an upgrade note, and `/warden:upgrade` applies it. See [Upgrading](docs/getting-started/upgrading.md).
 - **Built for agents.** The agent loads the `/warden:guide` skill when it is unsure or refused; [Guide for agents](docs/for-agents.md) is the long form.
 
 ## Quick start
 
-You need [Claude Code](https://docs.anthropic.com/en/docs/claude-code), git, [Bun](https://bun.sh) 1.4 or newer, and read access to this private repo (see [Installation](docs/getting-started/installation.md)).
+You need [Claude Code](https://docs.anthropic.com/en/docs/claude-code), git, [Bun](https://bun.sh) 1.4 or newer, and read access to the warden repo (see [Installation](docs/getting-started/installation.md)).
 
 1. Install the plugin, in a terminal or inside Claude Code (`/plugin`):
 

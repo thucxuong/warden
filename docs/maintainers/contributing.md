@@ -21,8 +21,9 @@ bun install
 | `bun test --parallel` (or `bun run test`) | Every test, unit and end-to-end |
 | `bun run test:unit` | `tests/unit` only |
 | `bun test tests/unit/<file>.test.ts` | One file |
-| `bun run typecheck` | `tsc --noEmit` over `plugins/warden/src`, `tests` and `scripts` |
+| `bun run typecheck` | `tsc --noEmit` over `plugins/warden/src`, `tests`, `scripts` and `website` |
 | `bun run check` | The type check, then all tests. Run it before every commit. |
+| `bun run site:build`, `bun run site:serve` | Build the website into `website/dist/` and preview it. See [Website](website.md). |
 | `bun run validate` | `claude plugin validate --strict` on the marketplace and on the plugin |
 | `bun plugins/warden/src/cli.ts <command> --help` | The usage line of one command |
 

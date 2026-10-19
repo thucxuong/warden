@@ -24,6 +24,7 @@ The project's agent files a report with `warden report`. The report reaches this
 | `triage/` | The ledger, the doorbell log and scratch files. All gitignored. | No |
 | `tests/` | Unit and end-to-end tests | No |
 | `docs/` | User docs; `docs/internal/` holds the specs and the design | No |
+| `website/` | The public website, built from `README.md` and `docs/` | No |
 | `CHANGELOG.md` | One section per release | No |
 
 A project's marketplace copy holds the whole repo at `stable`, but Claude Code loads only `plugins/warden/`. The shipped text has rules of its own: skills and agents never use the word "issue", and no shipped file names the repo, its owner, or an internal ticket prefix. `tests/unit/hidden.test.ts` and `tests/unit/skills.test.ts` check this.
@@ -35,6 +36,7 @@ A project's marketplace copy holds the whole repo at `stable`, but Claude Code l
 | Set up the doorbell, triage reports, ask the project questions, keep the ledger | [Triage](triage.md) |
 | Bump the version, write the changelog and upgrade notes, tag, move `stable`, verify | [Releasing](releasing.md) |
 | Set up a dev checkout, run the tests and the type check, follow the code style | [Contributing](contributing.md) |
+| Build, preview and deploy the website | [Website](website.md) |
 
 ## Repo facts
 
@@ -49,5 +51,6 @@ A project's marketplace copy holds the whole repo at `stable`, but Claude Code l
 - [Triage](triage.md)
 - [Releasing](releasing.md)
 - [Contributing](contributing.md)
+- [Website](website.md)
 - [Reports](../concepts/reports.md) (the consumer side of reports)
 - [CLI reference](../reference/cli.md)
