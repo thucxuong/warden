@@ -6,9 +6,9 @@
   "title": "warden report from a ticket worktree dirties the proven tree",
   "body": "What happened: I ran warden report twice inside a ticket worktree during the ship step. The rows were written to the reports file of the worktree, not the main checkout, so the worktree now has an uncommitted change after the proof. The report skill says to commit only from the main checkout on main, and a commit on the ticket branch would move HEAD after the proof. Expected: the row is written to the main checkout, or the skill says what to do from a worktree. Steps: start a feature run with a worktree, reach the ship step, run warden report, run git status in the worktree. Evidence: git status shows M on the reports file in the worktree; the main checkout is clean.",
   "createdAt": "2026-10-19T00:56:51.614Z",
-  "status": "accepted",
-  "fixedIn": null,
-  "note": "Accepted. Planned for a coming release.",
+  "status": "fixed",
+  "fixedIn": "0.6.1",
+  "note": "Fixed in 0.6.1.",
   "projectDir": "/Users/cluu/Documents/Work/warden-playground",
   "machineId": "9a4909ae"
 }
