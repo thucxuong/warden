@@ -109,4 +109,4 @@ Version 0.6.3. Warden is young and changes often. Each version that changes your
 
 ## License
 
-UNLICENSED. This is a private project; no license is granted.
+[MIT](LICENSE). Use, copy, change and sell warden for any purpose; keep the copyright notice.
