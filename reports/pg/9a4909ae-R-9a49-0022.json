@@ -6,9 +6,9 @@
   "title": "work skill does not say how to start a run; warden start fails on one missing flag at a time",
   "body": "What happened: /warden:work PG-330 starts at warden next, but no run existed. I ran warden start PG-330 and got three errors in a row, one flag each: first pass --template or --flow; then (with --template feature --ticket) start on a ticket branch, or pass --worktree. Expected: the work skill names the start command for a task that has a ticket, or warden start says all missing flags at once (template, ticket, worktree when on main). Steps: from the main branch with a clean tree and a todo ticket, run warden start PG-330, then add flags as the errors ask. Evidence: warden: pass either --template do|feature|bugfix|chore or --flow <name|path>; warden: start on a ticket branch, or pass --worktree.",
   "createdAt": "2026-10-19T00:56:37.687Z",
-  "status": "sent",
+  "status": "accepted",
   "fixedIn": null,
-  "note": null,
+  "note": "Accepted. Planned for a coming release.",
   "projectDir": "/Users/cluu/Documents/Work/warden-playground",
   "machineId": "9a4909ae"
 }
