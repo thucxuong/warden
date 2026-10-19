@@ -6,9 +6,9 @@
   "title": "Run record and reports.md conflict when merging a task branch into main",
   "body": "What happened: merging the task branch into main failed with CONFLICT (content) in .warden/reports.md, because both main and the branch had changed it (warden upgrade and report commits on main, a reports commit on the branch). Expected: a ship merge with no conflict in a warden-generated file. Steps: start a run in a worktree, commit warden reports on the branch, then on main run warden upgrade --done and warden report --status --write and commit, then git merge --no-ff the branch. Evidence: Auto-merging .warden/reports.md / CONFLICT (content): Merge conflict in .warden/reports.md. Workaround: git checkout --ours, then warden report --status --write.",
   "createdAt": "2026-10-19T01:42:35.759Z",
-  "status": "accepted",
-  "fixedIn": null,
-  "note": "Accepted. Planned for a coming release.",
+  "status": "fixed",
+  "fixedIn": "0.6.1",
+  "note": "Fixed in 0.6.1. Reports rows are written only in the main checkout now, so a task branch never changes reports.md. Your branch commit came from 0.6.0.",
   "projectDir": "/Users/cluu/Documents/Work/warden-playground",
   "machineId": "9a4909ae"
 }
