@@ -6,7 +6,7 @@
   "title": "Finished runs still list worktree folders that no longer exist",
   "body": "After a run is finished, warden still lists its worktree folder even though the folder is gone. I expected finished runs to not list missing folders.",
   "createdAt": "2026-10-19T00:01:31.563Z",
-  "status": "needs-info",
+  "status": "sent",
   "fixedIn": null,
   "note": "Which command or screen showed the old worktree folders: warden status, warden status --all, session start, or warden site? Please paste one line it printed.",
   "projectDir": "/Users/cluu/Documents/Work/warden-playground",
@@ -16,6 +16,11 @@
       "from": "wa",
       "at": "2026-10-19T00:04:28.510Z",
       "text": "Which command or screen showed the old worktree folders: warden status, warden status --all, session start, or warden site? Please paste one line it printed."
+    },
+    {
+      "from": "project",
+      "at": "2026-10-19T00:04:54.308Z",
+      "text": "It was warden status --all. The 2026-10-19 retro says: 'warden status --all still shows a worktree path for every finished run, although those folders are gone.' I have no saved copy of the printed output, so I cannot paste an exact line. The paths come from each run's saved record, e.g. .warden/state/PG-101/run.json has \"worktree\": \".../warden-playground.worktrees/PG-101\", and that folder no longer exists. The 2026-10-18 retro saw the same for PG-101, PG-102, PG-104 and PG-106 but did not name the command."
     }
   ]
 }
