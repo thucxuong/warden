@@ -191,25 +191,37 @@ function inboxCommand(args: string[], ctx: Ctx): void {
   console.log(JSON.stringify({ fetched, reports }));
 }
 
-// warden report --status [--write]: this project's reports with the maintainers' verdicts. Read-only, except that
-// --write also brings the rows of .warden/reports.md up to date (spec-0.2 4).
+// warden report --status [--all | --write]: this project's reports with the maintainers' verdicts (spec-0.5 7). The
+// list holds the open reports (sent, accepted, needs-info) and counts the closed ones; --all lists them all. --write
+// brings the rows of .warden/reports.md up to date and prints only counts.
+const CLOSED: ReportRecord["status"][] = ["fixed", "wontfix"];
+
 function printStatus(args: string[], ctx: Ctx): void {
-  const write = args.includes("--write");
-  if (args.length !== (write ? 2 : 1)) throw new WardenError("usage: warden report --status [--write]", EXIT.USAGE);
+  const extra = args.filter((a) => a !== "--status");
+  const flag = extra[0];
+  if (extra.length > 1 || (flag !== undefined && flag !== "--write" && flag !== "--all")) {
+    throw new WardenError("usage: warden report --status [--all | --write]", EXIT.USAGE);
+  }
   const { projectId } = loadWardenJson(join(mainRoot(ctx.cwd), ".warden", "warden.json"));
   const dir = reportsDir(ctx);
   const names = existsSync(dir) ? readdirSync(dir).filter((f) => OUTBOX_FILE.test(f)).sort() : [];
-  const reports: object[] = [];
+  const records: ReportRecord[] = [];
   for (const name of names) {
     try {
       const r = readJson<ReportRecord>(join(dir, name));
-      if (r.schema !== 1 || r.projectId !== projectId) continue;
-      reports.push({ id: r.id, kind: r.kind, title: r.title, status: r.status, fixedIn: r.fixedIn ?? null, note: r.note ?? null, createdAt: r.createdAt });
+      if (r.schema === 1 && r.projectId === projectId) records.push(r);
     } catch {
       // a broken record is skipped
     }
   }
-  console.log(JSON.stringify(write ? { reports, rowsUpdated: writeReportsTable(ctx, projectId) } : { reports }));
+  const closed = records.filter((r) => CLOSED.includes(r.status)).length;
+  if (flag === "--write") {
+    console.log(JSON.stringify({ rowsUpdated: writeReportsTable(ctx, projectId), open: records.length - closed, closed }));
+    return;
+  }
+  const shown = flag === "--all" ? records : records.filter((r) => !CLOSED.includes(r.status));
+  const reports = shown.map((r) => ({ id: r.id, title: r.title, status: r.status, fixedIn: r.fixedIn ?? null, note: r.note ?? null }));
+  console.log(JSON.stringify(flag === "--all" ? { reports } : { reports, closed }));
 }
 
 export async function run(args: string[], ctx: Ctx): Promise<void> {

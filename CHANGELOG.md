@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.2 — 2026-10-19
+
+- `warden report --status` is short: only open reports (sent, accepted, needs-info) with id, title, status, fixed-in and note, plus a count of closed ones. `--all` lists every report. `--write` prints only counts.
+
 ## 0.5.1 — 2026-10-19
 
 - `warden status --all` shows `worktree: null` for a run whose worktree folder is gone.

@@ -262,8 +262,7 @@ describe("warden report --status --write", () => {
     writeFileSync(join(data, `reports/${rid(2)}.json`), JSON.stringify({ ...readRecord(rid(2)), status: "fixed", fixedIn: "0.2.0" }));
 
     const res = await call(run, ["--status", "--write"]);
-    expect(res.out.rowsUpdated).toBe(1);
-    expect(res.out.reports).toHaveLength(2);
+    expect(res.out).toEqual({ rowsUpdated: 1, open: 1, closed: 1 });
     const table = readFileSync(join(repo, ".warden/reports.md"), "utf8");
     expect(table).toContain(`| ${rid(2)} | Two | fixed | 0.2.0 |`);
     expect(table).toContain(`| ${rid(1)} | One | sent | — |`);
@@ -291,6 +290,7 @@ describe("warden report --status --write", () => {
     expect((await call(run, ["--status"])).out.rowsUpdated).toBeUndefined();
     expect(readFileSync(join(repo, ".warden/reports.md"), "utf8")).toBe(before);
     expect((await call(run, ["--status", "--write", "x"])).code).toBe(2);
+    expect((await call(run, ["--status", "--write", "--all"])).code).toBe(2);
     expect((await call(run, ["--status", "x"])).code).toBe(2);
   });
 });
@@ -299,9 +299,10 @@ describe("warden report --status", () => {
   const put = (id: string, fields: Record<string, unknown>) =>
     writeFileSync(join(data, "reports", `${id}.json`), JSON.stringify({ schema: 1, id, projectId: "demo", kind: "bug", title: id, body: "secret body", createdAt: "2026-10-18T00:00:00.000Z", status: "sent", fixedIn: null, note: null, ...fields }));
 
-  test("lists this project's reports by id with status and note, without the body", async () => {
+  test("lists this project's open reports by id with status and note, without the body, and counts the closed ones", async () => {
     mkdirSync(join(data, "reports"), { recursive: true });
     put("R-0010", { status: "fixed", fixedIn: "0.2.0", note: "Fixed." });
+    put("R-0011", { status: "wontfix", note: "Yours." });
     put("R-0002", { kind: "enhancement", status: "needs-info", note: "Which command?" });
     put("R-0003", { projectId: "other" });
     writeFileSync(join(data, "reports", "R-0004.json"), "{ nope");
@@ -310,9 +311,14 @@ describe("warden report --status", () => {
     const before = readdirSync(join(data, "reports")).sort();
     const res = await call(run, ["--status"]);
     expect(res.out).toEqual({
+      reports: [{ id: "R-0002", title: "R-0002", status: "needs-info", fixedIn: null, note: "Which command?" }],
+      closed: 2,
+    });
+    expect((await call(run, ["--status", "--all"])).out).toEqual({
       reports: [
-        { id: "R-0002", kind: "enhancement", title: "R-0002", status: "needs-info", fixedIn: null, note: "Which command?", createdAt: "2026-10-18T00:00:00.000Z" },
-        { id: "R-0010", kind: "bug", title: "R-0010", status: "fixed", fixedIn: "0.2.0", note: "Fixed.", createdAt: "2026-10-18T00:00:00.000Z" },
+        { id: "R-0002", title: "R-0002", status: "needs-info", fixedIn: null, note: "Which command?" },
+        { id: "R-0010", title: "R-0010", status: "fixed", fixedIn: "0.2.0", note: "Fixed." },
+        { id: "R-0011", title: "R-0011", status: "wontfix", fixedIn: null, note: "Yours." },
       ],
     });
     expect(readdirSync(join(data, "reports")).sort()).toEqual(before);
@@ -320,7 +326,7 @@ describe("warden report --status", () => {
   });
 
   test("no outbox gives an empty list", async () => {
-    expect((await call(run, ["--status"])).out).toEqual({ reports: [] });
+    expect((await call(run, ["--status"])).out).toEqual({ reports: [], closed: 0 });
   });
 
   test("--status from a linked worktree reads the main checkout's warden.json", async () => {
@@ -333,7 +339,7 @@ describe("warden report --status", () => {
     mkdirSync(join(data, "reports"), { recursive: true });
     const record = { schema: 1, id: "R-0001", projectId: "demo", kind: "bug", title: "R-0001", status: "fixed", fixedIn: "0.2.0", note: null, createdAt: "2026-10-18T00:00:00.000Z" };
     writeFileSync(join(data, "reports", "R-0001.json"), JSON.stringify(record));
-    const res = await call(run, ["--status"], wt);
+    const res = await call(run, ["--status", "--all"], wt);
     expect(res.out.reports.map((r: { id: string }) => r.id)).toEqual(["R-0001"]);
   });
 

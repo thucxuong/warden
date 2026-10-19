@@ -24,4 +24,4 @@ When a report needs info, the note is their question. Usually this project's age
 warden report reply <id> --body "<answer>"
 ```
 Keep secrets, credentials and customer data out of the answer.
-To see the status of earlier reports, run warden report --status.
+To see the reports still open, run `warden report --status`. It counts the closed ones; `--all` lists them too.
