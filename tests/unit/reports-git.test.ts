@@ -32,7 +32,7 @@ function sh(cwd: string, args: string[]): string {
 
 function makeBare(dir = tempDir("warden-bare-")): string {
   mkdirSync(dir, { recursive: true });
-  sh(dir, ["init", "-q", "--bare", dir]);
+  sh(dir, ["init", "-q", "--bare", "-b", "main", dir]);
   return dir;
 }
 
