@@ -31,7 +31,7 @@ An AI agent that writes code will sometimes say "tests pass" when they do not, p
 
 ## Quick start
 
-You need [Claude Code](https://docs.anthropic.com/en/docs/claude-code), git, [Bun](https://bun.sh) 1.4 or newer, and read access to the warden repo (see [Installation](docs/getting-started/installation.md)).
+You need [Claude Code](https://docs.anthropic.com/en/docs/claude-code), git, [Bun](https://bun.sh) 1.4 or newer (see [Installation](docs/getting-started/installation.md)).
 
 1. Install the plugin, in a terminal or inside Claude Code (`/plugin`):
 
@@ -105,7 +105,7 @@ The full table of contents is in [docs/README.md](docs/README.md).
 
 ## Project status
 
-Version 0.6.3. Warden is young and changes often. Each version that changes your project's files ships an upgrade note, and `/warden:upgrade` applies it (see [Upgrading](docs/getting-started/upgrading.md)). Changes are listed in [CHANGELOG.md](CHANGELOG.md).
+Version 0.6.4. Warden is young and changes often. Each version that changes your project's files ships an upgrade note, and `/warden:upgrade` applies it (see [Upgrading](docs/getting-started/upgrading.md)). Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

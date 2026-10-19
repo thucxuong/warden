@@ -7,10 +7,7 @@
 //   - Quick start (incl. what you need to install) <- README.md, section "Quick start"
 //   - "Built for agents" rules     <- docs/for-agents.md, section "The short version"
 //
-// Access to the repo: the "what you need" line of the quick start comes from
-// README.md. While the repo is private it says you need read access. When the
-// repo goes public, follow the go-public list in docs/maintainers/website.md;
-// nothing here needs to change.
+// The "what you need" line of the quick start comes from README.md.
 
 import type { IconName } from "./svg.ts";
 

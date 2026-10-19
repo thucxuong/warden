@@ -56,8 +56,6 @@ Edit `website/content/landing.ts` for the hero, the problem, the step list, the 
 
 The build fails if one of these sections is renamed. Keep the bullets in the `- **Title.** text` shape.
 
-While the repo stays private, the quick start says you need read access to it, because `README.md` says so. When the repo goes public, see [Going public](#going-public).
-
 ## Build and preview
 
 ```bash
@@ -96,11 +94,11 @@ One-time setup, once the repo is public:
 Before the repo is made public, and so before the site deploys, change every place that calls the repo private:
 
 - [x] License: [MIT](https://github.com/thucxuong/warden/blob/main/LICENSE). It is set in `LICENSE`, `plugins/warden/.claude-plugin/plugin.json`, the "License" section of `README.md` and the site footer.
-- [ ] `README.md`, "Quick start": the line on what you need. Drop the read-access part, or point to Installation.
-- [ ] [Installation](../getting-started/installation.md): the last row of the prerequisites table, and the section on repo access (SSH and HTTPS checks).
-- [ ] [docs/README.md](../README.md), "Getting started": the Installation line mentions repo access.
-- [ ] [Maintainer overview](README.md), "Repo facts": the first line calls the repo private.
-- [ ] [Reports](../concepts/reports.md): the sync needs write access, which public users do not have. Check that the README feature line still reads right.
+- [x] `README.md`, "Quick start": the line on what you need. Drop the read-access part, or point to Installation.
+- [x] [Installation](../getting-started/installation.md): the last row of the prerequisites table, and the section on repo access (SSH and HTTPS checks).
+- [x] [docs/README.md](../README.md), "Getting started": the Installation line mentions repo access.
+- [x] [Maintainer overview](README.md), "Repo facts": the first line calls the repo private.
+- [x] [Reports](../concepts/reports.md): the sync needs write access, which public users do not have. Check that the README feature line still reads right.
 
 To check, run `SITE_PUBLIC=1 bun run site:build`. It lists each line that still needs a change.
 

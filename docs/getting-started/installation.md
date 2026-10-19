@@ -9,7 +9,6 @@ Install the warden plugin for yourself or for your whole team, check that it wor
 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | Warden is a Claude Code plugin. Its review gate also runs `claude` on the command line. | `claude --version` |
 | git | Warden works with branches, worktrees and commits. | `git --version` |
 | [Bun](https://bun.sh) 1.4 or newer | Warden's code runs on Bun. | `bun --version` |
-| Read access to the warden repo | The repo is private. See the next section. | `git ls-remote` below |
 
 Install Bun from [bun.sh](https://bun.sh), or run `bun upgrade` if you have an older version.
 
@@ -19,42 +18,13 @@ If Bun is missing or too old, warden turns itself off and says so at session sta
 warden: Bun is not installed, so warden is off. In a terminal run: curl -fsSL https://bun.sh/install | bash (or: bun upgrade) — then restart Claude Code.
 ```
 
-## Access to the private repo
+## If the install cannot fetch the repo
 
-Claude Code fetches the plugin with git, so git must be able to read `thucxuong/warden` without asking for a password. Choose one way.
+Claude Code fetches the plugin from GitHub with git. The repo is public, so no access is needed. If the fetch fails because you have no SSH key for GitHub, tell Claude Code to use HTTPS. Add this line to your shell profile (for example `~/.zshrc`), then open a new terminal:
 
-### SSH
-
-1. Check that GitHub accepts your SSH key:
-
-   ```bash
-   ssh -T git@github.com
-   ```
-
-2. Check that git can read the repo without a prompt:
-
-   ```bash
-   GIT_TERMINAL_PROMPT=0 git ls-remote git@github.com:thucxuong/warden.git
-   ```
-
-   It should print a list of refs. If it fails, ask the repo owner for access or use HTTPS below.
-
-### HTTPS with the GitHub CLI
-
-Use this if you do not have an SSH key.
-
-1. Log in and let git use the GitHub CLI for passwords:
-
-   ```bash
-   gh auth login
-   gh auth setup-git
-   ```
-
-2. Tell Claude Code to fetch plugins over HTTPS. Add this line to your shell profile (for example `~/.zshrc`), then open a new terminal:
-
-   ```bash
-   export CLAUDE_CODE_PLUGIN_PREFER_HTTPS=1
-   ```
+```bash
+export CLAUDE_CODE_PLUGIN_PREFER_HTTPS=1
+```
 
 ## Personal install
 
@@ -95,7 +65,7 @@ Use this so that everyone who opens your project gets warden. It is the recommen
 
 3. Each team member opens the project in Claude Code, accepts the workspace trust dialog, then runs `/reload-plugins` (or restarts) when asked.
 
-Each team member still needs Bun and read access to the repo, as above. See [Team setup](../guides/team-setup.md) for the other settings a team shares.
+Each team member still needs Bun, as above. See [Team setup](../guides/team-setup.md) for the other settings a team shares.
 
 ## Verify the install
 

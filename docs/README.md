@@ -19,7 +19,7 @@ A few words used everywhere are in the [Glossary](#glossary) at the end of this 
 
 ## Getting started
 
-1. [Installation](getting-started/installation.md): prerequisites, access to the private repo, personal and team install, verify, uninstall.
+1. [Installation](getting-started/installation.md): prerequisites, personal and team install, verify, uninstall.
 2. [Quick start](getting-started/quickstart.md): set up your project with `/warden:init`, run a first small task, then a feature from plan to ship.
 3. [Upgrading](getting-started/upgrading.md): how new versions arrive and how `/warden:upgrade` applies them to your project.
 

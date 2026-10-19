@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.4 — 2026-10-19
+
+- Warden is open source under the MIT license, and the repo is public. Installing needs no repo access any more.
+- New website with a landing page and all docs: https://thucxuong.github.io/warden/ . It is built with Bun from `README.md` and `docs/` (`bun run site:build`) and deploys from `stable`.
+- The docs say a change that weakens a test or a check counts as blocking in review, and that reports reach the maintainers only with write access to the repo.
+
 ## 0.6.3 — 2026-10-19
 
 - `/warden:guide` and the agent guide say what to do when a refusal matches none of their rows.

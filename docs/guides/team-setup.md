@@ -54,7 +54,7 @@ During a run, warden's hooks only allow push, pull request and merge commands in
 ## 4. What each teammate does
 
 1. Install Bun 1.4 or newer (`curl -fsSL https://bun.sh/install | bash`, or `bun upgrade`).
-2. Get read access to the warden repository, over SSH or HTTPS. See [Installation](../getting-started/installation.md).
+2. Check that git can fetch from GitHub, over SSH or HTTPS. See [Installation](../getting-started/installation.md).
 3. Open the project in Claude Code and accept the workspace trust dialog. Run `/reload-plugins` (or restart) when asked.
 4. Add the terminal alias, so they can run `warden approve`, `warden retry` and `warden reset` themselves:
 

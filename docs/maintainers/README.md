@@ -40,7 +40,7 @@ A project's marketplace copy holds the whole repo at `stable`, but Claude Code l
 
 ## Repo facts
 
-- Repo: `thucxuong/warden` on GitHub. Private.
+- Repo: `thucxuong/warden` on GitHub. Public, MIT license.
 - Projects install from the `stable` branch (`thucxuong/warden#stable`), never from `main`.
 - Reports travel on the `reports` branch of the same repo.
 - Bugs and enhancements that the Warden Agent accepts become GitHub issues in this repo.
