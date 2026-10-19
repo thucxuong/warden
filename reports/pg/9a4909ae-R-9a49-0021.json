@@ -6,9 +6,9 @@
   "title": "Ship step forbids changing the proven commit, but a project merge how-to needs a status commit before merge",
   "body": "What happened: the ship step says to deliver the proven commit without changing it, and that any other change sends the run back to the gates. The project git how-to says to commit status: done on the ticket file on the branch before merging. Both cannot be followed: the status commit moves HEAD after the proof. Expected: warden says how to mark the ticket done at ship (for example it does it itself, or the proof allows a ticket-file-only commit). Steps: finish the check gate on a feature run, read the ship instructions, read a how-to that requires a done-status commit before merge. Evidence: ship instructions text: Deliver the proven commit without changing it ... Any other change sends the run back to the gates. I stopped before merging to avoid a gate rerun.",
   "createdAt": "2026-10-19T00:56:35.182Z",
-  "status": "sent",
+  "status": "accepted",
   "fixedIn": null,
-  "note": null,
+  "note": "Accepted. Planned for a coming release.",
   "projectDir": "/Users/cluu/Documents/Work/warden-playground",
   "machineId": "9a4909ae"
 }
