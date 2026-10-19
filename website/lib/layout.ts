@@ -21,6 +21,8 @@ export type ShellInput = {
   menu?: boolean;
   /** Extra tags for <head>. */
   head?: string;
+  /** Extra scripts (site-root paths), loaded with defer after site.js. */
+  scripts?: string[];
   /** Override the computed relative root (404 page uses a <base> instead). */
   root?: string;
   ogType?: "website" | "article";
@@ -39,7 +41,7 @@ export function relHref(fromOut: string, toOut: string): string {
 }
 
 const THEME_BOOT =
-  `<script>try{var t=localStorage.getItem("warden-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>`;
+  `<script>document.documentElement.classList.add("js");try{var t=localStorage.getItem("warden-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>`;
 
 export function shell(p: ShellInput): string {
   const root = p.root ?? rootOf(p.out);
@@ -73,7 +75,7 @@ ${p.body}
 ${footer(r, p.version)}
 ${searchDialog()}
 <script src="${r("assets/site.js")}" defer></script>
-</body>
+${(p.scripts ?? []).map((s) => `<script src="${r(s)}" defer></script>\n`).join("")}</body>
 </html>
 `;
 }
@@ -122,6 +124,7 @@ function footer(r: (to: string) => string, version: string): string {
 <a href="${e(blobUrl("CHANGELOG.md"))}" rel="noopener">Changelog</a>
 <a href="${r("docs/troubleshooting.html")}">Troubleshooting</a>
 <a href="${r("docs/faq.html")}">FAQ</a>
+<a href="${e(blobUrl("LICENSE"))}" rel="noopener">License (MIT)</a>
 </div>
 </nav>
 </div>

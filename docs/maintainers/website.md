@@ -14,9 +14,25 @@ The website is a static site: a landing page and one page per user doc. It is pu
 | `website/content/svg.ts` | The logo, the icons and the step diagram, as inline SVG. |
 | `website/lib/` | Markdown to HTML, the code highlighter, the page templates. |
 | `website/assets/` | `site.css` and `site.js`, copied as they are. |
+| `node_modules/mermaid/dist/mermaid.min.js` | Draws the Mermaid diagrams. Copied to `assets/mermaid.min.js`. |
 | `tests/unit/website.test.ts` | Builds the site into a temp folder and checks pages, links, anchors and the search index. |
 
-The site uses Bun and Node built-ins only: no npm packages, no CDN, no web fonts, no external images. Markdown goes through `Bun.markdown`.
+The site uses Bun and Node built-ins, plus one npm package: `mermaid`, a devDependency pinned to an exact version, used only by the site. The plugin (`plugins/`) does not use it. There is no CDN, no web font and no external image. Markdown goes through `Bun.markdown`.
+
+## Diagrams
+
+A `` ```mermaid `` block in a doc is drawn on the page, as on GitHub:
+
+- The build writes a figure that holds the diagram source, as an open "Diagram source (Mermaid)" block. Without JavaScript, or if a diagram fails to draw, readers see the source.
+- Only a page with a diagram loads `assets/mermaid.min.js` (about 5.5 MB, 1.6 MB gzipped; the browser caches it). It loads with `defer`, after `site.js`, so it never blocks the page.
+- While the bundle loads, the box shows "Drawing the diagram…" and keeps a rough height the build guesses from the source (`diagramHeight` in `website/lib/markdown.ts`), so the page does not jump when the drawing appears. If the bundle fails to load or a diagram fails to draw, the source shows again.
+- `site.js` draws each diagram to SVG and folds the source behind its toggle. The colours and fonts come from the site's CSS tokens, so diagrams follow the light and dark theme, and they are drawn again when the reader switches theme or the OS does.
+- A diagram keeps its natural size and shrinks to 80% at most. A wider one scrolls inside its own box (its toggle then says "scroll sideways to see all of it"), and on a wide screen its box grows into the page margins. A top-down diagram that scrolls opens with its first node in view.
+- Node outlines use the `--diagram-line` colour token (3:1 contrast on the box). Mermaid only reads plain hex colours there, not `color-mix()`.
+- Labels wrap at a fixed width. Put `<br/>` before a CLI flag in a label so the flag stays whole.
+- The search index leaves diagram sources out.
+
+The build copies the bundle from `node_modules`, so run `bun install` first; the build fails with a clear message if it is missing. To update mermaid, change the exact version in `package.json`, run `bun install`, then check the diagram pages in light and dark, wide and narrow.
 
 ## What gets published
 
@@ -77,9 +93,9 @@ One-time setup, once the repo is public:
 
 ## Going public
 
-Before the repo is made public, and so before the site deploys, change every place that calls the repo private or says there is no license:
+Before the repo is made public, and so before the site deploys, change every place that calls the repo private:
 
-- [ ] Pick a license. Add a `LICENSE` file, set `license` in `plugins/warden/.claude-plugin/plugin.json`, and replace the "License" section of `README.md`. Then add a link to the license in the site footer (`website/lib/layout.ts`). The site invites people to install warden, so this comes first.
+- [x] License: [MIT](https://github.com/thucxuong/warden/blob/main/LICENSE). It is set in `LICENSE`, `plugins/warden/.claude-plugin/plugin.json`, the "License" section of `README.md` and the site footer.
 - [ ] `README.md`, "Quick start": the line on what you need. Drop the read-access part, or point to Installation.
 - [ ] [Installation](../getting-started/installation.md): the last row of the prerequisites table, and the section on repo access (SSH and HTTPS checks).
 - [ ] [docs/README.md](../README.md), "Getting started": the Installation line mentions repo access.

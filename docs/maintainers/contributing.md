@@ -12,7 +12,7 @@ cd warden
 bun install
 ```
 
-`bun install` adds the only two dev dependencies, `typescript` (7) and `@types/bun`. The plugin itself has no npm dependencies at run time: it uses Bun and Node built-ins only.
+`bun install` adds the dev dependencies: `typescript` (7), `@types/bun`, and `mermaid`, which only the website build uses (see [Website](website.md)). The plugin itself has no npm dependencies at run time: it uses Bun and Node built-ins only.
 
 ## Commands
 

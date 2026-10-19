@@ -9,6 +9,7 @@
   --muted: #5d6370;
   --line: #e2e2dc;
   --line-strong: #cfcfc7;
+  --diagram-line: #8f9389;
   --accent: #0b7d5a;
   --accent-strong: #08664a;
   --accent-ink: #ffffff;
@@ -45,6 +46,7 @@
     --muted: #979eaa;
     --line: #252930;
     --line-strong: #343a43;
+    --diagram-line: #626a77;
     --accent: #3ecf8e;
     --accent-strong: #5fdca3;
     --accent-ink: #06130d;
@@ -76,6 +78,7 @@
   --muted: #979eaa;
   --line: #252930;
   --line-strong: #343a43;
+  --diagram-line: #626a77;
   --accent: #3ecf8e;
   --accent-strong: #5fdca3;
   --accent-ink: #06130d;
@@ -387,8 +390,40 @@ main:focus { outline: none; }
   .code:not(.has-head) .copy-btn { opacity: 1; }
   .code:not(.has-head) pre { padding-right: 84px; }
 }
-.diagram-src { margin: 0 0 20px; }
-.diagram-src figcaption { font-size: 13.5px; color: var(--muted); margin-bottom: 6px; }
+/* Mermaid diagrams: drawn by site.js; the source sits behind a toggle. */
+.doc-main { container-type: inline-size; }
+.diagram { margin: 8px 0 24px; }
+/* A diagram wider than the text column grows into the page margins (up to the full main column), staying centred. */
+.doc > .diagram.is-drawn { margin-inline: calc((100% - min(100cqi, max(100%, var(--diagram-w, 0px)))) / 2); }
+/* The same in a list item, measured from the text column (the item plus the list's 1.4em indent). */
+.doc > ol > li > .diagram.is-drawn, .doc > ul > li > .diagram.is-drawn {
+  --diagram-m: calc((100% + 1.4em - min(100cqi, max(100% + 1.4em, var(--diagram-w, 0px)))) / 2);
+  margin-inline: calc(var(--diagram-m) - 1.4em) var(--diagram-m);
+}
+.diagram-view {
+  overflow-x: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain;
+  border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 16px;
+  /* Shadows at an edge that has more to scroll to. */
+  background:
+    linear-gradient(to right, var(--bg-raise) 40%, transparent) left / 32px 100% no-repeat local,
+    linear-gradient(to left, var(--bg-raise) 40%, transparent) right / 32px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, color-mix(in srgb, var(--fg) 26%, transparent), transparent) left / 16px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--fg) 26%, transparent), transparent) right / 16px 100% no-repeat scroll,
+    var(--bg-raise);
+}
+/* With JavaScript, a diagram still to draw hides its source and keeps room for the drawing,
+   so the page does not jump when it appears. A failed draw shows the source again. */
+.js .diagram:not(.is-drawn):not(.is-failed) .diagram-src { display: none; }
+.js .diagram:not(.is-drawn):not(.is-failed) .diagram-view[hidden] { display: grid !important; place-items: center; min-height: var(--diagram-h, 240px); }
+.js .diagram:not(.is-drawn):not(.is-failed) .diagram-view::before { content: "Drawing the diagram…"; font-size: 13.5px; color: var(--muted); }
+/* Wider than its box: a visible scrollbar and a hint, not just the edge shadow. */
+.diagram.is-wide .diagram-view { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+.diagram.is-wide .diagram-src summary::after { content: " · scroll sideways to see all of it"; }
+.diagram-view svg { display: block; height: auto; margin: 0 auto; font-family: var(--sans); }
+.diagram-src summary { font-size: 13.5px; color: var(--muted); margin-bottom: 6px; cursor: pointer; width: max-content; max-width: 100%; }
+.diagram-src summary:hover { color: var(--fg); }
+.diagram.is-drawn .diagram-src summary { margin: 8px 0 0; }
+.diagram.is-drawn .diagram-src[open] summary { margin-bottom: 6px; }
 .diagram-src .code { margin: 0; }
 .tk-c { color: var(--tk-c); font-style: italic; }
 .tk-s { color: var(--tk-s); }
@@ -505,4 +540,7 @@ main:focus { outline: none; }
   .prose h2, .prose h3 { break-after: avoid; }
   .hero::before { display: none; }
   .flow-wide { break-inside: avoid; }
+  .diagram { break-inside: avoid; }
+  .diagram.is-drawn .diagram-src { display: none; }
+  .diagram-view { overflow: visible; border-color: #bbb; }
 }

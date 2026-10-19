@@ -1,5 +1,6 @@
-// Warden website: theme toggle, docs menu, copy buttons, search, TOC highlight.
-// Plain browser JavaScript, no dependencies.
+// Warden website: theme toggle, docs menu, copy buttons, diagrams, search, TOC highlight.
+// Plain browser JavaScript, no dependencies. Diagrams use assets/mermaid.min.js
+// when the page loads it (only pages with a diagram do).
 (function () {
   "use strict";
   var doc = document.documentElement;
@@ -137,6 +138,138 @@
       if (byId[active]) byId[active].classList.add("is-active");
     }, { rootMargin: "-64px 0px -66% 0px" });
     targets.forEach(function (t) { io.observe(t); });
+  }
+
+  // Mermaid diagrams. Pages with one load assets/mermaid.min.js after this file.
+  // The source stays in the page (an open <details>), so a reader without
+  // JavaScript, or a diagram that fails to draw, still shows it. While a draw is
+  // pending, site.css hides the source and keeps room for the drawing.
+  var figures = document.querySelectorAll("[data-diagram]");
+  var mermaidLib = document.querySelector('script[src$="mermaid.min.js"]');
+  if (figures.length && !mermaidLib) {
+    // Nothing will draw them: show the source (site.css hides it while a draw is pending).
+    Array.prototype.forEach.call(figures, function (fig) { fig.classList.add("is-failed"); });
+  }
+  if (figures.length && mermaidLib) {
+    var drawnTheme = null;
+    var drawCount = 0;
+    var token = function (name) { return getComputedStyle(doc).getPropertyValue(name).trim(); };
+    var mermaidConfig = function (dark) {
+      var bg = token("--bg-raise"), soft = token("--bg-soft"), fg = token("--fg"), fgSoft = token("--fg-soft");
+      // Outlines use --diagram-line (3:1 on the box); mermaid needs plain hex there, not color-mix.
+      var muted = token("--muted"), line = token("--line-strong"), outline = token("--diagram-line") || line, accent = token("--accent");
+      var accentSoft = token("--accent-soft"), accentStrong = token("--accent-strong");
+      var font = getComputedStyle(document.body).fontFamily;
+      return {
+        startOnLoad: false,
+        securityLevel: "strict",
+        theme: "base",
+        fontFamily: font,
+        flowchart: { useMaxWidth: false, padding: 12, nodeSpacing: 32, rankSpacing: 40 },
+        sequence: {
+          useMaxWidth: false, mirrorActors: false, wrap: true, width: 120, actorMargin: 16, boxMargin: 8,
+          actorFontFamily: font, actorFontSize: 15, messageFontFamily: font, messageFontSize: 14, noteFontFamily: font, noteFontSize: 14
+        },
+        state: { useMaxWidth: false, nodeSpacing: 28, rankSpacing: 44 },
+        themeVariables: {
+          darkMode: dark, fontFamily: font, fontSize: "15px", radius: 8, strokeWidth: 1.5, dropShadow: "none", useGradient: false,
+          background: bg, mainBkg: soft, primaryColor: soft, primaryTextColor: fg, primaryBorderColor: outline,
+          secondaryColor: accentSoft, secondaryTextColor: fg, secondaryBorderColor: accent,
+          tertiaryColor: bg, tertiaryTextColor: fg, tertiaryBorderColor: outline,
+          nodeBorder: outline, nodeTextColor: fg, textColor: fgSoft, titleColor: fg,
+          lineColor: muted, arrowheadColor: muted, defaultLinkColor: muted, edgeLabelBackground: bg,
+          clusterBkg: bg, clusterBorder: line,
+          actorBkg: soft, actorBorder: outline, actorTextColor: fg, actorLineColor: line,
+          signalColor: muted, signalTextColor: fgSoft, labelBoxBkgColor: accentSoft, labelBoxBorderColor: accent,
+          labelTextColor: accentStrong, loopTextColor: fgSoft, noteBkgColor: accentSoft, noteTextColor: fg, noteBorderColor: accent,
+          activationBkgColor: accentSoft, activationBorderColor: accent, sequenceNumberColor: bg,
+          stateBkg: soft, stateLabelColor: fg, labelBackgroundColor: bg, transitionColor: muted, transitionLabelColor: fgSoft,
+          compositeBackground: bg, compositeTitleBackground: soft, compositeBorder: outline, altBackground: soft,
+          specialStateColor: accent, innerEndBackground: accent
+        },
+        // Decision nodes and start/end states in the accent colour.
+        themeCSS: ".node rect.label-container{rx:8px;ry:8px;}" +
+          "rect.actor{filter:none;rx:8px;ry:8px;}" +
+          "g.node[data-look] polygon, g.node polygon{fill:" + accentSoft + ";stroke:" + accent + ";}" +
+          ".edgeLabel, .edgeLabel p, .edgeLabel span{color:" + fgSoft + ";}" +
+          ".node .label, .nodeLabel{color:" + fg + ";}"
+      };
+    };
+    var failAll = function () {
+      Array.prototype.forEach.call(figures, function (fig) { if (!fig.classList.contains("is-drawn")) fig.classList.add("is-failed"); });
+    };
+    // A box narrower than its drawing scrolls; .is-wide makes that visible.
+    var markWide = function (fig) {
+      var view = fig.querySelector(".diagram-view");
+      if (view) fig.classList.toggle("is-wide", view.scrollWidth > view.clientWidth + 1);
+    };
+    var draw = function () {
+      var lib = window.mermaid;
+      var theme = effectiveTheme();
+      if (!lib || theme === drawnTheme) return;
+      drawnTheme = theme;
+      try { lib.initialize(mermaidConfig(theme === "dark")); } catch (err) { failAll(); return; }
+      // One at a time: mermaid keeps shared state while it draws.
+      var chain = Promise.resolve();
+      Array.prototype.forEach.call(figures, function (fig) {
+        var view = fig.querySelector(".diagram-view");
+        var code = fig.querySelector(".diagram-src code");
+        var src = fig.querySelector(".diagram-src");
+        if (!view || !code) { fig.classList.add("is-failed"); return; }
+        chain = chain.then(function () {
+          if (drawnTheme !== theme) return; // the theme changed again; the newer draw wins
+          return lib.render("diagram-" + (++drawCount), code.textContent).then(function (out) {
+            if (drawnTheme !== theme) return;
+            view.innerHTML = out.svg;
+            var svg = view.querySelector("svg");
+            if (svg) {
+              // Natural size, shrinking to at most 80% to fit, then the box scrolls.
+              var w = parseFloat(svg.style.maxWidth) || (svg.viewBox && svg.viewBox.baseVal && svg.viewBox.baseVal.width) || 0;
+              svg.removeAttribute("height");
+              svg.style.maxWidth = "100%";
+              if (w) {
+                svg.style.width = w + "px";
+                svg.style.minWidth = Math.round(w * 0.8) + "px";
+                // Wider than the text column: site.css lets the box grow into the margins.
+                fig.style.setProperty("--diagram-w", Math.ceil(w + 34) + "px");
+              }
+              svg.setAttribute("role", "img");
+              svg.setAttribute("aria-label", "Diagram. Its source follows.");
+            }
+            view.hidden = false;
+            fig.classList.remove("is-failed");
+            fig.classList.add("is-drawn");
+            markWide(fig);
+            // A top-down drawing starts in its middle: scroll so the first node is in view.
+            // Left-to-right and sequence diagrams start at the left and stay there.
+            var first = svg && svg.querySelector("g.node");
+            if (first && view.scrollWidth > view.clientWidth) {
+              var fr = first.getBoundingClientRect(), vr = view.getBoundingClientRect();
+              view.scrollLeft += (fr.left + fr.width / 2) - (vr.left + vr.width / 2);
+            }
+            if (src && !fig.hasAttribute("data-drawn")) src.open = false;
+            fig.setAttribute("data-drawn", "");
+          }, function (err) {
+            if (window.console) console.warn("diagram not drawn:", err);
+            if (!fig.classList.contains("is-drawn")) fig.classList.add("is-failed");
+          });
+        });
+      });
+    };
+    if (window.mermaid) draw();
+    else {
+      mermaidLib.addEventListener("load", function () { if (window.mermaid) draw(); else failAll(); });
+      mermaidLib.addEventListener("error", failAll);
+    }
+    window.addEventListener("resize", function () {
+      Array.prototype.forEach.call(figures, function (fig) { if (fig.classList.contains("is-drawn")) markWide(fig); });
+    });
+    new MutationObserver(draw).observe(doc, { attributes: true, attributeFilter: ["data-theme"] });
+    if (window.matchMedia) {
+      var mq = window.matchMedia("(prefers-color-scheme: dark)");
+      if (mq.addEventListener) mq.addEventListener("change", draw);
+      else if (mq.addListener) mq.addListener(draw);
+    }
   }
 
   // Search.

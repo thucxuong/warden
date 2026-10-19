@@ -38,7 +38,7 @@ The short form ships with the plugin as the [`/warden:guide`](reference/skills.m
 ```mermaid
 flowchart TD
     next["warden next"] --> s{status}
-    s -->|agent| work["Do the step"] --> done["warden done --json '...'"]
+    s -->|agent| work["Do the step"] --> done["warden done<br/>--json '...'"]
     done -->|"accepted: false"| fix["Fix each line of errors"] --> done
     done -->|accepted| next
     s -->|running_gate| wait["warden wait<br/>(Bash timeout 600000)"] --> s

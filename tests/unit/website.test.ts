@@ -1,13 +1,13 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, posix, relative, resolve } from "node:path";
-import { build, clearOutDir, countSteps, outPathFor, privateLeftovers, publicDocs, type BuildResult, type SearchEntry } from "../../website/build.ts";
+import { build, clearOutDir, countSteps, MERMAID_ASSET, mermaidBundle, outPathFor, privateLeftovers, publicDocs, type BuildResult, type SearchEntry } from "../../website/build.ts";
 import { QUICKSTART } from "../../website/content/landing.ts";
 import { section } from "../../website/lib/markdown.ts";
 import { githubSlug, Slugger, stripTags } from "../../website/lib/text.ts";
 import { highlight } from "../../website/lib/highlight.ts";
-import { renderMarkdown } from "../../website/lib/markdown.ts";
+import { diagramHeight, renderMarkdown } from "../../website/lib/markdown.ts";
 
 const repo = resolve(import.meta.dir, "../..");
 let out: string;
@@ -37,7 +37,7 @@ describe("pages", () => {
     expect(docs.length).toBeGreaterThan(20);
     expect(docs).toContain("docs/README.md");
     for (const d of docs) expect(existsSync(join(out, outPathFor(d)))).toBe(true);
-    for (const f of ["index.html", "docs/index.html", "404.html", "sitemap.xml", "robots.txt", "favicon.svg", "search-index.json", "assets/site.css", "assets/site.js"]) {
+    for (const f of ["index.html", "docs/index.html", "404.html", "sitemap.xml", "robots.txt", "favicon.svg", "search-index.json", "assets/site.css", "assets/site.js", MERMAID_ASSET]) {
       expect(existsSync(join(out, f))).toBe(true);
     }
     expect(res.pages.length).toBe(docs.length + 2);
@@ -98,7 +98,8 @@ describe("docs/internal is never published", () => {
         .slice(0, 5),
     );
     expect(lines.length).toBeGreaterThan(0);
-    const all = walk(out).map((f) => readFileSync(join(out, f), "utf8")).join("\n");
+    // The mermaid bundle is a copied third-party file, and large; skip it.
+    const all = walk(out).filter((f) => f !== MERMAID_ASSET).map((f) => readFileSync(join(out, f), "utf8")).join("\n");
     for (const l of lines) expect(all.includes(l), l).toBe(false);
   });
 
@@ -160,6 +161,85 @@ describe("self-contained", () => {
     expect(css).not.toMatch(/@import|url\(\s*["']?(?:https?:)?\/\/|@font-face/);
     const js = readFileSync(join(out, "assets/site.js"), "utf8");
     expect(js).not.toMatch(/https?:\/\//);
+  });
+});
+
+describe("diagrams", () => {
+  /** The sources of the ```mermaid blocks in a markdown file (fences may be indented in lists). */
+  const mermaidBlocks = (md: string): string[] =>
+    [...md.matchAll(/^([ \t]*)```mermaid\n([\s\S]*?)\n\1```/gm)].map((m) => m[2]!.split("\n").map((l) => l.slice(m[1]!.length)).join("\n"));
+  const withDiagrams = (): string[] => publicDocs(repo).filter((d) => mermaidBlocks(readFileSync(join(repo, d), "utf8")).length > 0);
+
+  test("every Mermaid block becomes a figure that keeps its source", () => {
+    const docs = withDiagrams();
+    expect(docs.length).toBeGreaterThanOrEqual(10);
+    for (const d of docs) {
+      const page = html.get(outPathFor(d))!;
+      const blocks = mermaidBlocks(readFileSync(join(repo, d), "utf8"));
+      expect(page.match(/<figure class="diagram" data-diagram>/g)?.length, d).toBe(blocks.length);
+      const sources = [...page.matchAll(/<code class="language-mermaid">([\s\S]*?)<\/code>/g)].map((m) => m[1]!.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&"));
+      expect(sources, d).toEqual(blocks);
+    }
+  });
+
+  test("the mermaid bundle is copied once, and only pages with a diagram load it", () => {
+    expect(res.files.filter((f) => f === MERMAID_ASSET)).toEqual([MERMAID_ASSET]);
+    expect(walk(out).filter((f) => /mermaid/i.test(f))).toEqual([MERMAID_ASSET]);
+    // Compare sizes, not contents: opening the 5 MB bundle can take seconds (file scanning
+    // on macOS), which timed this test out.
+    const copied = statSync(join(out, MERMAID_ASSET)).size;
+    expect(copied).toBeGreaterThan(1_000_000);
+    expect(copied).toBe(statSync(mermaidBundle(repo)).size);
+    const diagramPages = new Set(withDiagrams().map(outPathFor));
+    for (const [f, page] of html) {
+      const scripts = [...page.matchAll(/<script src="([^"]*mermaid[^"]*)" defer><\/script>/g)].map((m) => m[1]);
+      if (diagramPages.has(f)) {
+        expect(scripts, f).toEqual([relative(dirname(join(out, f)), join(out, MERMAID_ASSET)).split("\\").join("/")]);
+        expect(page.indexOf(scripts[0]!), f).toBeGreaterThan(page.indexOf("assets/site.js"));
+      } else {
+        expect(scripts, f).toEqual([]);
+        expect(page, f).not.toMatch(/<script[^>]*mermaid|<figure class="diagram"/);
+      }
+    }
+  });
+
+  test("no page still sends readers to GitHub to see a diagram", () => {
+    for (const [f, page] of html) expect(page, f).not.toContain("See it drawn on GitHub");
+  });
+
+  test("search text leaves out diagram sources", () => {
+    const idx = JSON.parse(readFileSync(join(out, "search-index.json"), "utf8")) as { pages: SearchEntry[] };
+    for (const p of idx.pages) expect(p.x, p.u).not.toMatch(/flowchart (TD|LR)|sequenceDiagram|stateDiagram|-->|Mermaid source/);
+  });
+
+  test("markdown: a mermaid fence becomes an escaped figure, counted, and out of the search text", () => {
+    const r = renderMarkdown('# T\n\nBefore.\n\n```mermaid\nflowchart LR\n  a["<b>x</b>"] --> b\n```\n\nAfter.', { rewriteHref: (h) => h });
+    expect(r.diagrams).toBe(1);
+    expect(r.html).toMatch(/<figure class="diagram" data-diagram><div class="diagram-view" style="--diagram-h:\d+px" hidden><\/div><details class="diagram-src" open>/);
+    expect(r.html).toContain("flowchart LR\n  a[&quot;&lt;b&gt;x&lt;/b&gt;&quot;] --&gt; b</code>");
+    expect(r.text).toBe("T Before. After.");
+    expect(renderMarkdown("```bash\necho\n```", { rewriteHref: (h) => h }).diagrams).toBe(0);
+  });
+
+  test("the room kept for a diagram before it draws grows with its ranks, not its back edges", () => {
+    const lr = diagramHeight("flowchart LR\n  a --> b --> c");
+    const td2 = diagramHeight("flowchart TD\n  a[\"x\"] --> b\n  b -->|again| a");
+    const td4 = diagramHeight("flowchart TD\n  a --> b{q}\n  b -->|yes| c([\"c\"]) --> d\n  d -.-> a");
+    const st = diagramHeight("stateDiagram-v2\n  [*] --> on: go\n  on --> off: stop");
+    expect(lr).toBeLessThan(td2);
+    expect(td2).toBeLessThan(td4);
+    expect(td4 - td2).toBe(2 * (diagramHeight("flowchart TD\n  a --> b --> c") - td2));
+    expect(st).toBeGreaterThan(diagramHeight("stateDiagram-v2\n  on --> off"));
+  });
+
+  test("the build names the missing mermaid bundle and how to get it", () => {
+    const tmp = realpathSync(mkdtempSync(join(tmpdir(), "warden-nomermaid-")));
+    try {
+      expect(() => mermaidBundle(tmp)).toThrow(/mermaid\.min\.js is missing[\s\S]*bun install/);
+      expect(mermaidBundle(repo)).toEndWith("node_modules/mermaid/dist/mermaid.min.js");
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
   });
 });
 

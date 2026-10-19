@@ -48,7 +48,7 @@ The `status` field of `warden next` tells the agent what to do:
 flowchart TD
     start["warden start"] --> next["warden next"]
     next -->|agent| work["do the step"]
-    work --> done["warden done --json ..."]
+    work --> done["warden done<br/>--json ..."]
     done -->|accepted: false| work
     done -->|accepted: true| next
     next -->|running_gate| wait["warden wait"]

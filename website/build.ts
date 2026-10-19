@@ -4,6 +4,8 @@
 // sitemap, canonical and Open Graph tags, and the 404 page.
 // SITE_PUBLIC=1 (set by the deploy workflow) fails the build while a published
 // page still says the repo is private or that no license is granted.
+// Pages with a Mermaid diagram load a self-hosted copy of mermaid (a site-only
+// devDependency, copied from node_modules); other pages do not.
 
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, posix, relative, resolve } from "node:path";
@@ -40,6 +42,18 @@ export function privateLeftovers(sources: { path: string; text: string }[]): str
   return out;
 }
 export type BuildResult = { outDir: string; pages: string[]; files: string[] };
+
+/** Mermaid's single-file browser bundle (sets window.mermaid), from the mermaid devDependency. */
+export const MERMAID_ASSET = "assets/mermaid.min.js";
+
+/** Path of mermaid.min.js in node_modules. Throws a clear error when it is missing. */
+export function mermaidBundle(repoRoot: string): string {
+  const p = join(repoRoot, "node_modules/mermaid/dist/mermaid.min.js");
+  if (!existsSync(p)) {
+    throw new Error(`${relative(process.cwd(), p) || p} is missing. The site draws Mermaid diagrams with it: run bun install.`);
+  }
+  return p;
+}
 
 type Doc = { src: string; out: string };
 
@@ -114,7 +128,7 @@ export async function build(opts: BuildOptions = {}): Promise<BuildResult> {
   const placed = new Set(groups.flatMap((g) => g.items.map((i) => i.out)));
   const rendered = new Map<string, ReturnType<typeof renderMarkdown>>();
   for (const d of docs) {
-    rendered.set(d.src, renderMarkdown(read(d.src), { rewriteHref: rewriterFor(d.src, d.out), diagramHref: blobUrl(d.src), dropTitle: true }));
+    rendered.set(d.src, renderMarkdown(read(d.src), { rewriteHref: rewriterFor(d.src, d.out), dropTitle: true }));
   }
   const extra = docs.filter((d) => d.out !== "docs/index.html" && !placed.has(d.out));
   if (extra.length) {
@@ -126,6 +140,7 @@ export async function build(opts: BuildOptions = {}): Promise<BuildResult> {
 
   const search: SearchEntry[] = [];
   const pages: string[] = [];
+  const mermaid = [...rendered.values()].some((r) => r.diagrams > 0) ? mermaidBundle(repoRoot) : null;
 
   for (const d of docs) {
     const r = rendered.get(d.src)!;
@@ -159,6 +174,7 @@ ${long ? toc(r.headings, false) : ""}
         body,
         bodyClass: "page-doc",
         menu: true,
+        scripts: r.diagrams > 0 ? [MERMAID_ASSET] : [],
       }),
     );
     pages.push(d.out);
@@ -235,6 +251,10 @@ ${long ? toc(r.headings, false) : ""}
     mkdirSync(join(outDir, "assets"), { recursive: true });
     copyFileSync(join(SITE_DIR, "assets", f), join(outDir, "assets", f));
     files.push(`assets/${f}`);
+  }
+  if (mermaid) {
+    copyFileSync(mermaid, join(outDir, MERMAID_ASSET));
+    files.push(MERMAID_ASSET);
   }
   pages.push("404.html");
   return { outDir, pages, files };
