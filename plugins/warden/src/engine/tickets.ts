@@ -1,5 +1,5 @@
 // Ticket tool runner, plan building, phases and the plan cache for `warden orchestrate` (0.3 spec 4.1, 5).
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { loadStepsJson, loadWardenJson } from "../config/config.ts";
@@ -14,7 +14,9 @@ import type {
   TicketRun, TicketStatus, TicketTemplate,
 } from "../types.ts";
 
-export const TICKET_STATUSES: TicketStatus[] = ["todo", "doing", "review", "done"];
+export const TICKET_STATUSES: TicketStatus[] = ["backlog", "todo", "doing", "review", "done", "archived"];
+// Closed tickets never hold a dependant back. backlog is parked: never scheduled (0.7).
+export const CLOSED_STATUSES: TicketStatus[] = ["done", "archived"];
 export const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const DAG_TIMEOUT_SEC = 300;
 const SHORT_TIMEOUT_SEC = 60;
@@ -38,24 +40,81 @@ export function ticketsTool(main: string): string {
 // The child leads its own process group, so a timeout also kills what the tool started (a `command()` shell).
 export function runTicketTool(main: string, root: string, args: string[], timeoutSec: number, cwd = main): unknown {
   const tool = ticketsTool(main);
+  // Bun honours `detached` in spawnSync; Node's types leave it out, hence the separate object.
+  const options = { cwd, env: toolEnv(root), encoding: "utf8" as const, timeout: timeoutSec * 1000, maxBuffer: MAX_TOOL_STDOUT, detached: true };
+  const res = spawnSync(process.execPath, toolArgv(root, tool, args), options);
+  if (res.status === null && res.pid) killGroup(res.pid, "SIGKILL"); // timed out or killed: stop the rest of the group
+  return toolResult(res.status, res.stdout ?? "", res.stderr ?? "", res.error?.message);
+}
+
+const MAX_TOOL_STDOUT = 16 * 1024 * 1024;
+
+function toolEnv(root: string): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = {
     ...process.env, PATH: pathWithBin(root, process.env.PATH), WARDEN_ROOT: root, [TOOLS_MAIN_ENV]: "1",
   };
   delete env.PROJECT_AGENT;
-  // Bun honours `detached` in spawnSync; Node's types leave it out, hence the separate object.
-  const options = { cwd, env, encoding: "utf8" as const, timeout: timeoutSec * 1000, maxBuffer: 16 * 1024 * 1024, detached: true };
-  const res = spawnSync(process.execPath, [join(root, "src", "cli.ts"), "tools", tool, ...args], options);
-  if (res.status === null && res.pid) killGroup(res.pid, "SIGKILL"); // timed out or killed: stop the rest of the group
-  if (res.status !== 0) {
-    const exit = res.status ?? 124; // killed by the timeout, or could not start
-    const last = (res.stderr ?? "").trim().split("\n").pop()?.trim() || res.error?.message || "";
+  return env;
+}
+
+function toolArgv(root: string, tool: string, args: string[]): string[] {
+  return [join(root, "src", "cli.ts"), "tools", tool, ...args];
+}
+
+// `status` is null when the tool was killed or could not start.
+function toolResult(status: number | null, stdout: string, stderr: string, startError?: string): unknown {
+  if (status !== 0) {
+    const exit = status ?? 124; // killed by the timeout, or could not start
+    const last = stderr.trim().split("\n").pop()?.trim() || startError || "";
     throw new WardenError(`ticket tool failed (exit ${exit}): ${last}`, EXIT.REJECTED);
   }
   try {
-    return JSON.parse(res.stdout);
+    return JSON.parse(stdout);
   } catch {
     throw new WardenError("ticket tool printed no JSON", EXIT.REJECTED);
   }
+}
+
+// runTicketTool without blocking the event loop (0.7, for `warden site`): same env, argv and error messages.
+// The child leads its own process group; on timeout the whole group is killed.
+export function runTicketToolAsync(main: string, root: string, args: string[], timeoutSec: number, cwd = main): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    let tool: string;
+    try {
+      tool = ticketsTool(main);
+    } catch (err) {
+      return reject(err);
+    }
+    const child = spawn(process.execPath, toolArgv(root, tool, args), { cwd, env: toolEnv(root), detached: true, stdio: ["ignore", "pipe", "pipe"] });
+    const out: Buffer[] = [];
+    const err: Buffer[] = [];
+    let outBytes = 0;
+    let timedOut = false;
+    let startError: string | undefined;
+    child.stdout!.on("data", (chunk: Buffer) => {
+      if (outBytes >= MAX_TOOL_STDOUT) return;
+      outBytes += chunk.length;
+      out.push(chunk);
+    });
+    child.stderr!.on("data", (chunk: Buffer) => void err.push(chunk));
+    const timer = setTimeout(() => {
+      timedOut = true;
+      if (child.pid !== undefined) killGroup(child.pid, "SIGKILL");
+      child.kill("SIGKILL"); // also when the group is not set up yet
+    }, timeoutSec * 1000);
+    child.on("error", (e) => {
+      startError = e.message;
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (timedOut) return reject(new WardenError(`ticket tool timed out after ${timeoutSec} s`, EXIT.REJECTED));
+      try {
+        resolve(toolResult(code, Buffer.concat(out).toString("utf8").slice(0, MAX_TOOL_STDOUT), Buffer.concat(err).toString("utf8"), startError));
+      } catch (e) {
+        reject(e);
+      }
+    });
+  });
 }
 
 // Why a value is not a DagTicket, or null when it is one.
@@ -118,9 +177,10 @@ export function buildPlan(input: PlanInput): OrchestratePlan {
   if (kids.size === 0 && errors.length === 0) errors.push(`${input.epic} has no tickets`);
 
   const ids = [...kids.keys()].sort(byId);
-  const done = new Set(ids.filter((id) => kids.get(id)!.status === "done"));
+  const closed = new Set(ids.filter((id) => CLOSED_STATUSES.includes(kids.get(id)!.status)));
+  const parked = new Set(ids.filter((id) => kids.get(id)!.status === "backlog"));
   const blockersOf = (id: string) => kids.get(id)!.blocked_by.filter((b) => b !== id);
-  const openIds = ids.filter((id) => !done.has(id));
+  const openIds = ids.filter((id) => !closed.has(id));
 
   // External blockers: looked up once, only when some blocker is not a child.
   const external = new Map<string, DagTicket | null>();
@@ -136,15 +196,16 @@ export function buildPlan(input: PlanInput): OrchestratePlan {
       }
     }
   }
-  const externalOpen = (b: string) => external.get(b) != null && external.get(b)!.status !== "done";
+  const externalOpen = (b: string) => external.get(b) != null && !CLOSED_STATUSES.includes(external.get(b)!.status);
+  const holds = (b: string) => externalOpen(b) || held.has(b) || parked.has(b);
 
-  // Held: waits on an open outside ticket, or on a held ticket (fixpoint).
+  // Held: waits on an open outside ticket, a held ticket or a parked child (fixpoint).
   const held = new Set<string>();
   for (let changed = true; changed;) {
     changed = false;
     for (const id of ids) {
-      if (done.has(id) || held.has(id)) continue;
-      if (blockersOf(id).some((b) => externalOpen(b) || held.has(b))) {
+      if (closed.has(id) || parked.has(id) || held.has(id)) continue;
+      if (blockersOf(id).some(holds)) {
         held.add(id);
         changed = true;
       }
@@ -154,9 +215,9 @@ export function buildPlan(input: PlanInput): OrchestratePlan {
   // Waves over the rest. Unknown blockers were reported above and do not hold a ticket back.
   const waveOf = new Map<string, number>();
   const waves: string[][] = [];
-  let left = ids.filter((id) => !done.has(id) && !held.has(id));
+  let left = ids.filter((id) => !closed.has(id) && !held.has(id) && !parked.has(id));
   while (left.length > 0) {
-    const wave = left.filter((id) => blockersOf(id).every((b) => !kids.has(b) || done.has(b) || waveOf.has(b)));
+    const wave = left.filter((id) => blockersOf(id).every((b) => !kids.has(b) || closed.has(b) || waveOf.has(b)));
     if (wave.length === 0) break;
     wave.forEach((id) => waveOf.set(id, waves.length + 1));
     waves.push(wave);
@@ -172,8 +233,9 @@ export function buildPlan(input: PlanInput): OrchestratePlan {
     schema: 1, epic: input.epic, at: input.at ?? new Date().toISOString(), tool: input.tool,
     mainBranch: input.mainBranch, mainRef: input.mainRef,
     tickets, waves, next: waves[0] ?? [],
-    held: [...held].map((id) => ({ id, blockers: blockersOf(id).filter((b) => externalOpen(b) || held.has(b)) })),
-    errors, complete: ids.length > 0 && done.size === ids.length,
+    held: [...held].map((id) => ({ id, blockers: blockersOf(id).filter(holds) })),
+    backlog: [...parked],
+    errors, complete: ids.length > 0 && closed.size === ids.length,
   };
 }
 
@@ -194,7 +256,7 @@ function cyclePath(left: string[], blockersOf: (id: string) => string[]): string
 // ---------------------------------------------------------------------------
 
 function phaseFromStatus(status: TicketStatus): TicketPhase {
-  return status === "done" ? "done" : "todo";
+  return status === "done" || status === "archived" || status === "backlog" ? status : "todo";
 }
 
 // The done status wins, except over a live run at its ship step: the engine sets the ticket done at ship (0.6.1),
@@ -202,7 +264,7 @@ function phaseFromStatus(status: TicketStatus): TicketPhase {
 export function ticketPhase(status: TicketStatus, run: RunJson | null, ship: ShipOutput | null): TicketPhase {
   const shipping = run !== null && run.current.type === "ship" && run.status !== "shipped" && run.status !== "done";
   if (status === "done" && !shipping) return "done";
-  if (!run) return "todo";
+  if (!run) return phaseFromStatus(status);
   switch (run.status) {
     case "blocked": return "blocked";
     case "waiting": return "waiting";
@@ -215,7 +277,7 @@ export function ticketPhase(status: TicketStatus, run: RunJson | null, ship: Shi
 }
 
 // The ship output of the last accepted ship step, or null.
-function shipOutput(main: string, task: string): ShipOutput | null {
+export function shipOutput(main: string, task: string): ShipOutput | null {
   try {
     const dir = taskDir(main, task);
     const flow = readJson<FlowJson>(join(dir, "flow.json"));
@@ -248,7 +310,7 @@ function overlay(main: string, t: OrchestrateTicket): OrchestrateTicket {
 }
 
 export function refreshPlan(main: string, plan: OrchestratePlan): OrchestratePlan {
-  return { ...plan, tickets: plan.tickets.map((t) => overlay(main, t)) };
+  return { ...plan, backlog: plan.backlog ?? [], tickets: plan.tickets.map((t) => overlay(main, t)) };
 }
 
 // ---------------------------------------------------------------------------
@@ -316,13 +378,16 @@ export function readPlans(main: string): OrchestratePlan[] {
   }
 }
 
+// Phases that do not count as tickets left: finished, or never to be started (0.7).
+export const DONE_PHASES: TicketPhase[] = ["done", "merged", "archived", "backlog"];
+
 // Session start line 6 (0.3 spec 10).
 export function orchestrateLines(main: string): string[] {
   try {
     return readPlans(main)
       .filter((p) => !p.complete && p.tickets.some((t) => t.run && ["active", "waiting", "blocked"].includes(t.run.status)))
       .map((p) => {
-        const left = p.tickets.filter((t) => t.phase !== "done" && t.phase !== "merged").length;
+        const left = p.tickets.filter((t) => !DONE_PHASES.includes(t.phase)).length;
         return `warden: orchestration of ${p.epic} stopped with ${left} tickets left. When the user's current request is done, offer to go on; with their OK, run /warden:orchestrate ${p.epic}.`;
       });
   } catch {

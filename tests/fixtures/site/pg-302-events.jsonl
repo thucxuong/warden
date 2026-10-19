@@ -1,0 +1,78 @@
+{"seq":1,"ts":"2026-10-18T16:07:39.446Z","task":"PG-302","type":"run.started","data":{"flow":"feature","branch":"pg-302","worktree":"/work/pg.worktrees/PG-302","baseSha":"3aa2eccc2a1ac8512271ad5df98951624d9b5b74"}}
+{"seq":2,"ts":"2026-10-18T16:07:39.485Z","task":"PG-302","type":"step.started","step":"plan","data":{"type":"plan","attempt":1}}
+{"seq":3,"ts":"2026-10-18T16:08:20.626Z","task":"PG-302","type":"output.accepted","step":"plan","data":{"path":"outputs/3-plan.json"}}
+{"seq":4,"ts":"2026-10-18T16:08:20.638Z","task":"PG-302","type":"step.ended","step":"plan"}
+{"seq":5,"ts":"2026-10-18T16:08:20.661Z","task":"PG-302","type":"step.started","step":"implement","data":{"type":"implement","attempt":1}}
+{"seq":6,"ts":"2026-10-18T16:08:50.211Z","task":"PG-302","type":"output.accepted","step":"implement","data":{"path":"outputs/6-implement.json"}}
+{"seq":7,"ts":"2026-10-18T16:08:50.214Z","task":"PG-302","type":"step.ended","step":"implement"}
+{"seq":8,"ts":"2026-10-18T16:08:50.237Z","task":"PG-302","type":"step.started","step":"check","data":{"type":"check","attempt":1}}
+{"seq":9,"ts":"2026-10-18T16:08:50.354Z","task":"PG-302","type":"gate.started","step":"check","data":{"job":"check","sha":"ace7152fe8e785a9c7e71995c19fa93b39476dec"}}
+{"seq":10,"ts":"2026-10-18T16:09:06.187Z","task":"PG-302","type":"gate.command","step":"check","data":{"name":"lint","exit":1,"durationMs":15801,"log":"checks/1/lint.log"}}
+{"seq":11,"ts":"2026-10-18T16:09:26.859Z","task":"PG-302","type":"triage.verdict","step":"check","data":{"n":1,"verdict":"OPS","flaky":false,"rule":null,"reason":"also fails on clean 3aa2ecc","report":"triage/1.json"}}
+{"seq":12,"ts":"2026-10-18T16:09:26.887Z","task":"PG-302","type":"gate.failed","step":"check","data":{"job":"check","verdict":"OPS","flaky":false,"report":"triage/1.json"}}
+{"seq":13,"ts":"2026-10-18T16:09:27.099Z","task":"PG-302","type":"step.started","step":"fix-1","data":{"type":"fix","mode":"normal"}}
+{"seq":14,"ts":"2026-10-18T16:09:27.101Z","task":"PG-302","type":"fix.started","step":"fix-1","data":{"n":1,"mode":"normal","verdict":"OPS","branch":"warden-fix/PG-302-1","worktree":"/work/pg.worktrees/PG-302-fix-1"}}
+{"seq":15,"ts":"2026-10-18T16:09:31.126Z","task":"PG-302","type":"session.linked","data":{"sessionId":"5b732e3d-817b-45f3-871c-e14e165df95c","agentId":"a61a19dfd3a6b5527"}}
+{"seq":16,"ts":"2026-10-18T16:09:44.497Z","task":"PG-302","type":"session.linked","data":{"sessionId":"5b732e3d-817b-45f3-871c-e14e165df95c"}}
+{"seq":17,"ts":"2026-10-18T16:09:44.502Z","task":"PG-302","type":"stop.blocked","step":"fix-1"}
+{"seq":18,"ts":"2026-10-18T16:09:47.212Z","task":"PG-302","type":"stop.blocked","step":"fix-1"}
+{"seq":19,"ts":"2026-10-18T16:09:51.056Z","task":"PG-302","type":"stop.blocked","step":"fix-1"}
+{"seq":20,"ts":"2026-10-18T16:09:54.988Z","task":"PG-302","type":"session.linked","data":{"sessionId":"5b732e3d-817b-45f3-871c-e14e165df95c","agentId":"a68e4adb665cbc8c7"}}
+{"seq":21,"ts":"2026-10-18T16:10:13.816Z","task":"PG-302","type":"output.accepted","step":"fix-1","data":{"path":"outputs/21-fix-1.json"}}
+{"seq":22,"ts":"2026-10-18T16:10:13.819Z","task":"PG-302","type":"fix.result","step":"fix-1","data":{"n":1,"result":"GAVE_UP","reason":"Bash was denied to the fixer agent, so it could not reproduce or fix the lint failure. Lint fails with 2 no-console errors at .claude/skills/backlog/bin/tickets.ts:229 and :232, the same signature as on clean 3aa2ecc, so the PG-302 change did not cause it."}}
+{"seq":23,"ts":"2026-10-18T16:10:13.822Z","task":"PG-302","type":"step.ended","step":"fix-1"}
+{"seq":24,"ts":"2026-10-18T16:10:13.891Z","task":"PG-302","type":"run.blocked","step":"check","data":{"reason":"Bash was denied to the fixer agent, so it could not reproduce or fix the lint failure. Lint fails with 2 no-console errors at .claude/skills/backlog/bin/tickets.ts:229 and :232, the same signature as on clean 3aa2ecc, so the PG-302 change did not cause it."}}
+{"seq":25,"ts":"2026-10-18T16:28:49.739Z","task":"PG-302","type":"run.retry","step":"check"}
+{"seq":26,"ts":"2026-10-18T16:28:49.745Z","task":"PG-302","type":"step.ended","step":"check"}
+{"seq":27,"ts":"2026-10-18T16:28:49.780Z","task":"PG-302","type":"step.started","step":"check","data":{"type":"check","attempt":2}}
+{"seq":28,"ts":"2026-10-18T16:28:49.878Z","task":"PG-302","type":"gate.started","step":"check","data":{"job":"check","sha":"ace7152fe8e785a9c7e71995c19fa93b39476dec"}}
+{"seq":29,"ts":"2026-10-18T16:29:06.732Z","task":"PG-302","type":"gate.command","step":"check","data":{"name":"lint","exit":1,"durationMs":16817,"log":"checks/2/lint.log"}}
+{"seq":30,"ts":"2026-10-18T16:29:26.075Z","task":"PG-302","type":"triage.verdict","step":"check","data":{"n":2,"verdict":"OPS","flaky":false,"rule":"TR-0001","reason":"also fails on clean 3aa2ecc — known pattern TR-0001 (.warden/fixes/2026-10-18-PG-301.md)","report":"triage/2.json"}}
+{"seq":31,"ts":"2026-10-18T16:29:26.104Z","task":"PG-302","type":"gate.failed","step":"check","data":{"job":"check","verdict":"OPS","flaky":false,"report":"triage/2.json"}}
+{"seq":32,"ts":"2026-10-18T16:29:26.263Z","task":"PG-302","type":"step.started","step":"fix-2","data":{"type":"fix","mode":"normal"}}
+{"seq":33,"ts":"2026-10-18T16:29:26.265Z","task":"PG-302","type":"fix.started","step":"fix-2","data":{"n":2,"mode":"normal","verdict":"OPS","branch":"warden-fix/PG-302-2","worktree":"/work/pg.worktrees/PG-302-fix-2"}}
+{"seq":34,"ts":"2026-10-18T16:30:07.095Z","task":"PG-302","type":"session.linked","data":{"sessionId":"19e0eba4-731d-4910-b382-88fd8003983c","agentId":"a0e1e038c33131c6e"}}
+{"seq":35,"ts":"2026-10-18T16:30:11.478Z","task":"PG-302","type":"output.rejected","step":"fix-2","data":{"path":"outputs/35-fix-2.json","errors":["notePath: must be .warden/fixes/<YYYY-MM-DD>-PG-302[-n].md","the fix branch has no changes",".warden/fixes/2026-10-18-PG-301.md: not changed on the fix branch",".warden/triage-rules.json: not changed on the fix branch",".warden/fixes/2026-10-18-PG-301.md: missing heading \"# Fix <YYYY-MM-DD> PG-302\""]}}
+{"seq":36,"ts":"2026-10-18T16:30:47.912Z","task":"PG-302","type":"session.linked","data":{"sessionId":"19e0eba4-731d-4910-b382-88fd8003983c","agentId":"a15c4f382e392cb59"}}
+{"seq":37,"ts":"2026-10-18T16:30:51.252Z","task":"PG-302","type":"output.accepted","step":"fix-2","data":{"path":"outputs/37-fix-2.json"}}
+{"seq":38,"ts":"2026-10-18T16:30:51.256Z","task":"PG-302","type":"fix.result","step":"fix-2","data":{"n":2,"result":"FIXED","reason":"Same cause as PG-301. Lint no-console errors come from vendored backlog tickets.ts v0.1.0. The ticket branch was cut before main got the v0.1.1 fix and the prettier format. Merging main in fixes it."}}
+{"seq":39,"ts":"2026-10-18T16:30:51.259Z","task":"PG-302","type":"step.ended","step":"fix-2"}
+{"seq":40,"ts":"2026-10-18T16:46:04.704Z","task":"PG-302","type":"run.retry","step":"check","data":{"landing":true}}
+{"seq":41,"ts":"2026-10-18T16:46:04.817Z","task":"PG-302","type":"gate.started","step":"check","data":{"job":"fix-landing","sha":"ace7152fe8e785a9c7e71995c19fa93b39476dec"}}
+{"seq":42,"ts":"2026-10-18T16:46:04.963Z","task":"PG-302","type":"fix.landed","step":"check","data":{"head":"2dc4633e6c42cc1e2e739d69bedc4c6bd5ab6e59","baseSha":"59e98d962f44f84191b7467e32779b3e1135facb"}}
+{"seq":43,"ts":"2026-10-18T16:46:05.244Z","task":"PG-302","type":"step.ended","step":"check"}
+{"seq":44,"ts":"2026-10-18T16:46:05.279Z","task":"PG-302","type":"step.started","step":"check","data":{"type":"check","attempt":3}}
+{"seq":45,"ts":"2026-10-18T16:46:05.307Z","task":"PG-302","type":"gate.started","step":"check","data":{"job":"check","sha":"2dc4633e6c42cc1e2e739d69bedc4c6bd5ab6e59"}}
+{"seq":46,"ts":"2026-10-18T16:46:23.235Z","task":"PG-302","type":"gate.command","step":"check","data":{"name":"lint","exit":0,"durationMs":17882,"log":"checks/3/lint.log"}}
+{"seq":47,"ts":"2026-10-18T16:46:24.841Z","task":"PG-302","type":"gate.command","step":"check","data":{"name":"format","exit":0,"durationMs":1590,"log":"checks/3/format.log"}}
+{"seq":48,"ts":"2026-10-18T16:46:28.055Z","task":"PG-302","type":"gate.command","step":"check","data":{"name":"typecheck","exit":2,"durationMs":3194,"log":"checks/3/typecheck.log"}}
+{"seq":49,"ts":"2026-10-18T16:46:52.918Z","task":"PG-302","type":"triage.verdict","step":"check","data":{"n":3,"verdict":"CODE","flaky":false,"rule":null,"reason":"passes on clean 59e98d9; fails on branch 3×","report":"triage/3.json"}}
+{"seq":50,"ts":"2026-10-18T16:46:52.949Z","task":"PG-302","type":"gate.failed","step":"check","data":{"job":"check","verdict":"CODE","flaky":false,"report":"triage/3.json"}}
+{"seq":51,"ts":"2026-10-18T16:46:52.954Z","task":"PG-302","type":"route.back","step":"check","data":{"kind":"code","reason":"CODE: passes on clean 59e98d9; fails on branch 3×","to":"implement"}}
+{"seq":52,"ts":"2026-10-18T16:46:52.957Z","task":"PG-302","type":"step.ended","step":"check"}
+{"seq":53,"ts":"2026-10-18T16:46:52.986Z","task":"PG-302","type":"step.started","step":"implement","data":{"type":"implement","attempt":2}}
+{"seq":54,"ts":"2026-10-18T16:47:10.373Z","task":"PG-302","type":"output.accepted","step":"implement","data":{"path":"outputs/54-implement.json"}}
+{"seq":55,"ts":"2026-10-18T16:47:10.383Z","task":"PG-302","type":"step.ended","step":"implement"}
+{"seq":56,"ts":"2026-10-18T16:47:10.411Z","task":"PG-302","type":"step.started","step":"check","data":{"type":"check","attempt":4}}
+{"seq":57,"ts":"2026-10-18T16:47:10.493Z","task":"PG-302","type":"gate.started","step":"check","data":{"job":"check","sha":"01bcd3b371efaa0752906434998f11b0a2285254"}}
+{"seq":58,"ts":"2026-10-18T16:47:11.922Z","task":"PG-302","type":"gate.command","step":"check","data":{"name":"lint","exit":0,"durationMs":1382,"log":"checks/4/lint.log"}}
+{"seq":59,"ts":"2026-10-18T16:47:12.474Z","task":"PG-302","type":"gate.command","step":"check","data":{"name":"format","exit":0,"durationMs":537,"log":"checks/4/format.log"}}
+{"seq":60,"ts":"2026-10-18T16:47:13.220Z","task":"PG-302","type":"gate.command","step":"check","data":{"name":"typecheck","exit":0,"durationMs":729,"log":"checks/4/typecheck.log"}}
+{"seq":61,"ts":"2026-10-18T16:47:15.568Z","task":"PG-302","type":"gate.command","step":"check","data":{"name":"test","exit":0,"durationMs":2331,"log":"checks/4/test.log"}}
+{"seq":62,"ts":"2026-10-18T16:47:23.462Z","task":"PG-302","type":"gate.command","step":"check","data":{"name":"build","exit":0,"durationMs":7879,"log":"checks/4/build.log"}}
+{"seq":63,"ts":"2026-10-18T16:47:23.536Z","task":"PG-302","type":"gate.command","step":"check","data":{"name":"docs","exit":0,"durationMs":56,"log":"checks/4/docs.log"}}
+{"seq":64,"ts":"2026-10-18T16:47:23.575Z","task":"PG-302","type":"gate.passed","step":"check","data":{"job":"check","sha":"01bcd3b371efaa0752906434998f11b0a2285254"}}
+{"seq":65,"ts":"2026-10-18T16:47:23.577Z","task":"PG-302","type":"step.ended","step":"check"}
+{"seq":66,"ts":"2026-10-18T16:47:23.603Z","task":"PG-302","type":"step.started","step":"review","data":{"type":"review","attempt":1}}
+{"seq":67,"ts":"2026-10-18T16:47:23.622Z","task":"PG-302","type":"gate.started","step":"review","data":{"job":"review","sha":"01bcd3b371efaa0752906434998f11b0a2285254"}}
+{"seq":68,"ts":"2026-10-18T16:47:33.686Z","task":"PG-302","type":"review.round","step":"review","data":{"round":1,"try":1,"status":"ok","blocking":0,"minor":0,"dropped":0,"costUsd":0.06448999999999999,"detail":"0 finding(s)"}}
+{"seq":69,"ts":"2026-10-18T16:47:33.716Z","task":"PG-302","type":"gate.passed","step":"review","data":{"job":"review","round":1}}
+{"seq":70,"ts":"2026-10-18T16:47:33.718Z","task":"PG-302","type":"step.ended","step":"review"}
+{"seq":71,"ts":"2026-10-18T16:47:33.747Z","task":"PG-302","type":"step.started","step":"ship","data":{"type":"ship","attempt":1}}
+{"seq":72,"ts":"2026-10-18T16:47:33.766Z","task":"PG-302","type":"gate.started","step":"ship","data":{"job":"ship-prep","sha":"01bcd3b371efaa0752906434998f11b0a2285254"}}
+{"seq":73,"ts":"2026-10-18T16:47:33.870Z","task":"PG-302","type":"history.written","step":"ship","data":{"dir":"/work/pg.worktrees/PG-302/.warden/history/PG-302"}}
+{"seq":74,"ts":"2026-10-18T16:47:35.259Z","task":"PG-302","type":"session.linked","data":{"sessionId":"51edcda3-6489-4698-9c19-d96124c8e06e","agentId":"a30c10cb4468d65d9"}}
+{"seq":75,"ts":"2026-10-18T16:48:04.323Z","task":"PG-302","type":"output.accepted","step":"ship","data":{"path":"outputs/75-ship.json"}}
+{"seq":76,"ts":"2026-10-18T16:48:04.332Z","task":"PG-302","type":"run.shipped","step":"ship","data":{"pr":null,"mergeCommit":"b281e9e2b8d5f4f04f6d3e19c15eba1238d91d19"}}
+{"seq":77,"ts":"2026-10-18T16:48:04.342Z","task":"PG-302","type":"step.ended","step":"ship"}
+{"seq":78,"ts":"2026-10-18T16:48:05.448Z","task":"PG-302","type":"session.linked","data":{"sessionId":"51edcda3-6489-4698-9c19-d96124c8e06e","agentId":"adef8fd5d2a2e6061"}}

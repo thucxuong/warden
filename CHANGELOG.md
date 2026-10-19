@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.0 — 2026-10-20
+
+- `warden site` is a control plane now: a React app (built into the plugin's `site-dist/`, so nothing to install) that shows what needs you and the exact command to type, the running runs, epic progress, recently shipped runs with their pull requests, your reports and the project's health. Each run has a detail page with the step timeline (bounces drawn as loops), gate results with log tails and triage, review findings and their state, the plan, files and commits, and tokens per step. A Tickets page shows the ticket tool's tickets as a board (Backlog, Todo, In progress, Done, Archived) or a DAG, and a History page lists shipped runs with filters and totals. The site stays read-only. The code graph page is gone.
+- Warning signals: a slow step (against this project's usual time for that step type), a loop (3 bounces, 2 fixer rounds, 3 rejected outputs), and a gone or overdue engine worker, fixer or answer runner. Thresholds can be set under `site.thresholds` in `.warden/warden.json`.
+- `warden site` opens the browser when run in a terminal; `--no-open` (or `CI`, or `WARDEN_NO_OPEN=1`) keeps it closed. It answers only requests for `127.0.0.1` or `localhost`.
+- The JSON API changed: `/api/home`, `/api/health`, `/api/signals`, `/api/runs`, `/api/runs/<task>` (with `/events` and `/log`), `/api/tickets`, `/api/docs` and `/api/doc`. `/api/tasks` and `/api/graph` are gone.
+- Ticket statuses gain `backlog` (parked: warden never starts it, and tickets that wait on it are held) and `archived` (closed without doing; it never holds a dependant back). Tools that print only the four old statuses keep working. The orchestrate plan has a new `backlog` list, and an epic is complete when every child is done or archived.
+- `warden upgrade --done` keeps a `site` key in `warden.json`.
+
 ## 0.6.4 — 2026-10-19
 
 - Warden is open source under the MIT license, and the repo is public. Installing needs no repo access any more.

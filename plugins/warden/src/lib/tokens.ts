@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import type { EventLine, SessionLink } from "../types.ts";
 import prices from "./prices.json";
 
@@ -67,12 +67,31 @@ function windowAt(windows: StepWindow[], at: number): StepWindow | null {
 
 interface AssistantMessage { id: string | null; model: string; at: number; usage: Record<string, unknown> }
 
+// Parsed transcripts by path, reused while size and mtime are unchanged. A long-running reader (warden site) reads the
+// same main-session transcript for many tasks; a short-lived command reads each file once anyway.
+const parsed = new Map<string, { size: number; mtimeMs: number; messages: AssistantMessage[] }>();
+
 function readAssistantMessages(path: string): AssistantMessage[] {
+  let stat: { size: number; mtimeMs: number };
+  try {
+    stat = statSync(path);
+  } catch {
+    parsed.delete(path);
+    return []; // transcripts exist only on the machine that ran the session
+  }
+  const hit = parsed.get(path);
+  if (hit && hit.size === stat.size && hit.mtimeMs === stat.mtimeMs) return hit.messages;
+  const messages = parseAssistantMessages(path);
+  parsed.set(path, { size: stat.size, mtimeMs: stat.mtimeMs, messages });
+  return messages;
+}
+
+function parseAssistantMessages(path: string): AssistantMessage[] {
   let text: string;
   try {
     text = readFileSync(path, "utf8");
   } catch {
-    return []; // transcripts exist only on the machine that ran the session
+    return [];
   }
   const messages: AssistantMessage[] = [];
   for (const line of text.split("\n")) {
@@ -100,12 +119,10 @@ function count(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
-export function tokensByStep(links: SessionLink[], events: EventLine[]): Record<string, TokenTotals> {
-  const windows = stepWindows(events);
-  const result: Record<string, TokenTotals> = {};
+// Each priced assistant message once (deduped by message id, the first kept), with the step window it falls in.
+function eachMessage(links: SessionLink[], windows: StepWindow[], fn: (window: StepWindow, message: AssistantMessage) => void): void {
   const seenIds = new Set<string>();
   const paths = [...new Set(links.map((l) => l.transcriptPath))];
-
   for (const path of paths) {
     for (const message of readAssistantMessages(path)) {
       if (message.id !== null) {
@@ -113,28 +130,45 @@ export function tokensByStep(links: SessionLink[], events: EventLine[]): Record<
         seenIds.add(message.id);
       }
       const window = windowAt(windows, message.at);
-      if (!window) continue;
-
-      const input = count(message.usage.input_tokens);
-      const output = count(message.usage.output_tokens);
-      const cacheRead = count(message.usage.cache_read_input_tokens);
-      const cacheWrite = count(message.usage.cache_creation_input_tokens);
-      const totals = (result[window.step] ??= emptyTotals());
-      totals.input += input;
-      totals.output += output;
-      totals.cacheRead += cacheRead;
-      totals.cacheWrite += cacheWrite;
-
-      const rate = rateFor(message.model);
-      if (rate) {
-        totals.costUsd +=
-          (input * rate.input + output * rate.output + cacheWrite * rate.cacheWrite + cacheRead * rate.cacheRead) / 1e6;
-      } else if (input + output + cacheRead + cacheWrite > 0) {
-        totals.unpriced = true;
-      }
+      if (window) fn(window, message);
     }
   }
+}
 
+function addMessage(totals: TokenTotals, message: AssistantMessage): void {
+  const input = count(message.usage.input_tokens);
+  const output = count(message.usage.output_tokens);
+  const cacheRead = count(message.usage.cache_read_input_tokens);
+  const cacheWrite = count(message.usage.cache_creation_input_tokens);
+  totals.input += input;
+  totals.output += output;
+  totals.cacheRead += cacheRead;
+  totals.cacheWrite += cacheWrite;
+
+  const rate = rateFor(message.model);
+  if (rate) {
+    totals.costUsd +=
+      (input * rate.input + output * rate.output + cacheWrite * rate.cacheWrite + cacheRead * rate.cacheRead) / 1e6;
+  } else if (input + output + cacheRead + cacheWrite > 0) {
+    totals.unpriced = true;
+  }
+}
+
+export function tokensByStep(links: SessionLink[], events: EventLine[]): Record<string, TokenTotals> {
+  const result: Record<string, TokenTotals> = {};
+  eachMessage(links, stepWindows(events), (window, message) => addMessage((result[window.step] ??= emptyTotals()), message));
   for (const totals of Object.values(result)) totals.costUsd = roundUsd(totals.costUsd);
+  return result;
+}
+
+// The same attribution as tokensByStep, per window (keyed by StepWindow.order), so the windows of a step sum to its total.
+export function tokensByWindow(links: SessionLink[], events: EventLine[]): Map<number, TokenTotals> {
+  const result = new Map<number, TokenTotals>();
+  eachMessage(links, stepWindows(events), (window, message) => {
+    let totals = result.get(window.order);
+    if (!totals) result.set(window.order, (totals = emptyTotals()));
+    addMessage(totals, message);
+  });
+  for (const totals of result.values()) totals.costUsd = roundUsd(totals.costUsd);
   return result;
 }

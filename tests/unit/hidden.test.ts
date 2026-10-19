@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const pluginRoot = resolve(import.meta.dir, "../../plugins/warden");
-const scannedDirs = ["skills", "agents", "templates", "src"];
+const scannedDirs = ["skills", "agents", "templates", "src", "site-dist"];
 
 // What the CPA must never read in the shipped plugin (spec 2, notes).
 const forbidden = ["github.com/thucxuong", "thucxuong/warden", "WD-", "issue #"];
@@ -23,6 +23,7 @@ describe("hidden strings", () => {
   test("the scan finds the skills and the fixer agent", () => {
     expect(files.some((f) => f.endsWith("skills/plan/SKILL.md"))).toBe(true);
     expect(files.some((f) => f.endsWith("agents/fixer.md"))).toBe(true);
+    expect(files.some((f) => f.endsWith("site-dist/index.html"))).toBe(true);
   });
 
   for (const needle of forbidden) {

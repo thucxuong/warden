@@ -115,6 +115,18 @@ describe("upgrade --done", () => {
     expect(JSON.parse(readFileSync(join(repo, ".warden/warden.json"), "utf8"))).toEqual({ schema: 1, wardenVersion: "0.2.0", projectId: "demo", taskIdPattern: "^DM-\\d+$", sitePort: 4400 });
   });
 
+  test("keeps a site key as it is, even one warden site would reject", async () => {
+    setPluginVersion("0.7.0");
+    setProjectVersion("0.6.0");
+    const path = join(repo, ".warden/warden.json");
+    const site = { thresholds: { slowFactor: 0, typo: true } };
+    writeFileSync(path, JSON.stringify({ ...JSON.parse(readFileSync(path, "utf8")), site }));
+    await call(["--done"]);
+    const after = JSON.parse(readFileSync(path, "utf8"));
+    expect(Object.keys(after).sort()).toEqual(["projectId", "schema", "site", "sitePort", "taskIdPattern", "wardenVersion"]);
+    expect(after.site).toEqual(site);
+  });
+
   test("removes a leftover lastRetro key and does not add one", async () => {
     setPluginVersion("0.2.0");
     setProjectVersion("0.1.0");

@@ -129,6 +129,14 @@ describe("orchestrate set-status", () => {
     expect(calls()).toEqual(["set-status T-1 done"]);
   });
 
+  test("0.7: backlog and archived are accepted statuses", () => {
+    for (const status of ["backlog", "archived"]) {
+      const r = cli(["orchestrate", "set-status", "T-1", status]);
+      expect(r.code).toBe(0);
+      expect(r.json).toEqual({ id: "T-1", status, changed: ["backlog/T-1.md"] });
+    }
+  });
+
   test("a result of the wrong shape is exit 1", () => {
     writeFileSync(join(fx, "bad-set"), "");
     expect(cli(["orchestrate", "set-status", "T-1", "done"]).code).toBe(1);

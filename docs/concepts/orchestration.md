@@ -24,9 +24,10 @@ It needs a ticket tool: a project tool set as the `tickets` role in `.warden/too
 | `tickets` | Every child, sorted by id, with `wave`, `template`, `phase` and `run` (the live run, if any). |
 | `waves` | The open tickets, wave by wave. |
 | `next` | The first wave: the tickets to work on now. |
-| `held` | Tickets waiting on an open ticket outside the epic, with those blockers. |
+| `held` | Tickets waiting on an open ticket outside the epic, on a held ticket or on a `backlog` child, with those blockers. |
+| `backlog` | Children with status `backlog`: parked, never in a wave. |
 | `errors` | Problems that stop the plan: a bad row from the tool, an id that does not match `taskIdPattern`, a ticket blocked by itself, an unknown blocker, a cycle (shown as `cycle: A -> B -> A`). |
-| `complete` | `true` when every child is done. |
+| `complete` | `true` when every child is `done` or `archived`. A closed blocker (`done` or `archived`) never holds a ticket back. |
 
 The command exits 1 when `errors` is not empty. `warden orchestrate status <epic>` prints the saved plan again with each ticket's run and phase read fresh; it does not ask the ticket tool.
 
@@ -104,7 +105,7 @@ Each ticket was checked and reviewed on its own branch. Once another ticket land
 |---|---|
 | `warden orchestrate plan <epic>` | Builds and saves the plan (asks the ticket tool). |
 | `warden orchestrate status <epic>` | The saved plan with runs and phases read again. Exit 3 if there is no saved plan. |
-| `warden orchestrate set-status <id> <status>` | Runs the ticket tool's `set-status` in the main checkout. Status is `todo`, `doing`, `review` or `done`. Prints `{id, status, changed}`. |
+| `warden orchestrate set-status <id> <status>` | Runs the ticket tool's `set-status` in the main checkout. Status is `backlog`, `todo`, `doing`, `review`, `done` or `archived`. Prints `{id, status, changed}`. |
 
 All three exit 3 when no `tickets` role is set.
 

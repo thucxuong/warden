@@ -17,8 +17,8 @@ export function command(cmd: string): (argv: string[]) => number {
   return (argv) => spawnSync("/bin/sh", ["-c", `${cmd} "$@"`, "sh", ...argv], { stdio: "inherit" }).status ?? 1;
 }
 
-// The `tickets` role contract.
-export type TicketStatus = "todo" | "doing" | "review" | "done";
+// The `tickets` role contract. backlog: parked, never started by warden. archived: closed without doing.
+export type TicketStatus = "backlog" | "todo" | "doing" | "review" | "done" | "archived";
 export interface DagTicket { id: string; title: string; status: TicketStatus; blocked_by: string[]; epic?: string; type?: string }
 export interface TicketDetail extends DagTicket { body: string }
 export interface SetStatusResult { id: string; status: TicketStatus; changed: string[] }

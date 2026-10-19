@@ -17,6 +17,7 @@ export interface SummaryInput {
   commit: string;
   pr: string | null;
   status?: HistorySummary["status"];   // history.ts passes "shipping"; default is run.status
+  tokens?: Record<string, TokenTotals>; // tokensByStep(links, events) when the caller has it already (the site)
 }
 
 const FIX_STEP = /^fix-\d+$/;
@@ -37,7 +38,7 @@ function reviewCost(rounds: ReviewRound[]): number {
 
 function buildSteps(input: SummaryInput, endMs: number): StepSummary[] {
   const windows = stepWindows(input.events);
-  const tokens = tokensByStep(input.links, input.events);
+  const tokens = input.tokens ?? tokensByStep(input.links, input.events);
   const ids = [...new Set(windows.map((w) => w.step))];
   const steps: StepSummary[] = [];
 

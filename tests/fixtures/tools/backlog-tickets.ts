@@ -10,7 +10,7 @@ import { spawnSync } from "node:child_process";
 const writeOut = (s: string): void => void process.stdout.write(s + "\n");
 const writeErr = (s: string): void => void process.stderr.write(s + "\n");
 
-export const STATUSES = ["todo", "doing", "review", "done"] as const;
+export const STATUSES = ["backlog", "todo", "doing", "review", "done", "archived"] as const;
 export type TicketStatus = (typeof STATUSES)[number];
 
 export interface DagTicket {

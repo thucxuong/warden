@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { run, startTime } from "../../plugins/warden/src/lib/proc.ts";
+import { pidAlive, processAlive, run, startTime } from "../../plugins/warden/src/lib/proc.ts";
 
 let dir: string;
 beforeAll(() => {
@@ -153,6 +153,31 @@ describe("startTime", () => {
 
   test("returns null for a pid that is not running", () => {
     expect(startTime(2 ** 22 + 12345)).toBeNull();
+  });
+});
+
+describe("processAlive", () => {
+  test("true for a running process with its own start time", () => {
+    const start = startTime(process.pid);
+    expect(start).not.toBeNull();
+    expect(pidAlive(process.pid)).toBe(true);
+    expect(processAlive(process.pid, start as string)).toBe(true);
+  });
+
+  test("false when the start time differs (a reused pid) or is empty", () => {
+    expect(processAlive(process.pid, "Thu Jan  1 00:00:00 1970")).toBe(false);
+    expect(processAlive(process.pid, "")).toBe(false);
+  });
+
+  test("false for a pid that is not running", async () => {
+    const child = Bun.spawn(["true"], { stdio: ["ignore", "ignore", "ignore"] });
+    await child.exited;
+    expect(pidAlive(child.pid)).toBe(false);
+    expect(processAlive(child.pid, "x")).toBe(false);
+  });
+
+  test("pid 1 belongs to another user (EPERM) and counts as alive", () => {
+    expect(pidAlive(1)).toBe(true);
   });
 });
 

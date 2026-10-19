@@ -70,6 +70,25 @@ Each doc folder (`context`, `rules`, `decisions`, `knowledge`, `checks`, `retros
 | `taskIdPattern` | string | — | A JavaScript regular expression that starts with `^` and ends with `$`. `warden start` refuses a task id that does not match |
 | `sitePort` | integer | `4400` | 1 to 65535. The port of `warden site` |
 | `lastRetro` | string or null | — | Old key (before 0.2). Still read when `.warden/checks/retro.md` is missing; `warden upgrade --done` removes it |
+| `site` | object | — | 0.7. Settings of `warden site`; its only key is `thresholds`, the limits of the warning signals (see below). Only the site reads it: a bad value never breaks a run, and `warden upgrade --done` keeps it as it is |
+
+`site.thresholds` (every key optional; a bad value falls back to its default and shows under Project health):
+
+| Key | Default | Rule |
+|---|---|---|
+| `slowFactor` | `2` | A number from 1 to 10. A step is slow above `slowFactor` × its usual time |
+| `minSlowSec` | `120` | A step is never slow before this many seconds |
+| `minSamples` | `5` | Runs of a step type needed to learn its usual time; with fewer, `usualSec` is used |
+| `sampleSize` | `20` | 1 to 200. How many of the newest runs the usual time (a median) is learned from |
+| `usualSec` | analyze, plan, check, review, ship `600`; implement `1200`; fix `900` | Usual seconds per step type until enough runs are known |
+| `loopBounces` | `3` | Bounces in one run that flag a loop |
+| `fixerRounds` | `2` | Fixer rounds in one run that flag a loop |
+| `rejectedOutputs` | `3` | Rejected outputs in a row at one step that flag a loop |
+| `fixerOutSec` | `1800` | A fixer that has not returned after this long is flagged |
+| `fixLandingSec` | `1800` | Time limit of landing a merged fix |
+| `jobGraceSec` | `300` | Extra time past a gate's limit before it is flagged overdue |
+
+Every value but `slowFactor` is an integer of at least 1. See [lead overview](../guides/lead-overview.md#warning-signals).
 
 ## .warden/steps.json
 
@@ -258,7 +277,6 @@ Live state. It is gitignored and lives in the main checkout only, even for runs 
   _checks/<name>.json      periodic check results; <name>.log and <name>.lock while running
   _orchestrate/<epic>.json the cached orchestrate plan
   _reports.json            report statuses already told at session start
-  _graph/graphify-out/graph.json   read by the site's graph page, if a graph tool writes it
 ```
 
 Folder names that start with `_` are not tasks.

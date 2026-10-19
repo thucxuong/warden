@@ -4,7 +4,7 @@ How to set up a dev checkout of warden, run the tests and the type check, and wr
 
 ## Set up
 
-You need Bun 1.4 or newer, git, and Claude Code. Warden runs on macOS and Linux only.
+You need Bun 1.4 or newer, git, and Claude Code. Warden runs on macOS and Linux only. To work on the `warden site` UI you also need Node 22.12 or newer: Vite and Playwright run on Node. Plugin users never need Node.
 
 ```bash
 git clone git@github.com:thucxuong/warden.git
@@ -12,7 +12,7 @@ cd warden
 bun install
 ```
 
-`bun install` adds the dev dependencies: `typescript` (7), `@types/bun`, and `mermaid`, which only the website build uses (see [Website](website.md)). The plugin itself has no npm dependencies at run time: it uses Bun and Node built-ins only.
+`bun install` adds the dev dependencies: `typescript` (7), `@types/bun`, `mermaid` (only the website build uses it, see [Website](website.md)), and the site UI stack (Vite, React, Tailwind, Radix, React Query, React Flow, Playwright and the rest, see `package.json`). The plugin itself has no npm dependencies at run time: it uses Bun and Node built-ins only, and serves the UI from the committed build in `plugins/warden/site-dist/`.
 
 ## Commands
 
@@ -23,11 +23,17 @@ bun install
 | `bun test tests/unit/<file>.test.ts` | One file |
 | `bun run typecheck` | `tsc --noEmit` over `plugins/warden/src`, `tests`, `scripts` and `website` |
 | `bun run check` | The type check, then all tests. Run it before every commit. |
+| `bun run ui:dev` (or `ui:dev:mock`) | The site UI dev server, against a running `warden site` (or mock data) |
+| `bun run ui:build` | Build `site-ui/` into `plugins/warden/site-dist/` |
+| `bun run ui:check` | Fail when `plugins/warden/site-dist/` differs from a fresh build |
+| `bun run test:ui` | The Playwright tests in `tests/ui` (needs `bunx playwright install chromium` once) |
 | `bun run site:build`, `bun run site:serve` | Build the website into `website/dist/` and preview it. See [Website](website.md). |
 | `bun run validate` | `claude plugin validate --strict` on the marketplace and on the plugin |
 | `bun plugins/warden/src/cli.ts <command> --help` | The usage line of one command |
 
-CI (`.github/workflows/ci.yml`) runs `bun install --frozen-lockfile`, `bun run typecheck` and `bun test` with Bun 1.4.2 on every push and pull request.
+**After editing `site-ui/`**, run `bun run ui:build` and commit `plugins/warden/site-dist/` with the change, then run `bun run ui:check` and `bun run test:ui`. `bun run check` alone does not cover the UI build.
+
+CI (`.github/workflows/ci.yml`) runs `bun install --frozen-lockfile`, `bun run typecheck`, `bun test`, `bun run ui:check` and `bun run test:ui`, with Bun 1.4.2 and Node 22, on every push and pull request.
 
 ## Try it on a real project
 
@@ -55,13 +61,16 @@ To run a command against the checkout from a terminal, use the wrapper: `plugins
 | `plugins/warden/src/state/` | Paths and the run store (atomic writes, task lock, events) |
 | `plugins/warden/src/config/` | Loading and checking `warden.json`, `steps.json`, triage rules |
 | `plugins/warden/src/lib/` | Git, processes, tokens, reports transport, doorbell, answer runner, small helpers |
-| `plugins/warden/src/site/` | The local `warden site` server and page |
+| `plugins/warden/src/site/` | The local `warden site` server: the read-only JSON API and the static file server |
+| `plugins/warden/site-dist/` | The committed UI build that `warden site` serves. Never edit by hand: run `bun run ui:build` |
+| `site-ui/` | The site UI source (React, Vite, Tailwind, shadcn) |
 | `plugins/warden/src/types.ts` | Every shared type and `DEFAULT_LIMITS` |
 | `plugins/warden/skills/`, `agents/` | Shipped skills and the `fixer` and `ticket` agents |
 | `plugins/warden/hooks/hooks.json` | Which hook events call `bin/warden hook <event>` |
 | `plugins/warden/templates/` | The four flow templates and the starting tool files |
 | `plugins/warden/upgrades/` | One upgrade note per version |
 | `tests/unit/` | One test file per module |
+| `tests/ui/` | Playwright tests of the site UI against a fixture project |
 | `tests/e2e/` | Whole runs through the real `bin/warden`, as a session would run them |
 | `tests/helpers/` | Shared fixtures: temp git repos (`repo.ts`), machine, hooks, commands and tools fixtures |
 | `tests/fixtures/` | A fake `claude` reviewer, flows (valid and invalid), check logs, review outputs, tool and transcript samples |
@@ -83,7 +92,7 @@ To run a command against the checkout from a terminal, use the wrapper: `plugins
 - **Background work never blocks.** Gates run in a detached worker; `warden done` returns at once, and `warden wait` is the only run command that blocks.
 - **Comments say why**, and name the spec section they follow (the specs are in `docs/internal/`).
 - **Plain words** in every message, skill and doc. Short sentences.
-- **Shipped text rules.** No file under `plugins/warden/` (`skills`, `agents`, `templates`, `src`) contains `github.com/thucxuong`, `thucxuong/warden`, `WD-` or `issue #`. Skills and agents never use the word "issue" at all. Projects never see where reports go.
+- **Shipped text rules.** No file under `plugins/warden/` (`skills`, `agents`, `templates`, `src`, `site-dist`) contains `github.com/thucxuong`, `thucxuong/warden`, `WD-` or `issue #`. Skills and agents never use the word "issue" at all. Projects never see where reports go.
 
 ## Tests
 

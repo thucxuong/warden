@@ -84,6 +84,7 @@ describe("help", () => {
       "warden report --kind bug|enhancement --title <t> --body <b>|--file <p> | warden report --status [--all | --write] | warden report reply <id> --body <answer>|--file <p> | warden report sync [--background] | warden report inbox [--all] | warden report set <key|file> --status <s> [--note <t>] [--fixed-in <v>] | warden report ask <key> --question <q>",
     );
     expect(HELP.docs).toBe("warden docs check");
+    expect(HELP.site).toBe("warden site [--port <n>] [--no-open]");
     expect(HELP.ask).toBe("warden ask [<task>] \"<question>\"   (at an agent step: wait for the user's answer)");
     expect(HELP.tools).toBe("warden tools [--check [<name>] | --init] | warden tools <name|role> [args...]");
   });

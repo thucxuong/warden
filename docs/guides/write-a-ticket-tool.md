@@ -34,7 +34,7 @@ Warden treats any exit other than 0 as a failure and shows the last line of stde
 The types are in `.warden/tools/tool.ts`:
 
 ```ts
-export type TicketStatus = "todo" | "doing" | "review" | "done";
+export type TicketStatus = "backlog" | "todo" | "doing" | "review" | "done" | "archived";
 export interface DagTicket { id: string; title: string; status: TicketStatus; blocked_by: string[]; epic?: string; type?: string }
 export interface TicketDetail extends DagTicket { body: string }
 export interface SetStatusResult { id: string; status: TicketStatus; changed: string[] }
@@ -46,7 +46,7 @@ export interface SetStatusResult { id: string; status: TicketStatus; changed: st
 |---|---|---|
 | `id` | yes | a string matching `^[A-Za-z0-9][A-Za-z0-9._-]*$`. Children of an epic must also match `taskIdPattern`. |
 | `title` | yes | a string |
-| `status` | yes | `todo`, `doing`, `review` or `done` |
+| `status` | yes | `backlog`, `todo`, `doing`, `review`, `done` or `archived`. `backlog` is parked: warden never starts it, and a ticket that waits on it waits too. `archived` is closed without doing: like `done`, it never holds a dependant back. A tool that prints only the other four keeps working. |
 | `blocked_by` | yes | an array of ticket ids (may be empty). A ticket may not block itself. |
 | `epic` | no | the epic id, as a string |
 | `type` | no | the ticket type, as a string. It picks the template (below). |
@@ -78,7 +78,7 @@ export interface SetStatusResult { id: string; status: TicketStatus; changed: st
    import type { DagTicket, SetStatusResult, TicketDetail, TicketStatus, Tool } from "./tool";
 
    const DIR = "tickets"; // relative to the checkout the tool runs in
-   const STATUSES: TicketStatus[] = ["todo", "doing", "review", "done"];
+   const STATUSES: TicketStatus[] = ["backlog", "todo", "doing", "review", "done", "archived"];
    const ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/; // the ids warden accepts
 
    interface Ticket extends TicketDetail { path: string; text: string }
@@ -139,7 +139,7 @@ export interface SetStatusResult { id: string; status: TicketStatus; changed: st
    export const backlog: Tool = {
      name: "backlog",
      summary: "Tickets in tickets/<ID>.md (the tickets role)",
-     usage: "backlog dag [<epic>] | backlog show <id> | backlog set-status <id> todo|doing|review|done",
+     usage: "backlog dag [<epic>] | backlog show <id> | backlog set-status <id> backlog|todo|doing|review|done|archived",
      probe: () => {
        if (!existsSync(DIR)) return [{ status: "FAIL", label: "tickets", detail: `${DIR}/ is missing` }];
        try {
@@ -276,7 +276,7 @@ export interface SetStatusResult { id: string; status: TicketStatus; changed: st
 For Jira, Linear or Azure DevOps, the shape is the same; only the data source changes:
 
 - Read the system's API token from an environment variable, and check for it in the probe (`FAIL` when it is missing).
-- Map the system's states to `todo`, `doing`, `review` and `done`, and its links to `blocked_by`.
+- Map the system's states to `todo`, `doing`, `review` and `done`, and its links to `blocked_by`. Parked or not planned → `backlog`; closed without doing (won't do, duplicate, obsolete) → `archived`.
 - Pass the system's work item type through as `type`, so bugs get the `bugfix` template.
 - `set-status` updates the remote ticket and prints `changed: []`, because no repo file changed.
 - Keep each call well inside the time limits (300 s for `dag`, 60 s for the others).
@@ -289,6 +289,7 @@ For Jira, Linear or Azure DevOps, the shape is the same; only the data source ch
 | `warden start <id> --ticket` | `show <id>` | the run's task text becomes `# <id>: <title>` and the body |
 | the engine, at the ship step of a run started with `--ticket` | `set-status <id> done`, in the ticket worktree | the change is committed with the run record. A failure never blocks the ship; the agent is told to ask you to set the status after the merge |
 | `warden orchestrate set-status <id> <status>` | `set-status <id> <status>`, in the main checkout | after merges, and for the epic at the end |
+| `warden site` | `dag`, and `show <epic>` for each epic (at most 4 at a time) | each time the Tickets page or the Epics section opens. It never calls `set-status` |
 
 ## See also
 

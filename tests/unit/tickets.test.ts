@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSy
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  buildPlan, cacheFile, dagRowProblem, orchestrateLines, readPlans, refreshPlan, runTicketTool, showTicket,
+  buildPlan, cacheFile, dagRowProblem, orchestrateLines, readPlans, refreshPlan, runTicketTool, runTicketToolAsync, showTicket,
   templateFor, ticketPhase, ticketsTool,
 } from "../../plugins/warden/src/engine/tickets.ts";
 import { WardenError } from "../../plugins/warden/src/lib/exit.ts";
@@ -160,6 +160,59 @@ describe("plan errors", () => {
   });
 });
 
+describe("backlog and archived (0.7)", () => {
+  test("a backlog ticket is parked: never in waves or next, listed in backlog", () => {
+    const p = plan([t("PG-010", [], "backlog"), t("PG-011")]);
+    expect(p.waves).toEqual([["PG-011"]]);
+    expect(p.next).toEqual(["PG-011"]);
+    expect(p.backlog).toEqual(["PG-010"]);
+    expect(p.tickets.find((x) => x.id === "PG-010")).toMatchObject({ wave: null, phase: "backlog" });
+    expect(p.held).toEqual([]);
+    expect(p.complete).toBe(false);
+  });
+
+  test("a ticket waiting on a backlog child is held, and so are its dependants", () => {
+    const p = plan([t("PG-010", [], "backlog"), t("PG-011", ["PG-010"]), t("PG-012", ["PG-011"])]);
+    expect(p.waves).toEqual([]);
+    expect(p.held).toEqual([{ id: "PG-011", blockers: ["PG-010"] }, { id: "PG-012", blockers: ["PG-011"] }]);
+  });
+
+  test("a backlog ticket outside the epic holds its dependant", () => {
+    const p = plan([t("PG-011", ["PG-002"])], [t("PG-002", [], "backlog")]);
+    expect(p.held).toEqual([{ id: "PG-011", blockers: ["PG-002"] }]);
+    expect(p.errors).toEqual([]);
+  });
+
+  test("archived tickets are closed: skipped, and they satisfy their dependants, inside and outside", () => {
+    const p = plan([t("PG-010", [], "archived"), t("PG-011", ["PG-010", "PG-002"])], [t("PG-002", [], "archived")]);
+    expect(p.waves).toEqual([["PG-011"]]);
+    expect(p.held).toEqual([]);
+    expect(p.tickets.find((x) => x.id === "PG-010")).toMatchObject({ wave: null, phase: "archived" });
+  });
+
+  test("complete when every child is done or archived; a backlog child keeps it open", () => {
+    expect(plan([t("PG-010", [], "done"), t("PG-011", [], "archived")]).complete).toBe(true);
+    expect(plan([t("PG-010", [], "done"), t("PG-011", [], "backlog")]).complete).toBe(false);
+  });
+
+  test("the six statuses are valid rows; open is not", () => {
+    for (const status of ["backlog", "todo", "doing", "review", "done", "archived"] as const) expect(dagRowProblem(t("PG-001", [], status))).toBeNull();
+    expect(dagRowProblem({ ...t("PG-001"), status: "open" })).toContain("backlog, todo, doing, review, done, archived");
+  });
+
+  test.each([
+    ["archived", "archived"], ["backlog", "backlog"], ["review", "todo"], ["doing", "todo"],
+  ] as const)("without a run, %s gives phase %s", (status, phase) => {
+    expect(ticketPhase(status, null, null)).toBe(phase);
+  });
+
+  test("an old cache file without backlog reads as an empty list", () => {
+    const old = plan([t("PG-010")]) as any;
+    delete old.backlog;
+    expect(refreshPlan(tmp(), old).backlog).toEqual([]);
+  });
+});
+
 describe("template map", () => {
   test.each([
     ["bug", "bugfix"], ["chore", "chore"], ["docs", "chore"], [undefined, "feature"], ["feature", "feature"],
@@ -281,6 +334,13 @@ describe("overlay and cache", () => {
     writeJsonAtomic(cacheFile(main, "E-1"), { ...base(), epic: "E-1", complete: true });
     expect(orchestrateLines(main)).toEqual([]);
   });
+
+  test("orchestrateLines: backlog and archived tickets are not left", () => {
+    const p = plan([t("PG-010"), t("PG-011", [], "backlog"), t("PG-012", [], "archived"), t("PG-013")]);
+    writeJsonAtomic(cacheFile(main, "E-1"), { ...p, epic: "E-1" });
+    writeRun(main, fakeRun({ task: "PG-010", status: "waiting" }));
+    expect(orchestrateLines(main)[0]).toContain("stopped with 2 tickets left");
+  });
 });
 
 // ---- running the tool ----
@@ -300,6 +360,10 @@ const FAKE = barrel(`  {
         return 3;
       }
       if (mode === "sleep") await Bun.sleep(5000);
+      if (mode === "nap") {
+        await Bun.sleep(300);
+        console.log("[]");
+      }
       if (mode === "text") console.log("hello");
       if (mode === "show") {
         const body = rest[0] === "A" ? { body: "hi" } : {};
@@ -378,6 +442,33 @@ describe("runTicketTool", () => {
   test("showTicket checks the shape", () => {
     expect(showTicket(main, PLUGIN, "A").body).toBe("hi");
     expect(() => showTicket(main, PLUGIN, "B")).toThrow("body");
+  });
+
+  test("runTicketToolAsync: same args, env and errors as runTicketTool, without blocking", async () => {
+    const args = ["a b; echo hi", "$HOME"];
+    const out = (await runTicketToolAsync(main, PLUGIN, ["echo", ...args], 10)) as Record<string, unknown>;
+    expect(out.args).toEqual(args);
+    expect(out.cwd).toBe(main);
+    expect(String(out.path).startsWith(`${join(PLUGIN, "bin")}:`)).toBe(true);
+    await expect(runTicketToolAsync(main, PLUGIN, ["fail"], 10)).rejects.toThrow("ticket tool failed (exit 3): boom");
+    await expect(runTicketToolAsync(main, PLUGIN, ["text"], 10)).rejects.toThrow("ticket tool printed no JSON");
+    let ticked = 0;
+    const timer = setInterval(() => ticked++, 20);
+    await runTicketToolAsync(main, PLUGIN, ["nap"], 10);   // the tool takes at least 300 ms, however fast the machine
+    clearInterval(timer);
+    expect(ticked).toBeGreaterThanOrEqual(3); // the event loop ran while the tool did
+  });
+
+  test("runTicketToolAsync: a timeout rejects and kills the group", async () => {
+    writeTools(main, FAKE.replace('command("sleep 1.5; touch late-write; echo \'[]\'")', 'command("sleep 3; touch late-write; echo \'[]\'")'), { tickets: "late" });
+    await expect(runTicketToolAsync(main, PLUGIN, ["dag"], 1.5)).rejects.toThrow("ticket tool timed out after 1.5 s");
+    await Bun.sleep(2500);
+    expect(existsSync(join(main, "late-write"))).toBe(false);
+  }, 15_000);
+
+  test("runTicketToolAsync: no tickets role rejects with exit 3", async () => {
+    writeRoles(main, {});
+    await expect(runTicketToolAsync(main, PLUGIN, ["dag"], 10)).rejects.toThrow("no tickets tool");
   });
 
   test("ticketsTool: missing warden.json and a missing tickets role are exit 3", () => {

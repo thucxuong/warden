@@ -29,6 +29,7 @@ export interface WardenJson {
   taskIdPattern: string;        // JS regex source, anchored, e.g. "^PG-\\d{3}$"
   sitePort: number;             // default 4400
   lastRetro: string | null;     // YYYY-MM-DD
+  site?: unknown;               // 0.7: settings for `warden site` (site.thresholds); never validated here, copied as it is
 }
 
 // ---------------------------------------------------------------------------
@@ -225,7 +226,7 @@ export type EventType =
   | "run.blocked" | "run.retry" | "history.written" | "run.shipped" | "run.done"
   | "session.linked" | "stop.blocked" | "hook.denied"
   | "gate.discarded" | "fix.landed" | "git.fetch-failed" | "proof.stale"
-  | "ticket.status" | "question.asked" | "question.answered";
+  | "ticket.status" | "question.asked" | "question.answered" | "retry.merged-main";
 
 export interface EventLine {
   seq: number;                     // 1.. per task, strictly increasing
@@ -401,7 +402,8 @@ export interface ProjectTool {
 // 0.3: ticket tools and orchestrate
 // ---------------------------------------------------------------------------
 
-export type TicketStatus = "todo" | "doing" | "review" | "done";
+// 0.7: backlog (parked, never scheduled) and archived (closed without doing) are additive.
+export type TicketStatus = "backlog" | "todo" | "doing" | "review" | "done" | "archived";
 
 export interface DagTicket {
   id: string;
@@ -415,7 +417,8 @@ export interface DagTicket {
 export type TicketDetail = DagTicket & { body: string };
 
 export type TicketTemplate = "chore" | "bugfix" | "feature" | "compose";
-export type TicketPhase = "todo" | "running" | "fix" | "ready" | "waiting" | "blocked" | "pr-open" | "merged" | "no-ship" | "done";
+export type TicketPhase =
+  | "backlog" | "todo" | "running" | "fix" | "ready" | "waiting" | "blocked" | "pr-open" | "merged" | "no-ship" | "done" | "archived";
 
 export interface TicketRun {
   status: RunStatus;
@@ -443,11 +446,12 @@ export interface OrchestratePlan {
   mainBranch: string;              // paths.mainBranch for the ship agents
   mainRef: string;                 // paths.mainRef, for the ship agents
   tickets: OrchestrateTicket[];    // the epic's children, sorted by id
-  waves: string[][];               // not-done tickets, wave by wave
+  waves: string[][];               // open (not done or archived), not parked and not held tickets, wave by wave
   next: string[];                  // waves[0] ?? []
-  held: { id: string; blockers: string[] }[];  // waiting on a ticket outside the epic that is not done
+  held: { id: string; blockers: string[] }[];  // waiting on an open ticket outside the epic, a held ticket or a backlog child
+  backlog: string[];               // 0.7: parked children (status backlog), sorted; never scheduled. Old cache files lack it: read plan.backlog ?? []
   errors: string[];
-  complete: boolean;               // every child is done
+  complete: boolean;               // every child is closed (done or archived)
 }
 
 // ---------------------------------------------------------------------------

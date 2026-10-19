@@ -123,6 +123,8 @@ export function validateWardenJson(value: unknown, file = "warden.json"): Warden
     taskIdPattern: taskIdPattern!,
     sitePort: sitePort!,
     lastRetro: lastRetro!,
+    // 0.7: `warden site` checks this key itself, so a typo there never breaks hooks or runs. Kept so upgrade --done keeps it.
+    ...(root.site !== undefined && { site: root.site }),
   };
 }
 

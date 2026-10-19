@@ -133,3 +133,18 @@ export function startTime(pid: number): string | null {
   const text = result.stdout.trim();
   return text === "" ? null : text;
 }
+
+// The pid exists. EPERM means it exists but belongs to another user, so it counts as alive.
+export function pidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+// Alive and still the same process: a reused pid has another start time. An empty pidStart never matches.
+export function processAlive(pid: number, pidStart: string): boolean {
+  return pidStart !== "" && pidAlive(pid) && startTime(pid) === pidStart;
+}

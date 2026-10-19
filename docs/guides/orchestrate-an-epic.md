@@ -26,9 +26,10 @@ An **epic** is a ticket that groups other tickets. Its children can block each o
    | `tickets` | every child, with its `wave`, `template` and `phase` |
    | `waves` | the ticket ids of each wave, in order |
    | `next` | the wave to work on now |
-   | `held` | tickets that wait on an open ticket outside the epic, with the blockers |
+   | `held` | tickets that wait on an open ticket outside the epic, or on a `backlog` ticket, with the blockers |
+   | `backlog` | parked tickets (status `backlog`); they are never started |
    | `errors` | problems such as `cycle: PG-102 -> PG-103 -> PG-102`, `PG-104: unknown blocker PG-900`, `PG-7 does not match taskIdPattern ^PG-\d{3}$` |
-   | `complete` | `true` when every child is `done` |
+   | `complete` | `true` when every child is `done` or `archived` |
 
 2. **Start the orchestration** in Claude Code:
 
@@ -72,7 +73,7 @@ flowchart LR
 
 ## Ticket phases
 
-`warden orchestrate status PG-100` prints the cached plan with each ticket's live phase. The site's Tickets tab shows the same.
+`warden orchestrate status PG-100` prints the cached plan with each ticket's live phase. The site's Tickets page shows the tickets and their runs.
 
 | Phase | Meaning | What happens |
 |---|---|---|
@@ -82,6 +83,8 @@ flowchart LR
 | `ready` | the run reached the ship step and no gate is running | it ships in turn |
 | `merged` | shipped and merged | marked `done` |
 | `done` | the ticket status is `done` | skipped |
+| `archived` | the ticket status is `archived` (closed without doing) | skipped; it never holds a dependant back |
+| `backlog` | the ticket status is `backlog` (parked) | never started; tickets that wait on it are held. Move it to `todo` in your ticket system to have it worked |
 | `blocked` | the run is blocked | a person fixes the cause and types `retry <id>` |
 | `waiting` | the run waits for a person | type `approve <id>`, or answer its question |
 | `pr-open` | shipped, but the pull request is not merged | merge it yourself |

@@ -41,10 +41,12 @@ flowchart LR
 
    ```bash
    bun run check
+   bun run ui:check
+   bun run test:ui
    bun run validate
    ```
 
-   `check` is the type check plus the full test suite. `validate` runs `claude plugin validate --strict` on the marketplace and on the plugin.
+   `check` is the type check plus the full test suite. `ui:check` fails when the committed `plugins/warden/site-dist/` is not a fresh build of `site-ui/` (run `bun run ui:build` and commit it). `test:ui` runs the Playwright tests of the site. `validate` runs `claude plugin validate --strict` on the marketplace and on the plugin.
 
 5. **Commit** on `main`. The message starts with the version and a summary of the changes, for example `0.6.2: <what changed>`.
 
@@ -55,7 +57,7 @@ flowchart LR
    git push origin main v0.6.2
    ```
 
-7. **Fast-forward `stable`** to the tag. Never force it:
+7. **Fast-forward `stable`** to the tag once CI is green on the pushed commit. Never force it:
 
    ```bash
    git fetch origin

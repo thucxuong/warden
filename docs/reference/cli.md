@@ -466,10 +466,14 @@ Exit codes: the tool's own exit code (0 to 255). A tool that throws or returns s
 ## warden site
 
 ```
-warden site [--port <n>]
+warden site [--port <n>] [--no-open]
 ```
 
-Starts a read-only web view of the project's runs, docs and tickets at `http://127.0.0.1:<port>`. The port is `--port` (1 to 65535), else `sitePort` in `.warden/warden.json` (default 4400). It prints `warden site: http://127.0.0.1:<port>` and runs until you stop it. Exit 5 when the port is in use. See [lead overview](../guides/lead-overview.md).
+Starts the read-only control plane of the project (what needs you, running runs, epics, tickets, history, docs) at `http://127.0.0.1:<port>`. The port is `--port` (1 to 65535), else `sitePort` in `.warden/warden.json` (default 4400). It prints `warden site: http://127.0.0.1:<port>`, opens that address in the browser, and runs until you stop it.
+
+The browser opens only when stdout is a terminal. `--no-open`, a `CI` variable set to anything but `0` or `false`, and `WARDEN_NO_OPEN=1` keep it closed. A failure to open is silent.
+
+Exit 2 for any other argument, exit 5 when the port is in use. The site serves the UI build that ships with the plugin in `site-dist/`; when it is missing, pages answer 503 and the JSON API under `/api` still works. See [lead overview](../guides/lead-overview.md).
 
 ---
 
@@ -487,7 +491,7 @@ Used by the `/warden:orchestrate` skill. Works on the main checkout. Needs a `ti
 |---|---|---|
 | `plan <epic>` | Runs the tickets tool (`dag <epic>`), builds waves, adds each ticket's run state, saves the plan in `.warden/state/_orchestrate/<epic>.json` and prints it | 1 when `errors` is not empty |
 | `status <epic>` | Prints the saved plan with run state read again. Does not ask the tickets tool | 3 when there is no saved plan |
-| `set-status <id> <status>` | Runs the tickets tool (`set-status`). Status is `todo`, `doing`, `review` or `done`. Prints `{"id","status","changed":[paths]}` | 2 for a bad status |
+| `set-status <id> <status>` | Runs the tickets tool (`set-status`). Status is `backlog`, `todo`, `doing`, `review`, `done` or `archived`. Prints `{"id","status","changed":[paths]}` | 2 for a bad status |
 
 Plan output:
 
@@ -496,13 +500,14 @@ Plan output:
   schema: 1; epic: string; at: string; tool: string; mainBranch: string; mainRef: string;
   tickets: { id, title, status, blocked_by, epic?, type?,
              wave: number | null, template: "chore" | "bugfix" | "feature" | "compose",
-             phase: "todo" | "running" | "fix" | "ready" | "waiting" | "blocked" | "pr-open" | "merged" | "no-ship" | "done",
+             phase: "backlog" | "todo" | "running" | "fix" | "ready" | "waiting" | "blocked" | "pr-open" | "merged" | "no-ship" | "done" | "archived",
              run: { status, step, stepType, worktree, branch, reason, pr, merged } | null }[];
-  waves: string[][];        // open tickets, wave by wave
+  waves: string[][];        // open tickets, wave by wave; never backlog or held ones
   next: string[];           // the first wave
-  held: { id: string; blockers: string[] }[];   // waiting on an open ticket outside the epic
+  held: { id: string; blockers: string[] }[];   // waiting on an open ticket outside the epic, a held ticket or a backlog child
+  backlog: string[];        // parked children (status backlog); never started
   errors: string[];         // bad rows, unknown blockers, cycles
-  complete: boolean;        // every child is done
+  complete: boolean;        // every child is done or archived
 }
 ```
 

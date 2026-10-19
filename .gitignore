@@ -5,3 +5,5 @@ triage/ledger.json
 triage/doorbell/
 triage/tmp/
 website/dist/
+test-results/
+playwright-report/

@@ -28,7 +28,7 @@ export const HELP: Record<string, string> = {
   retro: "warden retro --done [--date YYYY-MM-DD] [--note <t>]",
   upgrade: "warden upgrade --notes | --done",
   tools: "warden tools [--check [<name>] | --init] | warden tools <name|role> [args...]",
-  site: "warden site [--port <n>]",
+  site: "warden site [--port <n>] [--no-open]",
   orchestrate: "warden orchestrate plan <epic> | status <epic> | set-status <id> <status>",
   checks: "warden checks | warden checks run <name> [--background] | warden checks done <name> [--date YYYY-MM-DD] [--note <t>]",
   docs: "warden docs check",

@@ -44,7 +44,7 @@ export interface StartOptions {
 
 const LIVE: RunJson["status"][] = ["active", "waiting", "blocked"];
 const LOG_TAIL_LINES = 80;
-const RETRY_MERGED_MAIN = "retry.merged-main" as EventType; // belongs in the EventType union in types.ts
+const RETRY_MERGED_MAIN: EventType = "retry.merged-main";
 
 // Everything a transition needs. Transitions mutate s.run; the caller writes it under the lock.
 interface S {
@@ -346,18 +346,9 @@ export function pendingJob(main: string, run: RunJson): GateJob | null {
   return null;
 }
 
-function pidAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (err) {
-    return (err as NodeJS.ErrnoException).code === "EPERM";
-  }
-}
-
 // Alive and still the same process: a reused pid has another start time.
 function workerAlive(gate: NonNullable<RunJson["gate"]>): boolean {
-  return pidAlive(gate.pid) && proc.startTime(gate.pid) === gate.pidStart;
+  return proc.processAlive(gate.pid, gate.pidStart);
 }
 
 export async function ensureGate(ctx: Ctx, task: string, spawnWorker: SpawnWorker): Promise<void> {

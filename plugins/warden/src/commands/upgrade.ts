@@ -52,9 +52,9 @@ export function upgradeNotice(ctx: Ctx): string | null {
   }
 }
 
-// The session-start line when the marketplace clone holds a newer warden than this session runs (spec 0.2 section 6).
-// No network. Never throws: null on any problem, and for any plugin not loaded from the cache.
-export function newerVersionNotice(pluginRoot: string): string | null {
+// The warden version in the marketplace clone and the marketplace name, or null. No network. Never throws: null on any
+// problem, and for any plugin not loaded from the cache.
+export function availableVersion(pluginRoot: string): { version: string; marketplace: string } | null {
   try {
     const found = marketplaceClone(pluginRoot);
     if (!found) return null;
@@ -64,10 +64,22 @@ export function newerVersionNotice(pluginRoot: string): string | null {
     const source = catalog.plugins?.find((entry) => entry.name === "warden")?.source;
     if (typeof source !== "string" || !source.startsWith("./")) return null;
 
-    const available = readJson<{ version: string }>(join(clone, source, ".claude-plugin", "plugin.json")).version;
+    const version = readJson<{ version: unknown }>(join(clone, source, ".claude-plugin", "plugin.json")).version;
+    return typeof version === "string" ? { version, marketplace } : null;
+  } catch {
+    return null;
+  }
+}
+
+// The session-start line when the marketplace clone holds a newer warden than this session runs (spec 0.2 section 6).
+// No network. Never throws: null on any problem, and for any plugin not loaded from the cache.
+export function newerVersionNotice(pluginRoot: string): string | null {
+  try {
+    const available = availableVersion(pluginRoot);
+    if (!available) return null;
     const installed = readPluginVersion(pluginRoot);
-    if (compareSemver(available, installed) <= 0) return null;
-    return `warden: version ${available} is available; this session runs ${installed}. To update, run "claude plugin update warden@${marketplace}" in a terminal (or use /plugin), then /reload-plugins.`;
+    if (compareSemver(available.version, installed) <= 0) return null;
+    return `warden: version ${available.version} is available; this session runs ${installed}. To update, run "claude plugin update warden@${available.marketplace}" in a terminal (or use /plugin), then /reload-plugins.`;
   } catch {
     return null;
   }

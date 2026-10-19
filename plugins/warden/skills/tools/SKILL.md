@@ -77,14 +77,12 @@ export const e2e: Tool = {
 | `graph` | the work skill and the ticket agent | `query "<question>"` prints plain text and exits 0 |
 | `pr` | the push and merge rules | `create` and `merge` subcommands. Warden treats them as the pull request and merge commands |
 
-The `tickets` tool prints one JSON value on stdout. Exit 0 is ok, 1 an error, 2 bad usage, 3 an unknown ticket or epic. Status is one of `todo`, `doing`, `review` or `done`.
+The `tickets` tool prints one JSON value on stdout. Exit 0 is ok, 1 an error, 2 bad usage, 3 an unknown ticket or epic. Status is one of `backlog`, `todo`, `doing`, `review`, `done` or `archived`. `backlog` is parked: warden never starts it. `archived` is closed without doing; like `done`, it never holds a dependant back. A tool that prints only the first four kinds keeps working.
 - `dag [<epic>]` prints `DagTicket[]`: `{ id, title, status, blocked_by, epic?, type? }`. With an epic, its direct children; without, every ticket that is not an epic. It has 300 s.
 - `show <id>` prints one `DagTicket` with a `body` (the ticket text). It has 60 s.
 - `set-status <id> <status>` prints `{ id, status, changed }`, where `changed` lists the repo paths the caller must commit. Running it twice changes nothing more. It has 60 s.
 
 The types are in `tool.ts` (`DagTicket`, `TicketDetail`, `SetStatusResult`).
-
-The site's Graph page reads `.warden/state/_graph/graphify-out/graph.json` in the main checkout when it exists. Whatever writes it uses node-link JSON: `nodes[{id, source_file, community?}]` and `links[{source, target, relation?}]`.
 
 Anything else, such as end-to-end tests or CI status, needs no role. A check in `.warden/steps.json` simply runs `warden tools e2e run ...`.
 
