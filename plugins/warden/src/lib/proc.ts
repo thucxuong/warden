@@ -13,6 +13,21 @@ export interface RunOptions {
 }
 
 export const TIMEOUT_EXIT = 124;
+
+// For detached runners: exit once `gone()` is true or the deadline has passed, even if the event loop never goes
+// idle (a runner once spun for hours after its folder was deleted). Checked every `everyMs`; never keeps the process alive.
+export function exitWhen(gone: () => boolean, deadlineMs: number, everyMs = 30_000): void {
+  const deadline = Date.now() + deadlineMs;
+  setInterval(() => {
+    let stop = Date.now() > deadline;
+    try {
+      stop ||= gone();
+    } catch {
+      stop = true;
+    }
+    if (stop) process.exit(0);
+  }, everyMs).unref();
+}
 const DEFAULT_KILL_GRACE_MS = 10_000;
 
 // The plugin root: this file is <root>/src/lib/proc.ts.

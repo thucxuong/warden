@@ -3,11 +3,11 @@
 // question came from: the prompt holds only the report and its thread.
 import { spawn } from "node:child_process";
 import { appendFileSync, closeSync, existsSync, openSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
-import { isAbsolute, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { constants as osConstants } from "node:os";
 import { claudeBinary } from "../gates/review.ts";
 import type { ReportRecord } from "../types.ts";
-import { startTime } from "./proc.ts";
+import { exitWhen, startTime } from "./proc.ts";
 import { cleanThread } from "./reports-git.ts";
 
 interface AnswerJob {
@@ -194,7 +194,9 @@ export async function runAnswer(job: AnswerJob, graceMs = 10_000): Promise<numbe
 
 if (import.meta.main) {
   try {
-    await runAnswer(JSON.parse(readFileSync(process.argv[2] ?? "", "utf8")) as AnswerJob);
+    const job = JSON.parse(readFileSync(process.argv[2] ?? "", "utf8")) as AnswerJob;
+    exitWhen(() => !existsSync(job.cwd) || !existsSync(dirname(job.lock)), (job.timeoutSec + 300) * 1000);
+    await runAnswer(job);
   } catch {
     // the runner has no one to tell
   }

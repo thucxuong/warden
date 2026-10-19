@@ -317,9 +317,9 @@ async function write(args: string[], ctx: Ctx): Promise<{ written: string[]; not
   const source = installed && shareable(installed) ? installed : null;
   const settings = payload.teamInstall && source ? readSettings(settingsPath) : null;
   if (payload.teamInstall && !installed) {
-    notes.push("team install skipped: no warden-marketplace entry in known_marketplaces.json; paste the install block from the README into .claude/settings.json");
+    notes.push("team install skipped: no warden-marketplace entry in known_marketplaces.json; ask the user to add the warden team-install block (warden docs: team setup) to .claude/settings.json");
   } else if (payload.teamInstall && !source) {
-    notes.push(`team install skipped: warden was added from a local ${String(installed!.source)} source that teammates cannot reach; paste the install block from the README into .claude/settings.json`);
+    notes.push(`team install skipped: warden was added from a local ${String(installed!.source)} source that teammates cannot reach; ask the user to add the warden team-install block (warden docs: team setup) to .claude/settings.json`);
   }
 
   const out = new Writer(root);

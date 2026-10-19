@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 const pluginRoot = resolve(import.meta.dir, "../../plugins/warden");
 const skillsDir = join(pluginRoot, "skills");
 
-const expectedSkills = ["init", "compose", "work", "plan", "retro", "report", "upgrade", "tools", "orchestrate"];
+const expectedSkills = ["init", "compose", "work", "plan", "retro", "report", "upgrade", "tools", "orchestrate", "guide"];
 
 // Frontmatter extras from spec section 8 (string values, unquoted).
 const expectedExtras: Record<string, Record<string, string>> = {
@@ -15,6 +15,7 @@ const expectedExtras: Record<string, Record<string, string>> = {
   upgrade: {},
   tools: { "argument-hint": "[<name>]" },
   orchestrate: { "argument-hint": "<epic>" },
+  guide: {},
 };
 
 function parseFrontmatter(text: string): Record<string, string> {

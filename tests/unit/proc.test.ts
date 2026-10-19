@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { run, startTime } from "../../plugins/warden/src/lib/proc.ts";
 
 let dir: string;
@@ -153,5 +153,24 @@ describe("startTime", () => {
 
   test("returns null for a pid that is not running", () => {
     expect(startTime(2 ** 22 + 12345)).toBeNull();
+  });
+});
+
+describe("exitWhen", () => {
+  test("a runner that would run forever exits once its folder is gone", async () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), "warden-exitwhen-")));
+    const flag = join(dir, "here");
+    writeFileSync(flag, "");
+    const script = join(dir, "runner.ts");
+    const proc = resolve(import.meta.dir, "../../plugins/warden/src/lib/proc.ts");
+    writeFileSync(script, `import { existsSync } from "node:fs";\nimport { exitWhen } from ${JSON.stringify(proc)};\nexitWhen(() => !existsSync(${JSON.stringify(flag)}), 600_000, 100);\nsetInterval(() => {}, 1000);\n`);
+    const child = Bun.spawn([process.execPath, script], { stdio: ["ignore", "ignore", "ignore"] });
+    await Bun.sleep(500);
+    expect(child.exitCode).toBeNull(); // still running while the folder is there
+    rmSync(flag);
+    const code = await Promise.race([child.exited, Bun.sleep(5_000).then(() => "timeout")]);
+    if (code === "timeout") child.kill("SIGKILL");
+    expect(code).toBe(0);
+    rmSync(dir, { recursive: true, force: true });
   });
 });

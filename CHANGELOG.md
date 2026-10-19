@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.2 — 2026-10-19
+
+- Documentation: a new README and a full docs folder (getting started, concepts, guides, reference, agent guide, troubleshooting, FAQ, maintainer pages). Design notes and specs moved to `docs/internal/`.
+- New `/warden:guide` skill: a short guide for the project's agent, for when it is unsure, a command is refused or a run is blocked.
+- `warden --help` lists `init --force`, `retro --note` and `report reply --file`.
+- The init note for a skipped team install points to the team setup docs.
+- The work skill picks the template the same way as the compose skill.
+- Background runners (doorbell and answer) stop by themselves once their folder is gone or long past their time limit.
+
 ## 0.6.1 — 2026-10-19
 
 - Ship: for a run started with `--ticket`, warden sets the ticket to done in the worktree, and the ship step commits it with the run record. The gates stay proven only while the ticket files hold exactly what the tool wrote; the tool code always comes from the main checkout. If the ticket tool fails, the ship goes on and the instructions say so.

@@ -1,155 +1,112 @@
 # Warden
 
-A delivery harness for Claude Code: composed workflows, engine-run gates, code review, and self-healing checks.
+A delivery harness for Claude Code: every task runs as a fixed list of steps, and the tests, the code review and the fixes of broken checks are run by warden itself, not left to the agent's word.
 
-## Install
+Warden is a Claude Code plugin. You install it once, set it up in your project with `/warden:init`, and from then on each task goes through steps such as plan, implement, check, review and ship. The agent cannot skip a step: hooks block the actions that do not fit the current step, and a step only ends when warden accepts its output.
 
-### Prerequisites
+## Why warden
 
-- Bun >= 1.4: Install from [bun.sh](https://bun.sh), or run `bun upgrade` if you have an older version.
-- Git access to this private repo. Choose one:
-  - **SSH:** Test with `ssh -T git@github.com` and `GIT_TERMINAL_PROMPT=0 git ls-remote git@github.com:thucxuong/warden.git`.
-  - **HTTPS via `gh`:** Run `gh auth login`, then `gh auth setup-git`, then add `export CLAUDE_CODE_PLUGIN_PREFER_HTTPS=1` to your shell profile. Required if you don't have an SSH key.
+An AI agent that writes code will sometimes say "tests pass" when they do not, push before a review, or "fix" a failing test by changing the test. Warden takes those calls away from the agent:
 
-### Option A: Two commands (one person)
+- **Warden runs the checks.** Your test, lint and build commands run in the background. The proof is tied to the exact commit (its git SHA), so a later edit cancels it.
+- **A second Claude reviews the change.** Blocking findings send the task back to implement.
+- **Failures are sorted before they are fixed.** A failed check is triaged as `CODE` (the change broke it), `OPS` (the setup broke it) or `UNCLEAR`. Code failures go back to the agent; the others go to a separate fixer agent that works on its own branch.
+- **Nothing ships unproven.** The ship step delivers the commit that passed the checks and the review, and nothing else.
 
-In a terminal or inside Claude Code (`/plugin`):
+## Key features
 
-```bash
-claude plugin marketplace add thucxuong/warden#stable
-claude plugin install warden@warden-marketplace
+- **Workflows from templates.** `do`, `chore`, `bugfix` and `feature`, or your own flow built from seven step types.
+- **Engine-run gates.** `check` and `review` steps are run by warden, not by the agent.
+- **Self-healing checks.** Triage rules, a fixer agent and fix notes that the project keeps. See [Gates and self-healing](docs/concepts/gates-and-self-healing.md).
+- **Human sign-off when you want it.** An `approve` step waits until a person types `approve` or `reject: <why>`.
+- **Worktrees per task.** Each task gets its own git worktree and branch, so several tasks can run side by side.
+- **Epics.** `/warden:orchestrate` works through a set of tickets in dependency order.
+- **Project-owned tools.** Your project keeps its own tools (ticket tracker, code graph, pull requests) in `.warden/tools/`.
+- **A record of every task.** Steps, time and tokens are kept per task and shown on a local dashboard (`warden site`).
+- **Periodic checks and retros.** Session start runs or offers the checks that are due.
+- **Questions mid-step.** The agent can pause a step with `warden ask`; your next message is the answer. See [Blocked and waiting runs](docs/guides/blocked-and-waiting-runs.md).
+- **Reports to the maintainers.** The agent can report a warden problem for you; status changes and maintainer questions come back at session start, and the agent answers the questions itself. See [Reports](docs/concepts/reports.md).
+- **Guided upgrades.** Each version that changes your project's files ships an upgrade note, and `/warden:upgrade` applies it. See [Upgrading](docs/getting-started/upgrading.md).
+- **Built for agents.** The agent loads the `/warden:guide` skill when it is unsure or refused; [Guide for agents](docs/for-agents.md) is the long form.
+
+## Quick start
+
+You need [Claude Code](https://docs.anthropic.com/en/docs/claude-code), git, [Bun](https://bun.sh) 1.4 or newer, and read access to this private repo (see [Installation](docs/getting-started/installation.md)).
+
+1. Install the plugin, in a terminal or inside Claude Code (`/plugin`):
+
+   ```bash
+   claude plugin marketplace add thucxuong/warden#stable
+   claude plugin install warden@warden-marketplace
+   ```
+
+   Then restart Claude Code or run `/reload-plugins`.
+
+2. Open your project in Claude Code and set warden up:
+
+   ```text
+   /warden:init
+   ```
+
+   It scans your stack, drafts context files and check commands, asks you to confirm, then writes `.warden/`.
+
+3. Commit the result and get it onto your main branch. `warden start` reads `.warden/` from there.
+
+   ```bash
+   git add .warden .gitignore scripts/warden-setup.sh
+   git commit -m "chore: set up warden"
+   git push
+   ```
+
+   If your main branch is protected, push a branch, open a pull request with these files, and merge it before your first task.
+
+4. Start a task. The task id must match the pattern you chose during init.
+
+   ```text
+   /warden:compose APP-101 fix the typo in the settings page title
+   ```
+
+   The agent picks a template, starts the run in its own worktree and works through the steps. When a step waits for you, the agent tells you what to type.
+
+The [quick start guide](docs/getting-started/quickstart.md) walks through a first feature task from start to ship.
+
+## How it works
+
+```mermaid
+flowchart LR
+    start["/warden:compose<br/>warden start"] --> agent["Agent step<br/>(plan, implement)"]
+    agent -->|"warden done"| check["check gate<br/>(warden runs your commands)"]
+    check -->|pass| review["review gate<br/>(a second Claude reads the diff)"]
+    check -->|"fail: CODE"| agent
+    check -->|"fail: OPS or UNCLEAR"| fix["fix step<br/>(fixer agent, own branch)"]
+    fix --> check
+    review -->|"blocking findings"| agent
+    review -->|clean| ship["ship<br/>(PR or merge)"]
+    ship --> shipped(["shipped"])
 ```
 
-Then restart Claude Code or run `/reload-plugins`.
+The agent asks warden what to do (`warden next`), does it, and hands in the result (`warden done`). Warden checks the result, moves the run to the next step, and runs the gate steps itself. See [How warden works](docs/concepts/how-warden-works.md).
 
-### Option B: Team install (recommended)
+## Documentation
 
-Commit this to `.claude/settings.json` in your project (merge with any existing keys):
+| If you want to | Read |
+|---|---|
+| Install warden and run a first task | [Getting started](docs/getting-started/installation.md) |
+| Understand runs, steps, gates and reports | [Concepts](docs/README.md#concepts) |
+| Do a specific job (write a tool, run an epic, set up a team) | [Guides](docs/README.md#guides) |
+| See time, tokens and cost per task | [Lead overview](docs/guides/lead-overview.md) |
+| Look up a command, file or setting | [Reference](docs/README.md#reference) |
+| Look up a word (proof, triage, leftovers, ...) | [Glossary](docs/README.md#glossary) |
+| Work in a warden project as an AI agent | [Guide for agents](docs/for-agents.md) |
+| Fix a problem | [Troubleshooting](docs/troubleshooting.md) and [FAQ](docs/faq.md) |
+| Work on warden itself | [Maintainers](docs/maintainers/README.md) |
 
-```json
-{
-  "extraKnownMarketplaces": {
-    "warden-marketplace": {
-      "source": { "source": "github", "repo": "thucxuong/warden", "ref": "stable" },
-      "autoUpdate": true
-    }
-  },
-  "enabledPlugins": { "warden@warden-marketplace": true }
-}
-```
+The full table of contents is in [docs/README.md](docs/README.md).
 
-Each team member: open the project in Claude Code, accept the workspace trust dialog, then run `/reload-plugins` (or restart) when prompted.
+## Project status
 
-## Set up warden in your project
+Version 0.6.2. Warden is young and changes often. Each version that changes your project's files ships an upgrade note, and `/warden:upgrade` applies it (see [Upgrading](docs/getting-started/upgrading.md)). Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
-Run `/warden:init`. It scans your stack, drafts context files and check commands, asks you to confirm, then writes `.warden/`.
+## License
 
-Commit and push the result to your main branch:
-
-```bash
-git add .warden .gitignore scripts/warden-setup.sh .claude/settings.json
-git commit -m "chore: set up warden"
-git push
-```
-
-(Omit `.claude/settings.json` if you used option A above.)
-
-Then turn on branch protection: require a pull request and block direct pushes to your main branch.
-
-## Your first task
-
-Run `/warden:compose <task-id> what to do`. Warden picks a template (feature, bugfix, or simple do) and starts an engine-driven workflow.
-
-The workflow is:
-1. Plan (if a feature), implement, and check (your tests run).
-2. Review (an AI reads your changes).
-3. Fix (if needed, an AI fixes failing checks).
-4. Ship (you open and merge the PR).
-
-Each step waits for you. Run `/warden:work` to drive the loop, or `warden next` / `warden done` / `warden wait` in a terminal.
-
-## Tools
-
-Your project writes and owns its tools in `.warden/tools/`. Warden ships no tools and sends no fixes for them.
-
-- `index.ts` lists the tools. `tool.ts` holds the types and a `command()` helper. `warden tools --init` writes both, plus `roles.json`.
-- `roles.json` maps a role to a tool name. Warden uses three roles: `tickets` (needed for `/warden:orchestrate`), `graph` (asked before a broad search of the repo) and `pr` (its `create` and `merge` count as pull request commands).
-- `warden tools` lists the tools and roles. `warden tools <name> <args>` runs one. `warden tools --check` checks the list and the roles and runs each tool's probe.
-
-Run `/warden:tools <name>` to have Claude write or change a tool.
-
-## Work an epic
-
-Run `/warden:orchestrate <epic>` to work on a set of tickets from your ticket tool:
-
-1. The orchestrator reads your ticket DAG and organizes them into waves (by dependencies).
-2. For each wave, it starts your tickets one at a time, each in its own worktree, with its own engine run.
-3. Tickets work in parallel; the orchestrator waits for fixes and then ships them one at a time (after merging the latest main, so gates run on merged code).
-4. Any ticket that blocks, waits, or has an unmerged PR stops the orchestration. Run `/warden:orchestrate <epic>` again to go on.
-
-## Upgrade warden
-
-When a new version is available, Claude Code prints `warden: updated to <v>; this project is on <old>. Run /warden:upgrade.`
-
-Run `/warden:upgrade`, review and confirm the changes, then commit.
-
-## Terminal commands
-
-Add this alias to your shell profile to use warden commands from a terminal:
-
-```bash
-alias warden='"$(cat ~/.claude/plugins/data/warden-warden-marketplace/root)/bin/warden"'
-```
-
-Then:
-- `warden status` — list active tasks.
-- `warden next [<task>]` — show what the current step needs.
-- `warden done [<task>] --file <output.json>` — submit step output.
-- `warden wait [<task>]` — poll until the gates finish.
-- `warden ask [<task>] "<question>"` — at an agent step, wait for the user's answer; their next message continues the run.
-- `warden approve <task>` — approve a waiting step (human only; TTY required).
-- `warden retry <task>` — retry a blocked step.
-- `warden reset <task>` — delete a task's live state (human only; TTY required).
-- `warden report --status` — list this project's reports with status, fixed-in version and note.
-- `warden checks` — list the periodic checks and which are due. `warden checks run <name>` runs one; `warden checks done <name>` marks an agent check done.
-- `warden orchestrate plan <epic>` — read the ticket DAG and print waves to work on.
-- `warden orchestrate status <epic>` — show the current phase of each ticket in the epic.
-- `warden tools` — list this project's tools and roles. `warden tools <name> <args>` runs one; `warden tools --check` checks them.
-- `warden site` — open the task dashboard at http://127.0.0.1:4400.
-- `warden docs check` — check that every file in `.warden/context`, `rules`, `decisions`, `knowledge`, `checks` and `retros` has an INDEX line, and no file exceeds 200 lines.
-- `warden report sync` — send reports to the warden repo and fetch status updates from other machines now (runs by itself in the background).
-
-## Branch protection
-
-Set these rules on your main branch (in GitHub settings):
-- Require a pull request before merging.
-- Dismiss stale pull request approvals when new commits are pushed.
-- Do not allow bypassing the above rules.
-
-This is the hard guarantee warden relies on.
-
-## Develop warden locally
-
-Point Claude Code at the plugin directly:
-
-```bash
-claude --plugin-dir /path/to/warden/plugins/warden
-```
-
-A local plugin is loaded as `warden@inline` and uses `~/.claude/plugins/data/warden-inline/` for state.
-
-### WA doorbell (maintainers)
-
-To have `warden report` wake the Warden Agent on this machine, register it once per machine, from the warden repo:
-
-```bash
-bun scripts/wa-register.ts
-```
-
-A report then starts a headless `/wa-triage` here. Run `bun scripts/wa-register.ts --off` to stop. The log is `triage/doorbell/doorbell.log`.
-
-After updating to 0.4, re-run `bun scripts/wa-register.ts` to allow the new triage command.
-
-Reports from other machines arrive through the `reports` branch of the warden repo when their users can push to it. List all reports with `plugins/warden/bin/warden report inbox`.
-
-See [docs/design.html](docs/design.html) and [docs/spec.md](docs/spec.md) for architecture and implementation details.
+UNLICENSED. This is a private project; no license is granted.

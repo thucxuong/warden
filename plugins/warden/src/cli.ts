@@ -13,7 +13,7 @@ export const COMMANDS = [
 // One line per command for --help. hook and gate are internal and not listed.
 export const HELP: Record<string, string> = {
   version: "warden version",
-  init: "warden init --scan | --write [--file <payload>]",
+  init: "warden init --scan | --write [--file <payload>] [--force]",
   start: "warden start <task> --template do|feature|bugfix|chore | --flow <name|path> [--text <t> | --text-file <p> | --ticket] [--worktree] [--branch <b>]",
   next: "warden next [<task>]",
   done: "warden done [<task>] [--json <text> | --file <path>]",
@@ -24,8 +24,8 @@ export const HELP: Record<string, string> = {
   retry: "warden retry <task>   (a person, in a terminal)",
   reset: "warden reset <task> [--yes]   (a person, in a terminal)",
   flow: "warden flow check <file|name>... | warden flow save <path> --name <name> [--force]",
-  report: "warden report --kind bug|enhancement --title <t> --body <b>|--file <p> | warden report --status [--all | --write] | warden report reply <id> --body <answer> | warden report sync [--background] | warden report inbox [--all] | warden report set <key|file> --status <s> [--note <t>] [--fixed-in <v>] | warden report ask <key> --question <q>",
-  retro: "warden retro --done [--date YYYY-MM-DD]",
+  report: "warden report --kind bug|enhancement --title <t> --body <b>|--file <p> | warden report --status [--all | --write] | warden report reply <id> --body <answer>|--file <p> | warden report sync [--background] | warden report inbox [--all] | warden report set <key|file> --status <s> [--note <t>] [--fixed-in <v>] | warden report ask <key> --question <q>",
+  retro: "warden retro --done [--date YYYY-MM-DD] [--note <t>]",
   upgrade: "warden upgrade --notes | --done",
   tools: "warden tools [--check [<name>] | --init] | warden tools <name|role> [args...]",
   site: "warden site [--port <n>]",

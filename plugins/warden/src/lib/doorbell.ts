@@ -9,7 +9,7 @@ import { constants as osConstants } from "node:os";
 import { isAbsolute, join, sep } from "node:path";
 import type { Ctx } from "../types.ts";
 import { writeJsonAtomic } from "./json.ts";
-import { startTime } from "./proc.ts";
+import { exitWhen, startTime } from "./proc.ts";
 
 interface Registration {
   schema: 1;
@@ -251,7 +251,10 @@ export async function runWa(reg: Registration, graceMs = 10_000): Promise<void> 
 if (import.meta.main) {
   try {
     const reg = JSON.parse(readFileSync(process.argv[2] ?? "", "utf8"));
-    if (!problem(reg)) await runWa(reg);
+    if (!problem(reg)) {
+      exitWhen(() => !existsSync(reg.dir), (MAX_RUNS * reg.timeoutSec + 300) * 1000);
+      await runWa(reg);
+    }
     else if (isDir(reg?.dir)) dropOwnLock(join(reg.dir, "lock"));
   } catch {
     // the runner has no one to tell

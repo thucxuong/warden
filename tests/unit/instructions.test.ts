@@ -73,7 +73,7 @@ const headings = (text: string) => {
 
 describe("catalog", () => {
   test("catalog text is verbatim from the spec", () => {
-    const spec = readFileSync(resolve(import.meta.dir, "../../docs/spec.md"), "utf8");
+    const spec = readFileSync(resolve(import.meta.dir, "../../docs/internal/spec.md"), "utf8");
     const keys: [string, Parameters<typeof catalogText>[0], AnalyzeVariant?][] = [
       ["analyze / generic", "analyze", "generic"], ["analyze / reproduce", "analyze", "reproduce"],
       ["analyze / diagnose", "analyze", "diagnose"], ["analyze / spike", "analyze", "spike"],

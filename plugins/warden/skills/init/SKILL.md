@@ -56,6 +56,6 @@ What `warden init --write` creates:
 - an `INDEX.md` in each of `context/`, `rules/`, `decisions/`, `knowledge/`, `checks/`, `retros/`, `fixes/` and `flows/`
 - `scripts/warden-setup.sh`
 - the line `.warden/state/` in `.gitignore`
-- with `teamInstall`, the warden block in `.claude/settings.json`. If warden cannot find the marketplace entry it needs, it skips this file. Then tell the user to paste the block from the README.
+- with `teamInstall`, the warden block in `.claude/settings.json`. If warden cannot find the marketplace entry it needs, it skips this file. Then tell the user to add the warden team-install block from the warden docs (team setup) to `.claude/settings.json`.
 
 `warden init --write` refuses if `.warden/warden.json` already exists. Never pass `--force` unless the user asks.
