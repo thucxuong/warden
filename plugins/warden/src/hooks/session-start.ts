@@ -36,6 +36,10 @@ function runLine(call: HookCall, run: RunJson): string {
   const reason = run.waiting?.reason ?? "";
   if (run.status === "blocked") return `warden: ${run.task} is blocked: ${reason}. Fix it, then type "retry".`;
   if (run.status === "waiting") {
+    if (run.waiting?.kind === "question") {
+      const end = /[.?!]$/.test(reason) ? "" : ".";
+      return `warden: ${run.task} is waiting for your answer: ${reason}${end} Type your answer as your next message (start it with ${run.task} when several runs are live).`;
+    }
     // A fix waiting for its merge says itself what to type.
     if (run.waiting?.kind !== "approve") return `warden: ${run.task} is waiting for you: ${reason}.`;
     return `warden: ${run.task} is waiting for you: ${reason}. Type "approve" or "reject: <why>".`;
@@ -78,7 +82,7 @@ function checkLines(call: HookCall): string[] {
 
 // Session start never writes tracked files, so the agent refreshes reports.md itself, at a quiet moment.
 export const REPORTS_REFRESH =
-  "warden: when the user's current request is done, run warden report --status --write and commit .warden/reports.md alone (chore: warden reports).";
+  "warden: when the user's current request is done, run warden report --status --write. It rewrites .warden/reports.md in the main checkout (<main>: the first path git worktree list prints). Only when <main> is on the main branch with nothing else staged, commit it there alone: git -C <main> commit -m 'chore: warden reports' -- .warden/reports.md.";
 
 export async function sessionStart(call: HookCall): Promise<string | null> {
   recordSession(call);

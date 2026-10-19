@@ -83,6 +83,9 @@ function barrelProblems(value: unknown): string[] {
 }
 
 // Loads <root>/.warden/tools/index.ts and roles.json. Exit 3 when index.ts is missing, ToolsError when either is broken.
+// Set by the engine when it runs a tool in a ticket worktree (runTicketTool).
+export const TOOLS_MAIN_ENV = "WARDEN_TOOLS_MAIN";
+
 export async function loadTools(root: string): Promise<LoadedTools> {
   const index = join(toolsDir(root), "index.ts");
   if (!existsSync(index)) throw new WardenError("no project tools: run warden tools --init", EXIT.NOT_FOUND);
@@ -226,13 +229,16 @@ export async function run(args: string[], ctx: Ctx): Promise<number> {
   if (first === "--check" && (rest.length > 1 || rest[0]?.startsWith("-"))) throw new WardenError(`usage: ${USAGE}`, EXIT.USAGE);
 
   // Tools and probes run in the checkout root, with the main checkout known and warden on PATH.
+  // The engine (WARDEN_TOOLS_MAIN) loads the tool code from the main checkout, never from a ticket branch.
+  const fromMain = process.env[TOOLS_MAIN_ENV] === "1";
+  delete process.env[TOOLS_MAIN_ENV];
   process.env.WARDEN_MAIN_ROOT = mainRoot(root);
   process.env.PATH = pathWithBin(ctx.root, process.env.PATH);
   process.chdir(root);
 
   let loaded: LoadedTools;
   try {
-    loaded = await loadTools(root);
+    loaded = await loadTools(fromMain ? mainRoot(root) : root);
   } catch (err) {
     if (!(err instanceof ToolsError)) throw err;
     for (const problem of err.problems) console.error(problem);

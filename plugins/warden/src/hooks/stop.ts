@@ -49,6 +49,7 @@ export function lastAssistantText(input: HookInput): string {
 }
 
 // At an agent step the agent may stop to ask the user something (the plan skill and missing task text say to).
+// `warden ask` is the sure way: the run then waits and this hook is not reached.
 function asksUser(call: HookCall, run: RunJson): boolean {
   if (!isAgentStep(run.current.type) || run.gate || pendingJob(call.main, run)) return false;
   return /\?[\s*_`"')\]]*$/.test(lastAssistantText(call.input).trim());
@@ -91,6 +92,6 @@ export async function stop(call: HookCall): Promise<string | null> {
   }
   return JSON.stringify({
     decision: "block",
-    reason: `warden: ${run.task} is at ${run.current.id} and needs you. Run: warden next (or warden wait while a gate runs).`,
+    reason: `warden: ${run.task} is at ${run.current.id} and needs you. Run: warden next (or warden wait while a gate runs). At an agent step, if you need the user, run warden ask "<question>" and end your turn.`,
   });
 }

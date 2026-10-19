@@ -271,7 +271,7 @@ function checkEvidence(input: OutputCheckInput, type: CatalogType, step: FlowSte
   // Implement commits what was dirty at its start too (after a dirty route-back), so its commits are policed as well.
   const policed = type === "implement" ? [...new Set([...changed, ...committed])].sort() : changed;
   for (const path of policed) {
-    if (!editAllowed(type, variant, path, run.task)) errors.push(`${path}: not allowed in ${type} step`);
+    if (!editAllowed(type, variant, path, run.task, Object.keys(run.ticketFiles ?? {}))) errors.push(`${path}: not allowed in ${type} step`);
   }
   switch (type) {
     case "analyze":

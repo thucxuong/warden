@@ -90,7 +90,7 @@ describe("ship and stale proofs", () => {
     expect(nx.status).toBe("agent");
     expect(nx.step?.id).toBe("ship");
     expect(nx.context.ship?.historyDir).toBe(join(wt, ".warden/history", T));
-    expect(nx.instructions).toContain(`git add .warden/history/${T} && git commit -m 'chore(${T}): run record'`);
+    expect(nx.instructions).toContain(`run \`git -C ${wt} add .warden/history/${T}\`, then \`git -C ${wt} commit -m 'chore(${T}): run record'\``);
     expect(existsSync(join(wt, ".warden/history", T, "summary.json"))).toBe(true);
 
     const missing = await done(ctx, T, JSON.stringify({ pr: null, merged: false, mergeCommit: null, description: "d" }), spawn);

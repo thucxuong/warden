@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.1 — 2026-10-19
+
+- Ship: for a run started with `--ticket`, warden sets the ticket to done in the worktree, and the ship step commits it with the run record. The gates stay proven only while the ticket files hold exactly what the tool wrote; the tool code always comes from the main checkout. If the ticket tool fails, the ship goes on and the instructions say so.
+- `warden start` lists every missing or conflicting flag at once. The work skill says how to start a run when `warden next` finds none.
+- `warden report` writes its row to `.warden/reports.md` in the main checkout, also from a task worktree.
+- New `warden ask [<task>] "<question>"`: at an agent step the run waits for the user's answer, so the turn can end. The user's next message is the answer (start it with the task id when several runs are live, or run `warden retry <task>`) and the run goes on.
+
 ## 0.6.0 — 2026-10-19
 
 - Tools belong to the project now. They live in `.warden/tools/`: `index.ts` lists them, `roles.json` names the ones warden uses (`tickets`, `graph`, `pr`). Warden no longer ships tools or fix notes, and `/warden:fix`, `warden tools add | fixes | applied` and `.warden/tools.md` are gone.

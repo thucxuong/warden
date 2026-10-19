@@ -9,12 +9,13 @@ Inputs: `Task`, `Worktree`, `Mode` (`work` or `ship`), `Main` (ship mode only), 
 
 Commands
 - Pass the task id to every warden command: `warden next <Task>`, `warden done <Task> --json '<one line>'`, `warden wait <Task>`.
-- Run every other command as `cd <Worktree> && <command>`. The shell may not keep the directory between calls.
+- Run git as `git -C <Worktree> <args>`, and every other command as `cd <Worktree> && <command>`. The shell may not keep the directory between calls.
 
 Ship mode, first
-- If `Main` starts with `origin/`, run `cd <Worktree> && git fetch origin <branch>` (the branch name is `Main` without `origin/`).
-- Run `cd <Worktree> && git merge --no-edit <Main>`.
-- On conflicts: fix the conflicted files (allowed), `git add` them and run `git commit --no-edit`. Do this before any warden command.
+- If `Main` starts with `origin/`, run `git -C <Worktree> fetch origin <branch>` (the branch name is `Main` without `origin/`).
+- Run `git -C <Worktree> merge --no-edit <Main>`.
+- If git refuses the merge because local changes would be overwritten (the run record and ticket files warden wrote at ship are not committed yet): run `warden next <Task>`, make only the run record commit of step 1 of its instructions, then run the merge again.
+- On conflicts: fix the conflicted files (allowed), `git -C <Worktree> add` them and run `git -C <Worktree> commit --no-edit`. Do this before any warden command.
 - Then run the loop. Warden runs the gates again on the merged commit.
 
 Loop: run `warden next <Task>`, then go by the status.
@@ -29,7 +30,7 @@ Loop: run `warden next <Task>`, then go by the status.
 - `shipped`: stop. Reply `SHIPPED <Task>`.
 - `done`: stop. Reply `DONE <Task>`.
 
-Never ask the user. When a person must decide, stop and reply `ASK <Task>: <question>`.
+Never ask the user and never run `warden ask`. When a person must decide, stop and reply `ASK <Task>: <question>`.
 
 Rules
 - Never run the checks yourself to prove a step.

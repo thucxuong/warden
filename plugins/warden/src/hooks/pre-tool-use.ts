@@ -119,7 +119,7 @@ export function editDecision(main: string, target: string, fixer: boolean): Deci
   if (run.current.type === "ship" && !isGateFile(rel) && mergeInProgress(run.worktree)) return null; // E6a
   const step = runFlow(main, run).steps[run.stepIndex];
   const variant = step?.type === "analyze" ? step.variant : undefined;
-  if (!editAllowed(run.current.type, variant, rel, run.task)) {
+  if (!editAllowed(run.current.type, variant, rel, run.task)) { // ship only commits the ticket files, it never edits them
     return { reason: `${run.current.type} step does not change code (${run.task} at ${run.current.id})`, run };
   }
   return null;
@@ -168,7 +168,7 @@ const PR_COMMANDS = [
 const MERGE_COMMANDS = [/\bgh\s+pr\s+merge\b/, /\bglab\s+mr\s+merge\b/, /[\w./-]*\/pr\.ts\s+merge\b/];
 const ORCHESTRATE_COMMAND = /(?:^|[;&|(\s])(?:[\w./-]*\/)?(?:warden|cli\.ts)\s+orchestrate\s+(?:plan|status)\b([^;&|\n]*)/;
 const EPIC_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
-const RUN_COMMAND = /(?:^|[;&|(\s])(?:[\w./-]*\/)?(?:warden|cli\.ts)\s+(start|next|done|wait)\b([^;&|\n]*)/;
+const RUN_COMMAND = /(?:^|[;&|(\s])(?:[\w./-]*\/)?(?:warden|cli\.ts)\s+(start|next|done|wait|ask)\b([^;&|\n]*)/;
 
 // Drops the body of a heredoc that feeds `warden done` or `warden report`: it is JSON or prose, not a command.
 export function stripHeredocs(cmd: string): string {
@@ -359,8 +359,9 @@ function writesEngineFiles(cmd: string, live: RunJson[], fixer: boolean, cwd: st
   return false;
 }
 
-// The task a `warden start|next|done|wait` command is about: an id in its args, else the run of a
-// directory the command `cd`s into, else the run of the session record (agent record for an agent call), else the run for cwd.
+// The task a `warden start|next|done|wait|ask` command is about: an id in its args (for ask only a first arg before the
+// question), else the run of a directory the command `cd`s into, else the run of the session record (agent record for
+// an agent call), else the run for cwd.
 function linkedTask(call: HookCall, cmd: string, dirRun: RunJson | null): string | null {
   const found = RUN_COMMAND.exec(cmd);
   if (!found) return null;
@@ -371,7 +372,9 @@ function linkedTask(call: HookCall, cmd: string, dirRun: RunJson | null): string
     pattern = null;
   }
   const args = (found[2] ?? "").trim().split(/\s+/).map(unquote);
-  const named = pattern ? args.find((arg) => !arg.startsWith("-") && pattern.test(arg)) : undefined;
+  const named = !pattern ? undefined
+    : found[1] === "ask" ? (args.length > 1 && pattern.test(args[0]!) ? args[0] : undefined)
+    : args.find((arg) => !arg.startsWith("-") && pattern.test(arg));
   return named ?? dirRun?.task ?? runForSession(call)?.task ?? null;
 }
 
@@ -422,6 +425,10 @@ function bashDecision(call: HookCall, cmd: string, run: RunJson | null): string 
   if (changesWarden) return "this command changes how warden itself runs; ask the user to do it";
   if (writesEngineFiles(cmd, liveRuns(main), fixer, ctx.cwd)) {
     return "state, history and gate files are written by the engine only";
+  }
+
+  if (agentIdOf(call) !== undefined && RUN_COMMAND.exec(cmd)?.[1] === "ask") {
+    return "a subagent cannot ask the user; stop and give the question back to the caller (a ticket agent replies ASK <Task>: <question>)";
   }
 
   if (!run) return null;

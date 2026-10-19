@@ -39,13 +39,17 @@ function stepHeading(input: InstructionsInput, step: FlowStep | null): string {
 function stepBody(input: InstructionsInput, step: FlowStep | null): string {
   const { run, main } = input;
   const variant = step?.type === "analyze" ? step.variant : undefined;
-  const lines = [catalogText(run.current.type, run.task, variant)];
+  const ship = run.current.type === "ship" ? { worktree: run.worktree, ticketFiles: Object.keys(run.ticketFiles ?? {}) } : {};
+  const lines = [catalogText(run.current.type, run.task, variant, ship)];
   if (step?.type === "plan") {
     lines.push("", step.brainstorm
       ? "This step says brainstorm: the output must have a `brainstorm` object, shaped as in the example in \"output\"."
       : "This step does not say brainstorm: leave `brainstorm` out of the output.");
   }
   if (run.current.type === "implement") lines.push("", `Step start: ${run.current.startSha}`);
+  if (run.current.type === "ship" && run.ticketError) {
+    lines.push("", `The ticket status was not set: ${run.ticketError}. Do not change the ticket files in this step; tell the user to set ${run.task} to done after the merge.`);
+  }
   if (run.current.type === "ship" && run.leftovers) {
     lines.push("", `Leftovers to put in the description: ${join(taskDir(main, run.task), run.leftovers)}`);
   }

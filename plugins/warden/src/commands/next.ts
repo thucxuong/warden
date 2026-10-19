@@ -47,9 +47,9 @@ export function requiredTask(parsed: ParsedArgs, usage: string): string {
 
 // Task resolution (3.1): the given id, else the one live run whose worktree is this worktree.
 // `orFinished` (next, wait): with no live run, the most recent finished run of this worktree.
-export function resolveTask(ctx: Ctx, given: string | undefined, orFinished = false): string {
+export function resolveTask(ctx: Ctx, given: string | undefined, orFinished = false, command = "next"): string {
   const main = mainRoot(ctx.cwd);
-  if (given === undefined) return findRunForWorktree(ctx, worktreeRoot(ctx.cwd), orFinished).task;
+  if (given === undefined) return findRunForWorktree(ctx, worktreeRoot(ctx.cwd), orFinished, command).task;
   taskDir(main, given); // rejects ids that could leave the state dir (exit 2)
   if (!runExists(main, given)) throw new WardenError(`no such run: ${given}`, EXIT.NOT_FOUND);
   return given;

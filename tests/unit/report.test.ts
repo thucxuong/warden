@@ -142,6 +142,31 @@ describe("warden report set", () => {
   });
 });
 
+describe("reports.md from a task worktree (0.6.1)", () => {
+  // .warden/ is untracked, so the worktree has no .warden of its own; a commit makes the worktree possible.
+  function worktree(): string {
+    const git = (...a: string[]) => Bun.spawnSync(["git", "-c", "user.name=t", "-c", "user.email=t@t", ...a], { cwd: repo });
+    git("commit", "-q", "--allow-empty", "-m", "init");
+    const wt = join(tempDir("warden-wt-"), "wt");
+    expect(git("worktree", "add", "-q", wt, "-b", "side").exitCode).toBe(0);
+    return wt;
+  }
+
+  test("warden report, --status --write and reportStatusChanges use the main checkout's table", async () => {
+    const wt = worktree();
+    expect((await call(run, ["--kind", "bug", "--title", "From the worktree", "--body", "It broke."], wt)).out).toEqual({ id: rid(1), status: "sent" });
+    expect(readFileSync(join(repo, ".warden/reports.md"), "utf8")).toContain(`| ${rid(1)} | From the worktree | sent | — |`);
+    expect(existsSync(join(wt, ".warden/reports.md"))).toBe(false);
+    expect(readRecord(rid(1)).projectDir).toBe(repo);
+
+    writeFileSync(join(data, `reports/${rid(1)}.json`), JSON.stringify({ ...readRecord(rid(1)), status: "fixed", fixedIn: "0.6.1" }));
+    expect(reportStatusChanges(ctx(wt)).map((c) => c.status)).toEqual(["fixed"]);
+    expect((await call(run, ["--status", "--write"], wt)).out).toEqual({ rowsUpdated: 1, open: 0, closed: 1 });
+    expect(readFileSync(join(repo, ".warden/reports.md"), "utf8")).toContain(`| ${rid(1)} | From the worktree | fixed | 0.6.1 |`);
+    expect(existsSync(join(wt, ".warden/reports.md"))).toBe(false);
+  });
+});
+
 describe("reportStatusChanges", () => {
   async function fileTwo(): Promise<void> {
     await call(run, ["--kind", "bug", "--title", "One", "--file", bodyFile()]);

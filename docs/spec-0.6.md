@@ -248,3 +248,45 @@ Add:
 | `.claude-plugin/plugin.json` | version 0.6.0 |
 | `README.md` (Tools section, line 114), `docs/design.html:262,265` | describe `.warden/tools/` and roles; drop the registry and fixes |
 | `tests/...` | section 9 |
+
+## 0.6.1
+
+Four fixes from the playground.
+
+- Ticket status at ship. `warden start --ticket` records `ticket: true` in run.json. When ship prep finds the gates
+  proven, the engine runs the tickets role `set-status <task> done` in the ticket worktree (`runTicketTool` takes an
+  optional `cwd`). The role and the tool code are read from the main checkout (`WARDEN_TOOLS_MAIN=1` makes
+  `warden tools` load `.warden/tools/` from `mainRoot`), so a ticket branch cannot change what the engine runs. Of the
+  returned `changed` paths (repo-relative), only those the call made dirty in the worktree (or an earlier ship entry
+  recorded) are kept, in `run.ticketFiles` as path -> the blob sha the file now has (`git hash-object`; null when it
+  was deleted). A path outside the worktree or a gate file is never kept and sets `run.ticketError`
+  (`set-status changed files outside the ticket worktree or gate files: ...`). On top of the proven commit, the proof
+  rules (`shaCoversHead`, `dirtyOutsideHistory`, `proofValid`, `gatesProven`) and the engine's dirty check accept
+  changes only to `.warden/history/**`, or to a ticket file whose content (working tree, or blob at HEAD) is exactly
+  the recorded blob. The ship evidence check allows the ticket file paths; the edit hook does not (the ship agent only
+  commits them). Ship step 1 prints the exact commands: `git -C <worktree> add .warden/history/<task> <ticket files>`,
+  then `git -C <worktree> commit -m 'chore(<task>): run record'`. A tool failure does not block: no files are added,
+  `run.ticketError` holds the error, and the ship instructions say the status was not set. Event `ticket.status`.
+  Orchestrate's later `set-status done` on main stays; it changes nothing more. `ticketPhase` shows a live run at its
+  ship step by its run state even when the ticket status is already done. In ship mode the ticket agent commits the
+  run record first when git refuses the merge over those uncommitted files.
+- `warden start` reports every missing or conflicting flag at once, one `warden: <problem>` line each, then exits 2:
+  no task, template/flow missing or both, a bad template, `--ticket` with `--text`, `--text` with `--text-file`,
+  `--branch` without `--worktree`, and the main branch without `--worktree`. The work skill says how to start a run
+  when `warden next <id>` finds none (and not when the error lists the task among the live runs: then `cd` into its
+  worktree): `--ticket` when `warden tools tickets show <id>` finds it, else `--text "<task text>"`, always
+  `--worktree` with a Bash timeout of 600000, then `cd <worktree>` as its own command and `warden next`. The no-run
+  error names the command that was called (`pass the task id: warden next <task>`).
+- `warden report`, `warden report --status --write` and `reportStatusChanges` use `.warden/reports.md` of the main
+  checkout (`mainRoot`), never a task worktree. The report skill commits it there with `git -C <main>`.
+- `warden ask [<task>] "<question>"` (1–500 chars) at an agent step of the given run, else this worktree's active
+  run, with no gate or pending job: status `waiting`, `waiting: {kind: "question", reason, since}`, event
+  `question.asked`, prints `{task, status: "waiting", question}`. PreToolUse denies `warden ask` in a subagent (a
+  ticket agent replies `ASK` instead). The Stop hook lets the turn end (the run is not active). UserPromptSubmit
+  answers on a prompt that is not a slash command: the run the prompt starts with (`<task> ...`, `answer <task> ...`,
+  or an approve/reject/retry word with that task), else the session's run, else the only live run. It sets the run
+  active again, logs `question.answered` and adds `warden: <task> continues at <step>. The user's answer is in this
+  message.` A prompt naming another task keeps its approve/reject/retry meaning. `warden retry <task>` in a terminal
+  also answers a question wait. Session start shows `warden: <task> is waiting for your answer: <question> Type your
+  answer as your next message (start it with <task> when several runs are live).` The Stop block message ends with
+  `At an agent step, if you need the user, run warden ask "<question>" and end your turn.` The "ends with ?" allowance stays.

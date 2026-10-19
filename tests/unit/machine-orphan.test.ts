@@ -43,6 +43,6 @@ describe("ship after the worktree is removed", () => {
 
   test("with the worktree still there, the main checkout error lists the live runs", async () => {
     await startFlow([IMPL, CHECK]);
-    expect(() => findRunForWorktree(ctx, main)).toThrow(`no active run in this worktree; live runs: ${T} (implement); pass the task id: warden done <task>`);
+    expect(() => findRunForWorktree(ctx, main)).toThrow(`no active run in this worktree; live runs: ${T} (implement); pass the task id: warden next <task>`);
   });
 });

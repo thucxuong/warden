@@ -35,6 +35,7 @@ Run this only when the user asked for it. You are the orchestrator. Each ticket 
    Worktree: <worktree>
    Mode: ship
    Main: <mainRef>
+   Note: <only when the user answered a question for this ticket>
    ```
    Start it in the foreground and wait for it. Then run `warden orchestrate status $ARGUMENTS`. If the ticket did not end `merged`, ship no more tickets: go to step 7.
 7. If the project has a remote, run `git -C <main> pull --ff-only` first, so the merged PRs are in the main checkout. If it fails, tell the user and stop. For each `merged` ticket, run `warden orchestrate set-status <id> done`. If `changed` is not empty and the main checkout is on `<mainBranch>`, run `git -C <main> commit -m "chore(<id>): done" -- <changed paths>`. Otherwise tell the user which files to commit. Never push main.

@@ -106,6 +106,7 @@ Then:
 - `warden next [<task>]` — show what the current step needs.
 - `warden done [<task>] --file <output.json>` — submit step output.
 - `warden wait [<task>]` — poll until the gates finish.
+- `warden ask [<task>] "<question>"` — at an agent step, wait for the user's answer; their next message continues the run.
 - `warden approve <task>` — approve a waiting step (human only; TTY required).
 - `warden retry <task>` — retry a blocked step.
 - `warden reset <task>` — delete a task's live state (human only; TTY required).

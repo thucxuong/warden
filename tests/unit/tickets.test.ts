@@ -197,6 +197,8 @@ describe("ticketPhase", () => {
     ["shipped without output", "doing", fakeRun({ status: "shipped" }), null, "pr-open"],
     ["no-ship", "doing", fakeRun({ status: "done" }), null, "no-ship"],
     ["done status beats a live run", "done", fakeRun({}), null, "done"],
+    ["0.6.1: a run at ship beats the done status the engine set", "done", fakeRun({ type: "ship" }), null, "ready"],
+    ["0.6.1: a shipped run with the done status is done", "done", fakeRun({ type: "ship", status: "shipped" }), ship(true), "done"],
   ] as const)("%s", (_n, status, run, out, phase) => {
     expect(ticketPhase(status, run as RunJson | null, out as ShipOutput | null)).toBe(phase);
   });
@@ -331,6 +333,15 @@ describe("runTicketTool", () => {
     } finally {
       delete process.env.PROJECT_AGENT;
     }
+  });
+
+  test("0.6.1: cwd runs the tool in another checkout (its own barrel), with the role still read from main", () => {
+    const other = tmp();
+    Bun.spawnSync(["git", "init", "-q", "-b", "main"], { cwd: other });
+    writeTools(other, FAKE, { tickets: "tickets" }); // ignored: the role comes from main
+    const out = runTicketTool(main, PLUGIN, ["echo", "x"], 10, other) as Record<string, unknown>;
+    expect(out.cwd).toBe(other);
+    expect(out.args).toEqual(["x"]);
   });
 
   test("roles.tickets is used even when a tool named tickets exists", () => {

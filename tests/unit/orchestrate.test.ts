@@ -141,6 +141,7 @@ describe("start --ticket", () => {
     expect(r.code).toBe(0);
     expect(readFileSync(join(main, ".warden/state/T-1/task.md"), "utf8")).toBe("# T-1: Title T-1\n\nDo the thing.\n\n- a\n- b\n");
     expect(calls()).toEqual(["show T-1"]);
+    expect(JSON.parse(readFileSync(join(main, ".warden/state/T-1/run.json"), "utf8")).ticket).toBe(true);
   });
 
   test("an id mismatch is exit 1 and creates nothing", () => {

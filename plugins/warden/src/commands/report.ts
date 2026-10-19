@@ -1,4 +1,5 @@
 // warden report: file a report in this machine's outbox and note it in .warden/reports.md (spec 3.2, 4.13).
+// The table lives in the main checkout, also when the command runs in a task worktree (0.6.1).
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { loadWardenJson } from "../config/config.ts";
@@ -10,7 +11,7 @@ import {
   ANSWER_MAX, cleanThread, FIXED_IN, KEY_PATTERN, keyOfOutboxFile, listInbox, machineId, MAX_ASKS, mergeThread, newReportId, NOTE_FORBIDDEN,
   OUTBOX_FILE, queuePendingEdit, REPORT_ID, setReportStatus, startReportSync, STATUSES, syncReports, transportOn,
 } from "../lib/reports-git.ts";
-import { mainRoot, stateRoot, worktreeRoot } from "../state/paths.ts";
+import { mainRoot, stateRoot } from "../state/paths.ts";
 import type { Ctx, ReportMessage, ReportRecord } from "../types.ts";
 
 export const REPORTS_HEADER = "| ID | Title | Status | Fixed in |\n|---|---|---|---|\n";
@@ -247,14 +248,14 @@ export async function run(args: string[], ctx: Ctx): Promise<void> {
   const body = (inline ?? (file ? readFileSync(file, "utf8") : await Bun.stdin.text())).trim();
   if (!body) throw new WardenError("the report body is empty", EXIT.USAGE);
 
-  const root = worktreeRoot(ctx.cwd);
-  const { projectId } = loadWardenJson(join(root, ".warden", "warden.json"));
+  const main = mainRoot(ctx.cwd);
+  const { projectId } = loadWardenJson(join(main, ".warden", "warden.json"));
 
   const record = writeNewRecord(ctx, (id) => ({
     schema: 1, id, projectId, kind, title, body,
-    createdAt: new Date().toISOString(), status: "sent", fixedIn: null, note: null, projectDir: mainRoot(root),
+    createdAt: new Date().toISOString(), status: "sent", fixedIn: null, note: null, projectDir: main,
   }));
-  appendRow(reportsTablePath(root), REPORTS_HEADER, `| ${record.id} | ${cell(title)} | sent | ${NO_VERSION} |`);
+  appendRow(reportsTablePath(main), REPORTS_HEADER, `| ${record.id} | ${cell(title)} | sent | ${NO_VERSION} |`);
   ring(ctx);
   startReportSync(ctx);
   console.log(JSON.stringify({ id: record.id, status: "sent" }));
@@ -301,7 +302,7 @@ function changeForRow(ctx: Ctx, line: string, seen: Record<string, string> = {})
 // the statuses it returned in .warden/state/. Never throws: a broken table or outbox must not break a session start.
 export function reportStatusChanges(ctx: Ctx): ReportChange[] {
   try {
-    const path = reportsTablePath(worktreeRoot(ctx.cwd));
+    const path = reportsTablePath(mainRoot(ctx.cwd));
     if (!existsSync(path)) return [];
     const file = seenPath(ctx);
     const seen = existsSync(file) ? readJson<Record<string, string>>(file) : {};
@@ -323,7 +324,7 @@ export function reportStatusChanges(ctx: Ctx): ReportChange[] {
 // Brings reports.md in line with the outbox: rewrites every row whose record has another status and appends a row for
 // each of this project's records that has none (the table is created if missing). Returns how many rows changed.
 function writeReportsTable(ctx: Ctx, projectId: string): number {
-  const path = reportsTablePath(worktreeRoot(ctx.cwd));
+  const path = reportsTablePath(mainRoot(ctx.cwd));
   let count = 0;
   const known = new Set<string>();
   const lines = (existsSync(path) ? readFileSync(path, "utf8") : REPORTS_HEADER).split("\n").map((line) => {

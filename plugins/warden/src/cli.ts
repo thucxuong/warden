@@ -6,7 +6,7 @@ import { EXIT, WardenError } from "./lib/exit.ts";
 
 // Only these names are ever imported (spec 3.1). `gate` is internal.
 export const COMMANDS = [
-  "version", "init", "start", "next", "done", "wait", "status", "approve", "retry", "reset",
+  "version", "init", "start", "next", "done", "wait", "ask", "status", "approve", "retry", "reset",
   "flow", "report", "retro", "upgrade", "tools", "site", "hook", "gate", "checks", "orchestrate", "docs",
 ] as const;
 
@@ -18,6 +18,7 @@ export const HELP: Record<string, string> = {
   next: "warden next [<task>]",
   done: "warden done [<task>] [--json <text> | --file <path>]",
   wait: "warden wait [<task>] [--max-seconds <n>]",
+  ask: "warden ask [<task>] \"<question>\"   (at an agent step: wait for the user's answer)",
   status: "warden status [--all]",
   approve: "warden approve <task>   (a person, in a terminal)",
   retry: "warden retry <task>   (a person, in a terminal)",

@@ -104,6 +104,32 @@ describe("catalog", () => {
     expect(editAllowed("fix", undefined, "scripts/x.sh", T)).toBe(false);
   });
 
+  test("0.6.1: ship step 1 commits the ticket files with the run record, with their exact paths, as git -C commands", () => {
+    const text = catalogText("ship", T, undefined, { worktree: "/w/t 1", ticketFiles: ["backlog/T-1.md", "tickets/a b.md"] });
+    expect(text).toContain(
+      `1) Commit the run record together with the ticket files: run \`git -C '/w/t 1' add .warden/history/${T} backlog/T-1.md 'tickets/a b.md'\`, then \`git -C '/w/t 1' commit -m 'chore(${T}): run record'\``,
+    );
+    expect(text).toContain("Any other change sends the run back to the gates.");
+    expect(catalogText("ship", T, undefined, { ticketFiles: [] })).toBe(catalogText("ship", T));
+    expect(editAllowed("ship", undefined, "backlog/T-1.md", T, ["backlog/T-1.md"])).toBe(true);
+    expect(editAllowed("ship", undefined, "backlog/T-2.md", T, ["backlog/T-1.md"])).toBe(false);
+    expect(editAllowed("implement", undefined, ".warden/steps.json", T, [".warden/steps.json"])).toBe(false);
+  });
+
+  test("0.6.1: ship instructions name the ticket files, or say the ticket status was not set", () => {
+    const shipFlow: FlowJson = { ...flow, steps: [...flow.steps, { id: "ship", type: "ship" }] };
+    const at = (extra: Partial<RunJson>): RunJson => ({
+      ...runAt(1), stepIndex: 3, current: { id: "ship", type: "ship", startedAt: "", startSha: "s", startDirty: [], attempt: 1 }, ...extra,
+    });
+    const withFiles = buildInstructions({ main, run: at({ ticket: true, ticketFiles: { "backlog/T-1.md": "b".repeat(40) } }), flow: shipFlow, steps });
+    expect(withFiles).toContain(`git -C ${wt} add .warden/history/${T} backlog/T-1.md\`, then \`git -C ${wt} commit`);
+    expect(withFiles).not.toContain("ticket status was not set");
+
+    const failed = buildInstructions({ main, run: at({ ticket: true, ticketError: "ticket tool failed (exit 1): boom" }), flow: shipFlow, steps });
+    expect(failed).toContain(`git -C ${wt} add .warden/history/${T}\`, then`);
+    expect(failed).toContain(`The ticket status was not set: ticket tool failed (exit 1): boom. Do not change the ticket files in this step; tell the user to set ${T} to done after the merge.`);
+  });
+
   test("output spec per type", () => {
     expect(outputSpec("plan", T).schema).toContain("interface PlanOutput");
     expect(outputSpec("analyze", T, "reproduce").example).toHaveProperty("reproduction");

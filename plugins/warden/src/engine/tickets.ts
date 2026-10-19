@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { loadStepsJson, loadWardenJson } from "../config/config.ts";
-import { readRoles } from "../commands/tools.ts";
+import { readRoles, TOOLS_MAIN_ENV } from "../commands/tools.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
 import { readJson, writeJsonAtomic } from "../lib/json.ts";
 import { killGroup, pathWithBin } from "../lib/proc.ts";
@@ -32,14 +32,18 @@ export function ticketsTool(main: string): string {
   return tool;
 }
 
-// Runs `warden tools <tickets tool> <args>` in the main checkout, with no shell. `root` is the plugin root.
+// Runs `warden tools <tickets tool> <args>` in `cwd` (default the main checkout), with no shell. `root` is the plugin root.
+// The role and the tool code are always read from the main checkout (WARDEN_TOOLS_MAIN), so a ticket branch cannot
+// change what the engine runs; only the tool's working directory is `cwd`.
 // The child leads its own process group, so a timeout also kills what the tool started (a `command()` shell).
-export function runTicketTool(main: string, root: string, args: string[], timeoutSec: number): unknown {
+export function runTicketTool(main: string, root: string, args: string[], timeoutSec: number, cwd = main): unknown {
   const tool = ticketsTool(main);
-  const env: Record<string, string | undefined> = { ...process.env, PATH: pathWithBin(root, process.env.PATH), WARDEN_ROOT: root };
+  const env: Record<string, string | undefined> = {
+    ...process.env, PATH: pathWithBin(root, process.env.PATH), WARDEN_ROOT: root, [TOOLS_MAIN_ENV]: "1",
+  };
   delete env.PROJECT_AGENT;
   // Bun honours `detached` in spawnSync; Node's types leave it out, hence the separate object.
-  const options = { cwd: main, env, encoding: "utf8" as const, timeout: timeoutSec * 1000, maxBuffer: 16 * 1024 * 1024, detached: true };
+  const options = { cwd, env, encoding: "utf8" as const, timeout: timeoutSec * 1000, maxBuffer: 16 * 1024 * 1024, detached: true };
   const res = spawnSync(process.execPath, [join(root, "src", "cli.ts"), "tools", tool, ...args], options);
   if (res.status === null && res.pid) killGroup(res.pid, "SIGKILL"); // timed out or killed: stop the rest of the group
   if (res.status !== 0) {
@@ -193,8 +197,11 @@ function phaseFromStatus(status: TicketStatus): TicketPhase {
   return status === "done" ? "done" : "todo";
 }
 
+// The done status wins, except over a live run at its ship step: the engine sets the ticket done at ship (0.6.1),
+// before the ship step itself ran.
 export function ticketPhase(status: TicketStatus, run: RunJson | null, ship: ShipOutput | null): TicketPhase {
-  if (status === "done") return "done";
+  const shipping = run !== null && run.current.type === "ship" && run.status !== "shipped" && run.status !== "done";
+  if (status === "done" && !shipping) return "done";
   if (!run) return "todo";
   switch (run.status) {
     case "blocked": return "blocked";
@@ -278,8 +285,11 @@ export function statusPlan(main: string, epic: string): OrchestratePlan {
   return refreshPlan(main, readJson<OrchestratePlan>(file));
 }
 
-export function setTicketStatus(main: string, root: string, id: string, status: TicketStatus): { id: string; status: TicketStatus; changed: string[] } {
-  const out = runTicketTool(main, root, ["set-status", id, status], SHORT_TIMEOUT_SEC) as Record<string, unknown> | null;
+// `cwd` is the checkout whose ticket files change: the main checkout, or a ticket worktree at ship (0.6.1).
+export function setTicketStatus(
+  main: string, root: string, id: string, status: TicketStatus, cwd = main,
+): { id: string; status: TicketStatus; changed: string[] } {
+  const out = runTicketTool(main, root, ["set-status", id, status], SHORT_TIMEOUT_SEC, cwd) as Record<string, unknown> | null;
   const ok = typeof out === "object" && out !== null && typeof out.id === "string" && typeof out.status === "string"
     && Array.isArray(out.changed) && out.changed.every((p) => typeof p === "string");
   if (!ok) throw new WardenError("ticket tool: set-status did not print {id, status, changed}", EXIT.REJECTED);

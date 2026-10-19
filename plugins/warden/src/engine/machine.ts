@@ -3,12 +3,12 @@
 import { spawn, spawnSync } from "node:child_process";
 import { closeSync, copyFileSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join, relative } from "node:path";
 import { loadStepsJson, loadWardenJson, parseStepsJson, parseTriageRules } from "../config/config.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
 import {
   branchExists, deleteBranch, diffNames, fetchMain, head, isAncestor, mergeBase, mergeNoEdit, porcelain, revParse, showFile,
-  worktreeAdd, worktreeList, worktreeRemove,
+  workingBlob, worktreeAdd, worktreeList, worktreeRemove,
 } from "../lib/git.ts";
 import { ring } from "../lib/doorbell.ts";
 import { newReportId, startReportSync } from "../lib/reports-git.ts";
@@ -20,14 +20,15 @@ import {
   DEFAULT_LIMITS,
   type CheckStep, type Ctx, type DoneResponse, type EventType, type FixOutput, type FlowJson, type Gates, type Limits,
   type NextResponse, type ReportRecord, type ReviewRound, type RouteBack, type RunJson, type SessionRecord,
-  type StatusLine, type StepsJson, type TriageReport,
+  type StatusLine, type StepsJson, type TicketFiles, type TriageReport,
 } from "../types.ts";
 import { lintFlow } from "./flow-lint.ts";
-import { isAgentStep, isGateStep, isIgnoredPath, outputSpec, stepTitle } from "./catalog.ts";
+import { isAgentStep, isGateFile, isGateStep, isIgnoredPath, outputSpec, stepTitle } from "./catalog.ts";
 import { writeHistory, historyDirFor } from "./history.ts";
 import { buildInstructions } from "./instructions.ts";
 import { fixOnRef, readTriageReport, statePath, validateOutput } from "./outputs.ts";
-import { gatesProven } from "./proof.ts";
+import { gatesProven, ticketFileAsSet } from "./proof.ts";
+import { setTicketStatus } from "./tickets.ts";
 
 export type SpawnWorker = (task: string) => { pid: number; pidStart: string };
 export type GateJob = NonNullable<RunJson["gate"]>["job"];
@@ -37,6 +38,7 @@ export interface StartOptions {
   branch: string;
   mainRef: string;           // already fetched by the caller (3.2 start step 2)
   taskText?: string | null;  // --text-file contents; null stores the task id only
+  ticket?: boolean;          // started with --ticket: the engine marks the ticket done at ship (0.6.1)
   spawnWorker?: SpawnWorker;
 }
 
@@ -71,8 +73,10 @@ function event(s: S, type: EventType, step?: string, data?: Record<string, unkno
   appendEvent(s.main, s.run.task, type, { ...(step !== undefined && { step }), ...(data !== undefined && { data }) });
 }
 
+// The ticket files the engine changed at ship are its own change, like the run record, while they hold what it wrote.
 function dirty(run: RunJson): string[] {
-  return porcelain(run.worktree).filter((path) => !isIgnoredPath(path, run.task));
+  const ticketFiles = run.ticketFiles ?? {};
+  return porcelain(run.worktree).filter((path) => !isIgnoredPath(path, run.task) && !ticketFileAsSet(run.worktree, path, ticketFiles));
 }
 
 export function effectiveLimits(flow: FlowJson): Limits {
@@ -574,8 +578,12 @@ async function reviewJob(ctx: Ctx, main: string, task: string, gates: Gates): Pr
 }
 
 // Ship prep (5.6): re-run the gates when they no longer prove HEAD, else write the run record.
+// A run started with --ticket first gets its ticket set to done in the worktree (0.6.1), outside the lock.
 async function shipPrepJob(ctx: Ctx, main: string, task: string): Promise<void> {
+  const before = load(ctx, main, task);
+  const ticket = before.run.ticket === true && gatesProven(before.run, before.flow).proven ? markTicketDone(ctx, main, before.run) : null;
   await apply(ctx, main, task, (s) => {
+    if (ticket) recordTicket(s, ticket);
     const proven = gatesProven(s.run, s.flow);
     if (!proven.proven) {
       rerunGates(s, proven.reason, true);
@@ -584,6 +592,53 @@ async function shipPrepJob(ctx: Ctx, main: string, task: string): Promise<void> 
     const dir = writeHistory(main, s.run, s.flow);
     event(s, "history.written", s.run.current.id, { dir });
   });
+}
+
+interface TicketResult {
+  files: TicketFiles;    // the paths this call changed in the worktree, with their new blobs
+  error: string | null;
+}
+
+// `set-status <task> done` in the ticket worktree. A failure never blocks the ship; it is told in the instructions.
+// Only paths that this call made dirty count (or that an earlier ship entry recorded and are still dirty); a path
+// outside the worktree or a gate file is never taken and makes an error.
+function markTicketDone(ctx: Ctx, main: string, run: RunJson): TicketResult {
+  const prior = run.ticketFiles ?? {};
+  try {
+    const before = new Set(porcelain(run.worktree));
+    const out = setTicketStatus(main, ctx.root, run.task, "done", run.worktree);
+    const after = new Set(porcelain(run.worktree));
+    const files: TicketFiles = {};
+    const refused: string[] = [];
+    for (const reported of out.changed) {
+      const path = (isAbsolute(reported) ? relative(run.worktree, reported) : reported).replace(/^\.\//, "");
+      if (path === "" || path === ".." || path.startsWith("../") || isAbsolute(path) || isGateFile(path)) {
+        refused.push(reported);
+      } else if (after.has(path) && (!before.has(path) || Object.hasOwn(prior, path))) {
+        files[path] = workingBlob(run.worktree, path);
+      }
+    }
+    const error = refused.length > 0 ? `set-status changed files outside the ticket worktree or gate files: ${refused.join(", ")}` : null;
+    return { files, error };
+  } catch (err) {
+    return { files: {}, error: (err instanceof Error ? err.message : String(err)).split("\n")[0]! };
+  }
+}
+
+// Files are added to the ones of an earlier ship entry: a second set-status changes nothing more.
+function recordTicket(s: S, result: TicketResult): void {
+  const { run } = s;
+  const changed = Object.keys(result.files).sort();
+  if (result.error !== null) {
+    run.ticketError = result.error;
+    event(s, "ticket.status", run.current.id, { status: "done", error: result.error, ...(changed.length > 0 && { changed }) });
+    if (changed.length === 0) return;
+  } else {
+    delete run.ticketError;
+    event(s, "ticket.status", run.current.id, { status: "done", changed });
+  }
+  const merged = { ...(run.ticketFiles ?? {}), ...result.files };
+  run.ticketFiles = Object.fromEntries(Object.keys(merged).sort().map((path) => [path, merged[path] ?? null]));
 }
 
 function readFixOutput(main: string, run: RunJson): FixOutput {
@@ -671,6 +726,7 @@ function newRun(task: string, flow: FlowJson, opts: StartOptions, baseSha: strin
     latestImplementIndex: null,
     counters: { codeStrikes: 0, fixerRounds: 0, reviewRound: 0, checkRuns: 0, triageCount: 0, staleProofs: 0 },
     limits: effectiveLimits(flow), proofs: [], routeBack: null, waiting: null, gate: null, fix: null, leftovers: null,
+    ...(opts.ticket === true && { ticket: true as const }),
   };
 }
 
@@ -935,12 +991,55 @@ export async function retry(ctx: Ctx, task: string, spawnWorker: SpawnWorker = d
       event(s, "run.retry", run.current.id, { landing: true });
       return;
     }
+    if (run.waiting?.kind === "question") { // a person answered a `warden ask` question outside the session (0.6.1)
+      markAnswered(s);
+      return;
+    }
     if (run.status !== "blocked") throw new WardenError(`${task} is not blocked (status ${run.status})`);
     run.waiting = null;
     run.counters.staleProofs = 0; // otherwise a stale-proof block could never be retried
     enter(s, run.stepIndex);
     event(s, "run.retry", run.current.id); // after the step starts: the worker merges main (retryMergeDue)
   });
+}
+
+export const QUESTION_MAX = 500;
+
+// `warden ask` (0.6.1): the agent waits for the user's answer at an agent step. No engine work may be pending.
+export async function ask(ctx: Ctx, task: string, question: string): Promise<{ task: string; status: "waiting"; question: string }> {
+  const main = mainRoot(ctx.cwd);
+  await withLock(main, task, () => {
+    const s = load(ctx, main, task);
+    const { run } = s;
+    if (run.status !== "active" || !isAgentStep(run.current.type)) {
+      throw new WardenError(`${task} is ${run.status} at ${run.current.id}; warden ask works at an agent step`);
+    }
+    if (run.gate || pendingJob(main, run)) throw new WardenError("engine work is running; run: warden wait", EXIT.BUSY);
+    run.status = "waiting";
+    run.waiting = { kind: "question", reason: question, since: now() };
+    event(s, "question.asked", run.current.id, { question });
+    writeRun(main, run);
+  });
+  return { task, status: "waiting", question };
+}
+
+// The user answered a `warden ask` question: the run is active again at the same step. False when it was not waiting for one.
+export async function answer(ctx: Ctx, task: string): Promise<boolean> {
+  const main = mainRoot(ctx.cwd);
+  return withLock(main, task, () => {
+    const s = load(ctx, main, task);
+    const { run } = s;
+    if (run.status !== "waiting" || run.waiting?.kind !== "question") return false;
+    markAnswered(s);
+    writeRun(main, run);
+    return true;
+  });
+}
+
+function markAnswered(s: S): void {
+  s.run.status = "active";
+  s.run.waiting = null;
+  event(s, "question.answered", s.run.current.id);
 }
 
 function fixBranches(main: string, task: string): string[] {
@@ -1015,7 +1114,8 @@ export function statusLines(ctx: Ctx, all: boolean): StatusLine[] {
 
 // Task resolution for commands with an optional [<task>] (3.1). With `orFinished` (next, wait), a worktree
 // with no live run falls back to its most recently updated finished run, so the agent sees how it ended.
-export function findRunForWorktree(ctx: Ctx, toplevel: string, orFinished = false): RunJson {
+// `command` names the call in the error, so the agent sees how to pass the task id.
+export function findRunForWorktree(ctx: Ctx, toplevel: string, orFinished = false, command = "next"): RunJson {
   const main = mainRoot(ctx.cwd);
   const here = listTasks(main)
     .filter((task) => runExists(main, task))
@@ -1031,12 +1131,16 @@ export function findRunForWorktree(ctx: Ctx, toplevel: string, orFinished = fals
     if (orFinished && here.length > 0) return here.reduce((a, b) => (b.updatedAt >= a.updatedAt ? b : a));
     const list = live.map((run) => `${run.task} (${run.current.id})`).join(", ");
     throw new WardenError(
-      `no active run in this worktree${live.length > 0 ? `; live runs: ${list}; pass the task id: warden done <task>` : ""}`,
+      `no active run in this worktree${live.length > 0 ? `; live runs: ${list}; pass the task id: ${withTask(command)}` : ""}`,
       EXIT.NOT_FOUND,
     );
   }
   if (runs.length > 1) throw new WardenError("several runs here; pass the task id", EXIT.USAGE);
   return runs[0]!;
+}
+
+function withTask(command: string): string {
+  return command === "ask" ? 'warden ask <task> "<question>"' : `warden ${command} <task>`;
 }
 
 function responseStatus(main: string, run: RunJson): NextResponse["status"] {
@@ -1101,6 +1205,9 @@ function baseMessage(s: S, status: NextResponse["status"], position: string): st
     case "running_gate":
       return `${run.task}: ${run.current.id} (${position}) is running. Run: warden wait`;
     case "waiting":
+      if (run.waiting?.kind === "question") {
+        return `${run.task} is waiting for the user's answer: ${run.waiting.reason}\nEnd your turn; the run goes on with the user's next message.`;
+      }
       return `${run.task} is waiting for you: ${run.waiting?.reason ?? ""}`;
     case "blocked":
       return `${run.task} is blocked: ${run.waiting?.reason ?? ""}\n${retryHint(run.task)}`;

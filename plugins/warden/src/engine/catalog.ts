@@ -32,7 +32,7 @@ const TEXT: Record<string, string> = {
   implement:
     "Make the change the task and plan ask for, with tests. Commit all of it in one or more commits and leave nothing uncommitted. When you are back from a gate, fix exactly what it reports, nothing else. Do not change gate files. Do not run the checks to prove the step; the engine runs them. `filesChanged` must be exactly the files that differ from the start of this step; check with `git diff --name-only <step start> HEAD`.",
   ship:
-    "Deliver the proven commit without changing it. 1) Commit the run record: `git add .warden/history/<task> && git commit -m 'chore(<task>): run record'`. 2) Open the PR or merge as the project how-to says. 3) If there are leftovers, put the file text in the description under `## Unresolved review findings`. 4) Hand in the ship output with `warden done` BEFORE you remove the worktree or the branch. Any other change sends the run back to the gates.",
+    "Deliver the proven commit without changing it. 1) <commit-record>. 2) Open the PR or merge as the project how-to says. 3) If there are leftovers, put the file text in the description under `## Unresolved review findings`. 4) Hand in the ship output with `warden done` BEFORE you remove the worktree or the branch. Any other change sends the run back to the gates.",
   fix:
     "A check failed and triage says it is not (only) the change. Delegate this step to the warden:fixer subagent (Agent tool, subagent_type 'warden:fixer') in the foreground, never with run_in_background, with the context below. Wait for it to return, then pass its JSON to `warden done`. A FIXED output needs a new fix note and a new narrow triage rule, unless the triage report already named a matching rule (give its id as `ruleId`) or the fix is already on the main branch (give its sha as `mergeCommit`). Do not fix it yourself and do not touch the ticket worktree.",
 };
@@ -41,9 +41,30 @@ function textKey(type: CatalogType, variant?: AnalyzeVariant): string {
   return type === "analyze" ? `analyze/${variant ?? "generic"}` : type;
 }
 
+// A path as one shell word: as it is when it is plain, else in single quotes.
+function shellWord(path: string): string {
+  return /^[A-Za-z0-9._\/@%+=:,-]+$/.test(path) ? path : `'${path.replaceAll("'", "'\\''")}'`;
+}
+
+// Ship step 1. With ticket files (0.6.1: the status the engine set at ship), they go into the run record commit.
+// With the worktree known, two `git -C` commands that work from any directory.
+function commitRecordText(ship: ShipText): string {
+  const files = ship.ticketFiles ?? [];
+  const paths = [".warden/history/<task>", ...files.map(shellWord)].join(" ");
+  const what = files.length > 0 ? "Commit the run record together with the ticket files" : "Commit the run record";
+  if (ship.worktree === undefined) return `${what}: \`git add ${paths} && git commit -m 'chore(<task>): run record'\``;
+  const git = `git -C ${shellWord(ship.worktree)}`;
+  return `${what}: run \`${git} add ${paths}\`, then \`${git} commit -m 'chore(<task>): run record'\``;
+}
+
+export interface ShipText {
+  worktree?: string;
+  ticketFiles?: readonly string[];
+}
+
 // Empty for engine and human steps (check, review, approve).
-export function catalogText(type: CatalogType, task: string, variant?: AnalyzeVariant): string {
-  const text = TEXT[textKey(type, variant)] ?? "";
+export function catalogText(type: CatalogType, task: string, variant?: AnalyzeVariant, ship: ShipText = {}): string {
+  const text = (TEXT[textKey(type, variant)] ?? "").replace("<commit-record>", commitRecordText(ship));
   return text.replaceAll("<task>", task);
 }
 
@@ -92,8 +113,12 @@ export function isIgnoredPath(path: string, task: string): boolean {
   return path.startsWith(".warden/state/") || path.startsWith(`.warden/history/${task}/`);
 }
 
-// Whether a step of this type may change `path` in the ticket worktree.
-export function editAllowed(type: CatalogType, variant: AnalyzeVariant | undefined, path: string, task: string): boolean {
+// Whether a step of this type may change `path` in the ticket worktree. `ticketFiles` (the paths of RunJson.ticketFiles)
+// are the ticket files the engine changed at ship; the ship step commits them with the run record, and the proofs check
+// their content. The edit hook passes none: the ship agent never edits them.
+export function editAllowed(
+  type: CatalogType, variant: AnalyzeVariant | undefined, path: string, task: string, ticketFiles: readonly string[] = [],
+): boolean {
   switch (type) {
     case "analyze":
       if (variant === "reproduce") return !isGateFile(path);
@@ -104,7 +129,7 @@ export function editAllowed(type: CatalogType, variant: AnalyzeVariant | undefin
     case "implement":
       return !isGateFile(path);
     case "ship":
-      return path.startsWith(`.warden/history/${task}/`);
+      return path.startsWith(`.warden/history/${task}/`) || ticketFiles.includes(path);
     default:
       return false; // check, review, approve and fix change nothing in the ticket worktree
   }

@@ -15,7 +15,7 @@ description: Send a bug report or an enhancement request about warden itself. Re
    ```
    The body is one argument. Do not use a heredoc, a pipe or a temp file. For a long body in a file, use `--file <path>`.
 6. Tell the user: Report <id> sent. Use the id it prints, for example `R-eb85-0001`.
-7. Commit the new row, only when the main checkout is on the main branch and nothing else is staged (`git diff --cached --quiet`). Otherwise leave it and tell the user. Run `git add .warden/reports.md`, then `git commit -m "chore: warden report <id>" -- .warden/reports.md`. Never switch branches. Do not push unless the user asks.
+7. The row goes to `.warden/reports.md` in the main checkout, also when you work in a task worktree; never commit it on a task branch. `<main>` is the first path that `git worktree list` prints. Commit the new row, only when the main checkout is on the main branch and nothing else is staged there (`git -C <main> diff --cached --quiet`). Otherwise leave it and tell the user. Run `git -C <main> add .warden/reports.md`, then `git -C <main> commit -m "chore: warden report <id>" -- .warden/reports.md`. Never switch branches. Do not push unless the user asks. After a commit, tell the user the report commit is on the local main branch and must be pushed (or rebased onto the remote) before the next `git pull --ff-only`, which orchestration runs.
 
 Session start shows later when the status of a report changes, with the maintainers' note.
 

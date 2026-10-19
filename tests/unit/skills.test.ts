@@ -75,7 +75,18 @@ describe("retro and report skills", () => {
 
   test("report ends by committing reports.md alone", () => {
     const text = read(join(skillsDir, "report", "SKILL.md"));
-    expect(text).toContain('git commit -m "chore: warden report <id>" -- .warden/reports.md');
+    expect(text).toContain('git -C <main> commit -m "chore: warden report <id>" -- .warden/reports.md');
+    expect(text).toContain("The row goes to `.warden/reports.md` in the main checkout, also when you work in a task worktree");
+  });
+
+  test("0.6.1: work says how to start a run when next finds none, and when to use warden ask", () => {
+    const text = read(join(skillsDir, "work", "SKILL.md"));
+    expect(text).toContain("`warden start <id> --template <do|feature|bugfix|chore> --ticket --worktree` with a Bash timeout of 600000");
+    expect(text).toContain('`warden start <id> --template <do|feature|bugfix|chore> --text "<task text>" --worktree` with a Bash timeout of 600000');
+    expect(text).toContain("run `cd <worktree>` as its own command, and `warden next`");
+    expect(text).toContain("lists your task among the live runs, run `cd <its worktree>`");
+    expect(text).toContain('`warden ask "<question>"`');
+    expect(text).toContain('`warden ask <id> "<question>"`');
   });
 
   test("report passes the body as one argument, with no heredoc", () => {

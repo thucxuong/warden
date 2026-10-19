@@ -180,6 +180,9 @@ export interface RouteBack {
   findings?: Finding[];            // blocking findings
 }
 
+// Repo path -> the blob sha set-status left there (null: it deleted the file).
+export type TicketFiles = Record<string, string | null>;
+
 export interface RunJson {
   schema: 1;
   task: string;
@@ -197,7 +200,7 @@ export interface RunJson {
   limits: Limits;                  // effective (flow limits and defaults)
   proofs: Proof[];                 // valid proofs since the latest implement
   routeBack: RouteBack | null;     // context for the agent when re-entering implement
-  waiting: { kind: "approve" | "merge-fix" | "human"; reason: string; since: string } | null;
+  waiting: { kind: "approve" | "merge-fix" | "human" | "question"; reason: string; since: string } | null;  // "question": the agent asked the user (warden ask)
   gate: {                          // running engine worker (5.4); written by the parent before it releases the lock
     pid: number; pidStart: string; // pidStart = `ps -o lstart= -p <pid>`, so a reused pid is not taken for the worker
     job: "check" | "review" | "ship-prep" | "fix-landing";
@@ -205,6 +208,9 @@ export interface RunJson {
   } | null;
   fix: { n: number; worktree: string; branch: string; baseSha: string; verdict: Verdict; report: string; mayMerge: boolean } | null;  // baseSha = mainRef sha the fix branch started from
   leftovers: string | null;        // state-relative path to review/leftover.md
+  ticket?: true;                   // 0.6.1: started with --ticket; the engine marks the ticket done at ship
+  ticketFiles?: TicketFiles;       // 0.6.1: what set-status changed at ship; the proofs allow exactly these contents on top of the proven commit
+  ticketError?: string;            // 0.6.1: why the engine could not set the ticket status at ship
 }
 
 // ---------------------------------------------------------------------------
@@ -218,7 +224,8 @@ export type EventType =
   | "approve.waiting" | "approve.granted" | "approve.rejected" | "approve.skipped"
   | "run.blocked" | "run.retry" | "history.written" | "run.shipped" | "run.done"
   | "session.linked" | "stop.blocked" | "hook.denied"
-  | "gate.discarded" | "fix.landed" | "git.fetch-failed" | "proof.stale";
+  | "gate.discarded" | "fix.landed" | "git.fetch-failed" | "proof.stale"
+  | "ticket.status" | "question.asked" | "question.answered";
 
 export interface EventLine {
   seq: number;                     // 1.. per task, strictly increasing

@@ -48,7 +48,7 @@ describe("cli", () => {
 
   test("allowlist is exactly the spec list", () => {
     expect([...COMMANDS]).toEqual([
-      "version", "init", "start", "next", "done", "wait", "status", "approve", "retry", "reset",
+      "version", "init", "start", "next", "done", "wait", "ask", "status", "approve", "retry", "reset",
       "flow", "report", "retro", "upgrade", "tools", "site", "hook", "gate", "checks", "orchestrate", "docs",
     ]);
   });
@@ -84,6 +84,7 @@ describe("help", () => {
       "warden report --kind bug|enhancement --title <t> --body <b>|--file <p> | warden report --status [--all | --write] | warden report reply <id> --body <answer> | warden report sync [--background] | warden report inbox [--all] | warden report set <key|file> --status <s> [--note <t>] [--fixed-in <v>] | warden report ask <key> --question <q>",
     );
     expect(HELP.docs).toBe("warden docs check");
+    expect(HELP.ask).toBe("warden ask [<task>] \"<question>\"   (at an agent step: wait for the user's answer)");
     expect(HELP.tools).toBe("warden tools [--check [<name>] | --init] | warden tools <name|role> [args...]");
   });
 });

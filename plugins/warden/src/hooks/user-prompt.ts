@@ -1,5 +1,7 @@
 // UserPromptSubmit (spec 7.3): the human types approve / reject / retry. The prompt is never blocked.
-import { approve, reject, retry } from "../engine/machine.ts";
+// 0.6.1: a run waiting for the answer to `warden ask` goes on with any prompt (not a slash command); the prompt is
+// the answer. A prompt that starts with a task id (`T-1: ...` or `answer T-1: ...`) answers that run's question.
+import { answer, approve, reject, retry } from "../engine/machine.ts";
 import { WardenError } from "../lib/exit.ts";
 import { readRun, runExists } from "../state/store.ts";
 import type { RunJson } from "../types.ts";
@@ -44,7 +46,10 @@ export async function userPrompt(call: HookCall): Promise<string | null> {
 
   const prompt = call.input.prompt;
   if (typeof prompt !== "string") return null;
-  const action = parsePrompt(prompt, wardenJson(call.main).taskIdPattern);
+  const { taskIdPattern } = wardenJson(call.main);
+  const action = parsePrompt(prompt, taskIdPattern);
+  const asked = await answerQuestion(call, resolved, prompt, taskIdPattern, action);
+  if (asked) return asked;
   if (!action) return null;
   // Step 3: a new session in the main checkout has no link and no worktree cwd. With exactly one live
   // run, that run is the one SessionStart told the user about. Step 4: with several, the only one in
@@ -76,9 +81,50 @@ export async function userPrompt(call: HookCall): Promise<string | null> {
   }
 }
 
+// The task id a prompt starts with (`T-1: ...`, `answer T-1 ...`), or null.
+export function promptTask(prompt: string, taskIdPattern: string): string | null {
+  const re = new RegExp(String.raw`^\s*(?:[Aa]nswer\s+)?(?<task>` + bareTaskPattern(taskIdPattern) + String.raw`)(?=[\s:,.]|$)`);
+  return re.exec(prompt)?.groups?.task ?? null;
+}
+
+function waitsForAnswer(run: RunJson | null): run is RunJson {
+  return run !== null && run.status === "waiting" && run.waiting?.kind === "question";
+}
+
+// The run this prompt answers, when it waits for a `warden ask` answer: the run the prompt names first, else the
+// session's run, else the only live run. A prompt with an approve/reject/retry word for another task, or a slash
+// command, answers nothing.
+async function answerQuestion(
+  call: HookCall, resolved: RunJson | null, prompt: string, taskIdPattern: string, action: PromptAction | null,
+): Promise<string | null> {
+  if (prompt.trimStart().startsWith("/")) return null;
+  const named = action?.task ?? promptTask(prompt, taskIdPattern);
+  let run: RunJson | null = null;
+  let adopted = false;
+  if (named !== null && named !== resolved?.task) {
+    if (!runExists(call.main, named)) return null;
+    run = readRun(call.main, named);
+    adopted = true;
+  } else if (resolved) {
+    run = resolved;
+  } else {
+    const live = liveRuns(call.main);
+    if (live.length !== 1) return null;
+    run = live[0]!;
+    adopted = true;
+  }
+  if (!waitsForAnswer(run)) return null;
+  if (!(await answer(machineCtx(call), run.task))) return null;
+  if (adopted && orchestrating(call) === null) {
+    recordSession(call, run.task);
+    await linkSession(call, run.task);
+  }
+  return contextJson(`warden: ${run.task} continues at ${run.current.id}. The user's answer is in this message.`);
+}
+
 // Whether a run is in the state the action works on.
 function needsAction(word: PromptAction["word"], run: RunJson): boolean {
-  if (word === "retry") return run.status === "blocked" || run.waiting?.kind === "merge-fix";
+  if (word === "retry") return run.status === "blocked" || run.waiting?.kind === "merge-fix" || run.waiting?.kind === "question";
   return run.waiting?.kind === "approve";
 }
 

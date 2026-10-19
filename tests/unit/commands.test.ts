@@ -17,8 +17,31 @@ installCommandsFixture();
 describe("start", () => {
   test("refuses on the main branch without --worktree", () => {
     const r = cli(["start", "T-1", "--template", "do"]);
-    expect(r.code).toBe(1);
-    expect(r.err).toContain("start on a ticket branch, or pass --worktree");
+    expect(r.code).toBe(2);
+    expect(r.err).toBe("warden: on main: start on a ticket branch, or pass --worktree\n");
+  });
+
+  test("every missing or conflicting flag is reported at once, one line each (0.6.1)", () => {
+    const r = cli(["start", "T-1"]);
+    expect(r.code).toBe(2);
+    expect(r.err.trim().split("\n")).toEqual([
+      "warden: pass either --template do|feature|bugfix|chore or --flow <name|path>",
+      "warden: on main: start on a ticket branch, or pass --worktree",
+    ]);
+
+    const many = cli(["start", "--template", "nope", "--ticket", "--text", "a", "--text-file", "b", "--branch", "x"]);
+    expect(many.code).toBe(2);
+    const lines = many.err.trim().split("\n");
+    expect(lines).toHaveLength(6);
+    expect(lines[0]).toStartWith("warden: usage: warden start <task>");
+    expect(lines.slice(1)).toEqual([
+      "warden: --template must be one of do, feature, bugfix, chore",
+      "warden: --ticket cannot be used with --text or --text-file",
+      "warden: use --text or --text-file, not both",
+      "warden: --branch needs --worktree",
+      "warden: on main: start on a ticket branch, or pass --worktree",
+    ]);
+    expect(runExists(main, "T-1")).toBe(false);
   });
 
   test("refuses when .warden/ is not committed on the main branch", () => {
@@ -133,6 +156,36 @@ describe("start", () => {
     expect(w.json).toMatchObject({ task: "T-3", status: "done" });
     expect(cli(["done"]).code).toBe(3);
     expect(cli(["status"]).json.runs).toEqual([]);
+  });
+});
+
+describe("ask (0.6.1)", () => {
+  test("waits for the user's answer at the run of this worktree; bad input is exit 2; no run is exit 3", () => {
+    expect(cli(["ask", "Which name?"]).code).toBe(3);
+    expect(cli(["start", "T-1", "--template", "do", "--worktree"]).code).toBe(0);
+    expect(cli(["ask"], { cwd: wt() }).code).toBe(2);
+    expect(cli(["ask", "a", "b", "c"], { cwd: wt() }).code).toBe(2);
+    expect(cli(["ask", "T-9", "Which name?"], { cwd: wt() }).code).toBe(3); // no such run
+    expect(cli(["ask", "   "], { cwd: wt() }).code).toBe(2);
+    expect(cli(["ask", "x".repeat(501)], { cwd: wt() }).code).toBe(2);
+    expect(readRun(main, "T-1").status).toBe("active");
+
+    const r = cli(["ask", " Which name should the greeting use? "], { cwd: wt() });
+    expect(r.code).toBe(0);
+    expect(r.json).toEqual({ task: "T-1", status: "waiting", question: "Which name should the greeting use?" });
+    expect(readRun(main, "T-1").waiting).toMatchObject({ kind: "question", reason: "Which name should the greeting use?" });
+    expect(readEvents(main, "T-1").map((e) => e.type)).toContain("question.asked");
+    expect(cli(["ask", "Again?"], { cwd: wt() }).code).toBe(1); // already waiting
+  });
+
+  test("from the main checkout: the task id goes first; without it the error says how to pass it", () => {
+    expect(cli(["start", "T-1", "--template", "do", "--worktree"]).code).toBe(0);
+    const missing = cli(["ask", "Which name?"]);
+    expect(missing.code).toBe(3);
+    expect(missing.err).toContain('pass the task id: warden ask <task> "<question>"');
+    const r = cli(["ask", "T-1", "Which name?"]);
+    expect(r.code).toBe(0);
+    expect(r.json).toEqual({ task: "T-1", status: "waiting", question: "Which name?" });
   });
 });
 

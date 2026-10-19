@@ -69,7 +69,7 @@ describe("Stop", () => {
 
   test("an active run blocks the stop, links the session, and the loop guard releases after 3", async () => {
     await startFlow(FEATURE);
-    const block = JSON.stringify({ decision: "block", reason: `warden: ${T} is at plan and needs you. Run: warden next (or warden wait while a gate runs).` });
+    const block = JSON.stringify({ decision: "block", reason: `warden: ${T} is at plan and needs you. Run: warden next (or warden wait while a gate runs). At an agent step, if you need the user, run warden ask "<question>" and end your turn.` });
     expect(await hook("stop", { cwd: wt, stop_hook_active: false })).toBe(block);
     expect(readSessionLinks(main, T).map((l) => l.sessionId)).toEqual(["S1"]);
     expect(await hook("stop", { cwd: wt, stop_hook_active: true })).toBe(block);

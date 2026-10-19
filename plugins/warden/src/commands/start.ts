@@ -13,7 +13,7 @@ import { mainRoot, SESSIONS_DIR_NAME, taskDir, worktreeRoot, worktreesDir } from
 import { readRun, runExists } from "../state/store.ts";
 import type { Ctx, FlowJson } from "../types.ts";
 import { readFlowFile, resolveFlowPath, TEMPLATES } from "./flow.ts";
-import { parseArgs, printJson, requiredTask, type ParsedArgs } from "./next.ts";
+import { parseArgs, printJson, type ParsedArgs } from "./next.ts";
 
 const USAGE =
   "warden start <task> --template do|feature|bugfix|chore | --flow <name|path> [--text <t> | --text-file <p> | --ticket] [--worktree] [--branch <b>]";
@@ -23,16 +23,41 @@ function checkTaskId(task: string, pattern: string): void {
   if (!new RegExp(pattern).test(task)) throw new WardenError(`task id ${task} does not match ${pattern}`);
 }
 
+// Every missing or conflicting flag, one line each, so a single call shows all of them (0.6.1).
+function usageProblems(parsed: ParsedArgs): string[] {
+  const problems: string[] = [];
+  const { values, switches } = parsed;
+  if (parsed.positional.length !== 1) problems.push(`usage: ${USAGE}`);
+  const template = values["--template"];
+  if ((template === undefined) === (values["--flow"] === undefined)) {
+    problems.push(`pass either --template ${TEMPLATES.join("|")} or --flow <name|path>`);
+  } else if (template !== undefined && !TEMPLATES.includes(template)) {
+    problems.push(`--template must be one of ${TEMPLATES.join(", ")}`);
+  }
+  if (switches.has("--ticket") && (values["--text"] !== undefined || values["--text-file"] !== undefined)) {
+    problems.push("--ticket cannot be used with --text or --text-file");
+  }
+  if (values["--text"] !== undefined && values["--text-file"] !== undefined) problems.push("use --text or --text-file, not both");
+  if (!switches.has("--worktree") && values["--branch"] !== undefined) problems.push("--branch needs --worktree");
+  return problems;
+}
+
+// Without --worktree the run uses the current branch, which must not be the main branch. Null when it cannot tell
+// yet (no git repo, no .warden/): the steps after report that themselves.
+function branchProblem(ctx: Ctx, parsed: ParsedArgs): string | null {
+  if (parsed.switches.has("--worktree")) return null;
+  try {
+    const { mainBranch } = loadStepsJson(join(mainRoot(ctx.cwd), ".warden", "steps.json"));
+    const branch = currentBranch(ctx.cwd);
+    return branch === mainBranch || branch === "" ? `on ${branch || "a detached HEAD"}: start on a ticket branch, or pass --worktree` : null;
+  } catch {
+    return null;
+  }
+}
+
 function chooseFlow(ctx: Ctx, parsed: ParsedArgs): FlowJson {
-  const template = parsed.values["--template"];
-  const flow = parsed.values["--flow"];
-  if ((template === undefined) === (flow === undefined)) {
-    throw new WardenError(`pass either --template ${TEMPLATES.join("|")} or --flow <name|path>`, EXIT.USAGE);
-  }
-  if (template !== undefined && !TEMPLATES.includes(template)) {
-    throw new WardenError(`--template must be one of ${TEMPLATES.join(", ")}`, EXIT.USAGE);
-  }
-  return readFlowFile(resolveFlowPath(ctx, (template ?? flow)!)) as FlowJson;
+  const name = parsed.values["--template"] ?? parsed.values["--flow"];
+  return readFlowFile(resolveFlowPath(ctx, name!)) as FlowJson;
 }
 
 // 0.3 spec 4.2: the task text comes from the ticket tool.
@@ -42,9 +67,7 @@ function ticketText(main: string, root: string, task: string): string {
   return `# ${ticket.id}: ${ticket.title}\n\n${ticket.body}\n`;
 }
 
-function readTaskText(ctx: Ctx, text: string | undefined, file: string | undefined, ticket: boolean): string | null {
-  if (ticket && (text !== undefined || file !== undefined)) throw new WardenError("--ticket cannot be used with --text or --text-file", EXIT.USAGE);
-  if (text !== undefined && file !== undefined) throw new WardenError("use --text or --text-file, not both", EXIT.USAGE);
+function readTaskText(ctx: Ctx, text: string | undefined, file: string | undefined): string | null {
   if (text !== undefined) return text;
   if (file === undefined) return null;
   try {
@@ -136,17 +159,24 @@ function allowWorktreesDir(main: string): void {
   writeJsonAtomic(file, { ...settings, permissions: { ...permissions, additionalDirectories: [...dirs, dir] } });
 }
 
-export async function run(args: string[], ctx: Ctx): Promise<void> {
+export async function run(args: string[], ctx: Ctx): Promise<number | void> {
   const parsed = parseArgs(args, ["--template", "--flow", "--text", "--text-file", "--branch"], ["--worktree", "--ticket"]);
-  const task = requiredTask(parsed, USAGE);
+  const problems = usageProblems(parsed);
+  const onMain = branchProblem(ctx, parsed);
+  if (onMain) problems.push(onMain);
+  if (problems.length > 0) {
+    for (const problem of problems) console.error(`warden: ${problem}`);
+    return EXIT.USAGE;
+  }
+  const task = parsed.positional[0]!;
   const useWorktree = parsed.switches.has("--worktree");
-  if (!useWorktree && parsed.values["--branch"] !== undefined) throw new WardenError("--branch needs --worktree", EXIT.USAGE);
+  const ticket = parsed.switches.has("--ticket");
   const flow = chooseFlow(ctx, parsed);
-  let taskText = readTaskText(ctx, parsed.values["--text"], parsed.values["--text-file"], parsed.switches.has("--ticket"));
+  let taskText = readTaskText(ctx, parsed.values["--text"], parsed.values["--text-file"]);
 
   const main = mainRoot(ctx.cwd);
   checkTaskId(task, loadWardenJson(join(main, ".warden", "warden.json")).taskIdPattern);
-  if (parsed.switches.has("--ticket")) taskText = ticketText(main, ctx.root, task);
+  if (ticket) taskText = ticketText(main, ctx.root, task);
   const { mainBranch } = loadStepsJson(join(main, ".warden", "steps.json"));
   const ref = fetchRef(main, mainBranch);
 
@@ -164,6 +194,6 @@ export async function run(args: string[], ctx: Ctx): Promise<void> {
     worktree = worktreeRoot(ctx.cwd);
   }
 
-  const response = await start(ctx, task, flow, { worktree, branch, mainRef: ref, taskText });
+  const response = await start(ctx, task, flow, { worktree, branch, mainRef: ref, taskText, ticket });
   printJson(useWorktree ? { ...response, worktree } : response);
 }

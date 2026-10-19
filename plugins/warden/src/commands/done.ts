@@ -21,7 +21,7 @@ function readOutput(ctx: Ctx, json: string | undefined, file: string | undefined
 
 export async function run(args: string[], ctx: Ctx): Promise<number> {
   const parsed = parseArgs(args, ["--json", "--file"]);
-  const task = resolveTask(ctx, optionalTask(parsed, "warden done [<task>] [--json <text> | --file <path>]"));
+  const task = resolveTask(ctx, optionalTask(parsed, "warden done [<task>] [--json <text> | --file <path>]"), false, "done");
   const text = await readOutput(ctx, parsed.values["--json"], parsed.values["--file"]);
 
   try {
