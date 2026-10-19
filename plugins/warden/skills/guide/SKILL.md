@@ -89,6 +89,14 @@ A hook refusal starts with `warden:`. Do not try another way around it.
 
 When the Stop hook says the task `needs you`, run `warden next` (or `warden wait` while a gate runs).
 
+### A refusal that matches no row
+
+1. Read the whole message: most refusals name the fix or the command to run.
+2. Run `warden <command> --help` and check your arguments.
+3. Do not try another way around the refusal (a different tool, a shell trick, editing state files).
+4. If the fix needs a person (approve, retry, reset, a locked file), tell the user what to type and end your turn.
+5. If warden itself looks wrong or unclear, file it with `/warden:report`, with the exact message.
+
 ## Session start lines
 
 Act on the `warden:` lines at session start: resume a stopped run with `warden next`; pass blocked and waiting messages on to the user; offer an upgrade, a due check, a retro or a stopped orchestration in one short line once the user's request is done, and start it only with their OK.

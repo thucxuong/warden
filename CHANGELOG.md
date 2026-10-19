@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.3 — 2026-10-19
+
+- `/warden:guide` and the agent guide say what to do when a refusal matches none of their rows.
+
 ## 0.6.2 — 2026-10-19
 
 - Documentation: a new README and a full docs folder (getting started, concepts, guides, reference, agent guide, troubleshooting, FAQ, maintainer pages). Design notes and specs moved to `docs/internal/`.

@@ -214,6 +214,14 @@ Each hook refusal starts with `warden:`.
 
 More in [Troubleshooting](troubleshooting.md). Exit codes are in [Exit codes](reference/exit-codes.md).
 
+### A refusal that matches no row
+
+1. Read the whole message: most refusals name the fix or the command to run.
+2. Run `warden <command> --help` and check your arguments.
+3. Do not try another way around the refusal (a different tool, a shell trick, editing state files).
+4. If the fix needs a person (approve, retry, reset, a locked file), tell the user what to type and end your turn.
+5. If warden itself looks wrong or unclear, file it with `/warden:report`, with the exact message.
+
 ## Session start lines
 
 At the start of a session, warden adds lines that begin with `warden:`. Act on them like this:
