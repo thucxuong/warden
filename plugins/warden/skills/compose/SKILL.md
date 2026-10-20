@@ -6,7 +6,7 @@ argument-hint: "[ticket-id] [what to do]"
 
 # Compose and start a task
 
-1. Read the task from the arguments (the last line of this skill) and the user's request. Every run starts from a ticket: `warden start` stores the ticket's text as the task text, so it survives new sessions and compaction.
+1. Read the task from the user's request and the ARGUMENTS given with this skill, if any. Every run starts from a ticket: `warden start` stores the ticket's text as the task text, so it survives new sessions and compaction.
    If `warden tools` lists no `tickets` role, tell the user warden needs a ticket tool: `/warden:tools` writes one, or `/warden:init` in a new project. Stop.
    If there is no ticket id, first follow "No task id" below. If the user gave an id and more details than the ticket holds, ask them to add the details to the ticket, or keep them for this session.
 2. Classify the task with this table.
@@ -55,5 +55,3 @@ Never make up an id: the ticket tool picks it. Write a single quote in a title a
 4. If the first create exits 3, tell the user the ticket tool cannot create tickets, show the breakdown to add by hand, and stop. If a later create fails, show the error and the tickets created so far, and stop.
 5. Commit and push every `changed` path as in "No task id" step 4, in one commit with the message `chore(<epic id>): plan epic`. If the push is refused, stop and tell the user the tickets must reach `<mainBranch>` first (through a pull request).
 6. Tell the user: the Tickets page of `warden site` shows the epic as a DAG, and `/warden:orchestrate <epic id>` runs it. Do not start any run.
-
-Arguments: $ARGUMENTS

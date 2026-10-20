@@ -219,7 +219,7 @@ function shapeFix(o: Obj, errors: string[]): void {
         errors.push("notePath and ruleId: required; leave them out only with the ruleId the triage report named, or the mergeCommit of a fix already on the main branch");
       }
     }
-    str(o.branch, "branch", errors);
+    if (o.branch !== undefined) str(o.branch, "branch", errors);
     if (o.pr !== undefined) nullableStr(o.pr, "pr", errors);
     if (o.mergeCommit !== undefined) nullableStr(o.mergeCommit, "mergeCommit", errors);
     if (o.repairCommands !== undefined) strArray(o.repairCommands, "repairCommands", errors);
@@ -466,7 +466,7 @@ function evidenceFix(input: OutputCheckInput, o: Obj, errors: string[]): void {
   const withNote = typeof o.notePath === "string";
   const notePath = o.notePath as string;
   const ruleId = o.ruleId as string;
-  if (o.branch !== fix.branch) errors.push(`branch: must be ${fix.branch}`);
+  if (o.branch !== undefined && o.branch !== fix.branch) errors.push(`branch: must be ${fix.branch}`); // optional: warden knows it
   const notePattern = new RegExp(`^\\.warden/fixes/\\d{4}-\\d{2}-\\d{2}-${escapeRegex(run.task)}(-\\d+)?\\.md$`);
   if (withNote && !notePattern.test(notePath)) errors.push(`notePath: must be .warden/fixes/<YYYY-MM-DD>-${run.task}[-n].md`);
 

@@ -58,13 +58,8 @@ describe("skills", () => {
     });
   }
 
-  test("0.9 (R-a30e-0004): $ARGUMENTS is only ever a last line `Arguments: $ARGUMENTS`, so an empty value reads fine", () => {
-    for (const name of expectedSkills) {
-      const text = read(join(skillsDir, name, "SKILL.md"));
-      const lines = text.split("\n").filter((line) => line.includes("$ARGUMENTS"));
-      expect(lines.every((line) => line === "Arguments: $ARGUMENTS")).toBe(true);
-      if (lines.length > 0) expect(text.trimEnd().endsWith("\nArguments: $ARGUMENTS")).toBe(true);
-    }
+  test("0.9.1 (R-a30e-0004, R-a30e-0006): no skill inlines $ARGUMENTS; Claude Code appends ARGUMENTS only when given", () => {
+    for (const name of expectedSkills) expect(read(join(skillsDir, name, "SKILL.md"))).not.toContain("$ARGUMENTS");
   });
 
   test("0.9: init and the 0.9.0 upgrade note write the file ticket tool with the same words", () => {

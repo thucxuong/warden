@@ -190,7 +190,7 @@ interface PlanOutput {
   rootCauseChain: string[];                // >= 2 for FIXED and CODE
   notePath?: string;                       // FIXED: .warden/fixes/<YYYY-MM-DD>-<task>[-n].md; leave out only with ruleId (named by the triage report) or mergeCommit
   ruleId?: string;                         // FIXED: id of the triage rule added; without notePath, the id of the rule the triage report named
-  branch?: string;                         // FIXED: the fix branch
+  branch?: string;                         // FIXED: the fix branch (optional; must match when given)
   pr?: string | null;                      // FIXED
   mergeCommit?: string | null;             // FIXED: set when merged; without notePath, the sha of a fix already on the main branch
   repairCommands?: string[];               // FIXED: run in the ticket worktree after the engine merged the main branch in; must leave HEAD unchanged and the tree clean

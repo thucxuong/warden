@@ -414,6 +414,8 @@ describe("fix", () => {
     test("(b) a commit that is on mainRef", () => {
       const sha = sh(main, "rev-parse", "main");
       expect(errorsFor(fixRun(), bare({ mergeCommit: sha }))).toEqual([]);
+      expect(errorsFor(fixRun(), bare({ mergeCommit: sha, branch: undefined }))).toEqual([]); // R-a30e-0007: branch is optional
+      expect(errorsFor(fixRun(), bare({ mergeCommit: sha, branch: "main" }))[0]).toStartWith("branch: must be warden-fix/")
       expect(errorsFor(fixRun(), bare({ mergeCommit: "0".repeat(40) }))).toEqual([`mergeCommit: ${"0".repeat(40)} is not on main`]);
       const onBranch = commit(fixWt, { "scripts/x.sh": "true\n" });
       expect(errorsFor(fixRun(), bare({ mergeCommit: onBranch }))).toEqual([`mergeCommit: ${onBranch} is not on main`]);

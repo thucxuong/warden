@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.1 — 2026-10-20
+
+- Skills no longer print an empty "Arguments:" line: they read your request, and Claude Code adds the arguments only when you give some.
+- A fix step that returns `FIXED` with the `mergeCommit` of a fix already on the main branch no longer needs `branch`; when given, it must still be the fix branch.
+
 ## 0.9.0 — 2026-10-20
 
 - Every run starts from a ticket. `warden start <id> --template <t> --worktree` reads the task from the ticket tool (`show <id>`); `--text`, `--text-file` and `--ticket` are gone. A project without a `tickets` role gets a refusal that says how to add a ticket tool. Runs started from text before 0.9 keep working: the engine finishes them as before.

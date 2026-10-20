@@ -8,7 +8,7 @@ argument-hint: "[<name>]"
 
 This project owns its tools. They live in `.warden/tools/`, and warden sends no fixes for them: change them like any other code in the repo.
 
-The argument (the last line of this skill) names the tool to write or change. Without a name, run `warden tools` to see what exists and ask the user what the tool should do.
+The ARGUMENTS given with this skill, if any, name the tool to write or change. Without a name, run `warden tools` to see what exists and ask the user what the tool should do.
 
 ## Layout
 
@@ -90,5 +90,3 @@ The types are in `tool.ts` (`DagTicket`, `TicketDetail`, `SetStatusResult`, `Cre
 Anything else, such as end-to-end tests or CI status, needs no role. A check in `.warden/steps.json` simply runs `warden tools e2e run ...`.
 
 Git and paths: run `git -C <dir> ...` and use absolute paths, one simple command per call. A plain `cd <dir>` on its own is fine; never chain it as `cd <dir> && ...`.
-
-Arguments: $ARGUMENTS

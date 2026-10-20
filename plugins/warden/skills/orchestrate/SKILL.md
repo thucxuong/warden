@@ -8,7 +8,7 @@ argument-hint: "<epic>"
 
 Run this only when the user asked for it. You are the orchestrator. Each ticket has its own run and worktree. Runs are started one at a time. Work runs in parallel. Ship runs one at a time, in wave order, so every ticket is gated on the code it lands on.
 
-`<epic>` is the argument (the last line of this skill) when it is an epic id. If it is a request instead, plan it with the warden:compose "Plan an epic" section, steps 1 to 5, and stop there if planning stops. Then `<epic>` is the new epic id in every step below, never the request text.
+`<epic>` is the ARGUMENTS given with this skill when it is an epic id. If it is a request instead, plan it with the warden:compose "Plan an epic" section, steps 1 to 5, and stop there if planning stops. Then `<epic>` is the new epic id in every step below, never the request text.
 
 1. Work from the main checkout. If the project has a remote, run `git -C <main> pull --ff-only`. If it fails, tell the user and stop.
 2. Run `warden orchestrate plan <epic>`. If `errors` is not empty, show them and stop. If `complete` is true, go to step 9. Mention the `held` tickets and the parked ones in `backlog`.
@@ -52,5 +52,3 @@ Rules
 - Never edit files in a ticket worktree.
 - Never run checks to prove anything.
 - The `warden next`, `done` and `wait` rules of the work skill apply.
-
-Arguments: $ARGUMENTS
