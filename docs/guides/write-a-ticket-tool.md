@@ -1,6 +1,8 @@
 # Write a ticket tool
 
-Connect warden to your tickets by writing a tool for the `tickets` role, so `/warden:orchestrate` and `warden start --ticket` can read and update them, and the agent can create tickets for you.
+Connect warden to your tickets by writing a tool for the `tickets` role. Every warden run starts from a ticket (0.9), so every project needs one: `warden start` reads the ticket, `/warden:orchestrate` plans and updates them, and the agent creates a ticket for a request that has none.
+
+No tracker? The complete example below keeps tickets as Markdown files in the repo; `/warden:init` writes it for a new project.
 
 Warden does not know where your tickets live. It could be Markdown files in the repo, Jira, Linear or Azure DevOps. You write one small tool that answers a few questions in a fixed format, and point the `tickets` role at it. Everything else (waves, runs, shipping) is warden's job.
 
@@ -11,7 +13,7 @@ Warden does not know where your tickets live. It could be Markdown files in the 
 
 ## The contract
 
-The tool has three subcommands, and two optional ones. Each prints **one JSON value** on stdout. Messages go to stderr.
+The tool has four subcommands, and one optional one. Each prints **one JSON value** on stdout. Messages go to stderr.
 
 | Command | Prints | Time limit |
 |---|---|---|
@@ -19,7 +21,7 @@ The tool has three subcommands, and two optional ones. Each prints **one JSON va
 | `dag` | `DagTicket[]`: every ticket that is not an epic | 300 s |
 | `show <id>` | one `DagTicket` plus `body` (the ticket text) | 60 s |
 | `set-status <id> <status>` | `{ id, status, changed }` | 60 s |
-| `create --title <t> --type <type> --body-file <path> [--epic <id>] [--blocked-by <id,id>]` (optional) | `{ ticket, changed }`: the new ticket with its `body` | 60 s |
+| `create --title <t> --type <type> --body-file <path> [--epic <id>] [--blocked-by <id,id>]` | `{ ticket, changed }`: the new ticket with its `body` | 60 s |
 | `link <id> <url>` (optional, a tracker outside the repo) | `{ id }` | 60 s |
 
 Exit codes:
@@ -31,7 +33,7 @@ Exit codes:
 | 2 | bad usage |
 | 3 | unknown ticket or epic |
 
-Warden treats any exit other than 0 as a failure and shows the last line of stderr: `ticket tool failed (exit 3): unknown epic PG-999`. When stdout is not JSON, it says `ticket tool printed no JSON`. The one exception: exit 2 from `create` or `link` means the tool does not have that subcommand, so report any other problem with them as exit 1.
+Warden treats any exit other than 0 as a failure and shows the last line of stderr: `ticket tool failed (exit 3): unknown epic PG-999`. When stdout is not JSON, it says `ticket tool printed no JSON`. The one exception: exit 2 from `create` or `link` means the tool does not have that subcommand, so report any other problem with them as exit 1. `warden tools --check` calls `create` with no flags to see that it is there: it must exit 1 and write nothing.
 
 The types are in `.warden/tools/tool.ts`:
 
@@ -73,32 +75,34 @@ A `tool.ts` written before 0.8 has no `CreateResult` or `LinkResult`; add the tw
 - Write files **relative to the working directory**. At the ship step, warden runs `set-status <id> done` inside the ticket's worktree, so the ticket file change goes into the same pull request as the code. A path outside that worktree, or a gate file such as `.warden/steps.json`, is refused.
 - It must also accept an epic id: the orchestrator sets the epic to `done` when every ticket is done.
 
-### create rules (optional)
+### create rules (required since 0.9)
 
 - **The tool picks the id**: the next number of its own numbering, or the id the tracker gives. The agent never makes one up.
 - The id must match `^[A-Za-z0-9][A-Za-z0-9._-]*$`, and `taskIdPattern` unless `--type epic`. Warden checks it and stops with `ticket tool: create: ...` when it does not.
 - `--body-file` is an absolute path to the ticket text. `--epic` makes the ticket a child of that epic; `--blocked-by` lists ids, comma-separated. `--type epic` creates an epic. A new ticket is `todo`.
-- `changed` follows the set-status rule: the repo paths to commit, `[]` for a tracker outside the repo. Warden runs `create` in the main checkout, and the agent commits `changed` on the main branch. With a remote, runs branch from `origin/<mainBranch>`, so the agent pushes the main branch before a run starts. If the push is refused (a protected branch), it stops and tells you the ticket must reach the main branch first.
-- Without it, the agent asks you for an id as before.
+- `changed` follows the set-status rule: the repo paths to commit, `[]` for a tracker outside the repo. Warden runs `create` in the main checkout, and the agent commits `changed` on the main branch. With a remote, runs branch from `origin/<mainBranch>`, so the agent pushes the main branch before a run starts. If the push is refused (a protected branch), it undoes that commit and commits the ticket on the run's branch instead, so the ticket reaches the main branch with the run's pull request. For an epic's tickets it stops and tells you they must reach the main branch first.
+- Without it, `warden tools --check` fails with `role tickets create`, and the agent cannot start a run for a request that has no ticket yet.
 
 ### link rules (optional)
 
-- Warden calls `link <id> <url>` once, in the main checkout, after the ship step of a run started with `--ticket` is handed in with a `pr`. A local merge without a pull request url (`pr: null`) has nothing to link, so warden does not call it.
+- Warden calls `link <id> <url>` once, in the main checkout, after the ship step of a run is handed in with a `pr`. A local merge without a pull request url (`pr: null`) has nothing to link, so warden does not call it.
 - It is for a ticket system outside the repo: record the url as a field, a comment, or a remote link, and print `{ id }`. Running it twice changes nothing more.
 - It must not change repo files. A tool that keeps tickets as repo files leaves it out (exit 2): the pull request already carries the ticket change. If `link` prints `changed` paths anyway, warden ignores them (it never commits them) and `warden done` prints a warning.
 - A failure never blocks the ship: warden writes a `ticket.linked` event with the error, and `warden done` prints a warning.
 
 ## Steps
 
-1. **Write the tool.** This complete example keeps tickets as Markdown files in `tickets/<ID>.md`. Save it as `.warden/tools/backlog.ts`:
+1. **Write the tool.** This complete example keeps tickets as Markdown files in `backlog/<ID>.md`. Save it as `.warden/tools/backlog.ts`, and set `FIRST_ID` to the first id in the form of `taskIdPattern` in `.warden/warden.json` (for `^PG-\d{3}$`: `PG-001`). The plugin ships the same example as `skills/tools/ticket-tool-example.md`, which `/warden:init` and `/warden:tools` copy:
 
    ```ts
-   // The `tickets` role for this project. Tickets are Markdown files: tickets/<ID>.md.
+   // The `tickets` role for this project. Tickets are Markdown files: backlog/<ID>.md.
    import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
    import { join } from "node:path";
    import type { CreateResult, DagTicket, SetStatusResult, TicketDetail, TicketStatus, Tool } from "./tool";
 
-   const DIR = "tickets"; // relative to the checkout the tool runs in
+   const DIR = "backlog"; // relative to the checkout the tool runs in
+   const FIRST_ID = "PG-001"; // the first id, in the form of taskIdPattern in .warden/warden.json
+   const PREFIX = FIRST_ID.replace(/\d+$/, "");
    const STATUSES: TicketStatus[] = ["backlog", "todo", "doing", "review", "done", "archived"];
    const ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/; // the ids warden accepts
 
@@ -147,12 +151,14 @@ A `tool.ts` written before 0.8 has no `CreateResult` or `LinkResult`; add the tw
      return { id: t.id, title: t.title, status: t.status, blocked_by: t.blocked_by, epic: t.epic, type: t.type };
    }
 
-   // The next id: one more than the highest number used by a ticket or a warden run, same prefix and width (PG-103 -> PG-104).
+   // The next id: one more than the highest number used by a ticket or a warden run (PG-103 -> PG-104), else FIRST_ID.
    function nextId(): string {
      const runs = [".warden/state", ".warden/history"].flatMap((d) => (existsSync(d) ? readdirSync(d) : []));
-     const ids = [...allTickets().map((t) => t.id), ...runs].filter((id) => ID.test(id)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-     const m = /^(.*?)(\d+)$/.exec(ids.at(-1) ?? "PG-000")!;
-     return m[1]! + String(Number(m[2]) + 1).padStart(m[2]!.length, "0");
+     const nums = [...allTickets().map((t) => t.id), ...runs]
+       .filter((id) => id.startsWith(PREFIX) && /^\d+$/.test(id.slice(PREFIX.length)))
+       .map((id) => Number(id.slice(PREFIX.length)));
+     if (nums.length === 0) return FIRST_ID;
+     return PREFIX + String(Math.max(...nums) + 1).padStart(FIRST_ID.length - PREFIX.length, "0");
    }
 
    // --name value pairs, for create.
@@ -174,11 +180,10 @@ A `tool.ts` written before 0.8 has no `CreateResult` or `LinkResult`; add the tw
 
    export const backlog: Tool = {
      name: "backlog",
-     summary: "Tickets in tickets/<ID>.md (the tickets role)",
+     summary: "Tickets in backlog/<ID>.md (the tickets role)",
      usage: "backlog dag [<epic>] | backlog show <id> | backlog set-status <id> backlog|todo|doing|review|done|archived"
        + " | backlog create --title <t> --type <type> --body-file <path> [--epic <id>] [--blocked-by <id,id>]",
      probe: () => {
-       if (!existsSync(DIR)) return [{ status: "FAIL", label: "tickets", detail: `${DIR}/ is missing` }];
        try {
          return [{ status: "OK", label: "tickets", detail: `${allTickets().length} tickets` }];
        } catch (err) {
@@ -252,7 +257,7 @@ A `tool.ts` written before 0.8 has no `CreateResult` or `LinkResult`; add the tw
 
 4. **Add some tickets.** An epic is a ticket with `type: epic`. Its children name it in `epic`:
 
-   `tickets/PG-100.md`:
+   `backlog/PG-100.md`:
 
    ```markdown
    ---
@@ -263,7 +268,7 @@ A `tool.ts` written before 0.8 has no `CreateResult` or `LinkResult`; add the tw
    Let people sign up and sign in.
    ```
 
-   `tickets/PG-101.md`:
+   `backlog/PG-101.md`:
 
    ```markdown
    ---
@@ -275,7 +280,7 @@ A `tool.ts` written before 0.8 has no `CreateResult` or `LinkResult`; add the tw
    Add a users table with email and password hash.
    ```
 
-   `tickets/PG-102.md` (and `PG-103.md` the same way, titled "Sign-in page"):
+   `backlog/PG-102.md` (and `PG-103.md` the same way, titled "Sign-in page"):
 
    ```markdown
    ---
@@ -304,7 +309,7 @@ A `tool.ts` written before 0.8 has no `CreateResult` or `LinkResult`; add the tw
    ```
 
    ```json
-   {"id":"PG-101","status":"doing","changed":["tickets/PG-101.md"]}
+   {"id":"PG-101","status":"doing","changed":["backlog/PG-101.md"]}
    {"id":"PG-101","status":"doing","changed":[]}
    ```
 
@@ -318,10 +323,10 @@ A `tool.ts` written before 0.8 has no `CreateResult` or `LinkResult`; add the tw
    ```
 
    ```json
-   {"ticket":{"id":"PG-104","title":"Password reset","status":"todo","blocked_by":["PG-101"],"epic":"PG-100","type":"feature","body":"Let people reset a forgotten password."},"changed":["tickets/PG-104.md"]}
+   {"ticket":{"id":"PG-104","title":"Password reset","status":"todo","blocked_by":["PG-101"],"epic":"PG-100","type":"feature","body":"Let people reset a forgotten password."},"changed":["backlog/PG-104.md"]}
    ```
 
-   Delete `tickets/PG-104.md` again, or keep it.
+   Delete `backlog/PG-104.md` again, or keep it.
 
 6. **Check the whole setup.**
 
@@ -330,7 +335,7 @@ A `tool.ts` written before 0.8 has no `CreateResult` or `LinkResult`; add the tw
    warden orchestrate plan PG-100
    ```
 
-   `--check` must show `role tickets` as `OK`. The plan puts PG-101 in wave 1 and PG-102 and PG-103 in wave 2:
+   `--check` must show `role tickets` and `role tickets create` as `OK`. The plan puts PG-101 in wave 1 and PG-102 and PG-103 in wave 2:
 
    ```json
    {"schema":1,"epic":"PG-100","tool":"backlog", ...,
@@ -407,11 +412,12 @@ sh("az", ["boards", "work-item", "update", "--id", id.slice(3), "--discussion", 
 | Caller | Calls | When |
 |---|---|---|
 | `warden orchestrate plan <epic>` | `dag <epic>`, and `dag` when a blocker is not a child of the epic | building the plan |
-| `warden start <id> --ticket` | `show <id>` | the run's task text becomes `# <id>: <title>` and the body |
-| the engine, at the ship step of a run started with `--ticket` | `set-status <id> done`, in the ticket worktree | the change is committed with the run record. A failure never blocks the ship; the agent is told to ask you to set the status after the merge |
+| `warden start <id>` | `show <id>` | the run's task text becomes `# <id>: <title>` and the body. Every run starts this way (0.9) |
+| the engine, at the ship step of a run | `set-status <id> done`, in the ticket worktree | the change is committed with the run record. A failure never blocks the ship; the agent is told to ask you to set the status after the merge |
 | `warden orchestrate set-status <id> <status>` | `set-status <id> <status>`, in the main checkout | after merges, and for the epic at the end |
 | `warden orchestrate create ...` | `create ...`, in the main checkout | the agent got a request without a ticket id, or planned an epic (`/warden:compose`). Exit 3 with `the ticket tool has no create` when the tool answers exit 2 |
-| the engine, once the ship step of a `--ticket` run is handed in with a `pr` | `link <id> <pr>`, in the main checkout | exit 2 is silent; another failure, or `changed` paths (ignored), is a warning in `warden done`; a `ticket.linked` event |
+| `warden tools --check` | `create` with no flags | checks that `create` is there (exit 2 means it is not) |
+| the engine, once the ship step of a run is handed in with a `pr` | `link <id> <pr>`, in the main checkout | exit 2 is silent; another failure, or `changed` paths (ignored), is a warning in `warden done`; a `ticket.linked` event |
 | `warden site` | `dag`, and `show <epic>` for each epic (at most 4 at a time) | each time the Tickets page or the Epics section opens. It never calls `set-status` |
 
 ## See also
@@ -420,4 +426,4 @@ sh("az", ["boards", "work-item", "update", "--id", id.slice(3), "--discussion", 
 - [Orchestrate an epic](orchestrate-an-epic.md): what the plan is used for
 - [Orchestration](../concepts/orchestration.md): waves, phases and merge order
 - [Tools and roles](../concepts/tools-and-roles.md)
-- [CLI reference](../reference/cli.md): `warden orchestrate` and `warden start --ticket`
+- [CLI reference](../reference/cli.md): `warden orchestrate` and `warden start`

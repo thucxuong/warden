@@ -73,7 +73,7 @@ The `/warden:work` skill runs this loop for the agent. `/warden:compose` picks a
 7. Runs the setup commands from `steps.json` in the worktree. If one fails, the run is not created and the log is kept in the temp folder.
 8. Enters the first step.
 
-The task text comes from `--text`, `--text-file`, or, with `--ticket`, from the project's ticket tool. Without any of them the run stores only the id, and `warden next` tells the agent to ask the user what the task is.
+Every run starts from a ticket (0.9). The task text comes from the project's ticket tool (`show <id>` of the `tickets` role): the ticket's title and body. Without a `tickets` role, `warden start` refuses and says how to add a ticket tool. For a request without a ticket, `/warden:compose` creates one first.
 
 ## What the agent is told
 

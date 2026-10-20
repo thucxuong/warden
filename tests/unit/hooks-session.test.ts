@@ -15,7 +15,7 @@ installHooksFixture();
 
 describe("session links and records", () => {
   test("PreToolUse on warden start links the session without creating state; later calls link it once", async () => {
-    expect(await bash(`warden start ${T} --template feature --worktree --text-file task.txt`, { session_id: "S2", cwd: main })).toBeNull();
+    expect(await bash(`warden start ${T} --template feature --worktree`, { session_id: "S2", cwd: main })).toBeNull();
     expect(readSessionRecord(main, "S2")?.task).toBe(T);
     expect(existsSync(taskDir(main, T))).toBe(false);
     await startFlow(FEATURE);

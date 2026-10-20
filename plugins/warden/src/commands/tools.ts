@@ -1,5 +1,6 @@
 // warden tools [--check [<name>] | --init] | warden tools <name|role> [args...] (0.6): the project's own tools.
 // They live in <checkout>/.warden/tools/: index.ts lists them, roles.json maps role names to tool names.
+import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -179,7 +180,22 @@ function wardenRows(loaded: LoadedTools): CheckRow[] {
   return rows;
 }
 
-async function check(loaded: LoadedTools, word: string | undefined): Promise<number> {
+// 0.9: warden is ticket-based, so every project needs one (/warden:tools writes one).
+export const NO_TICKETS = 'no tickets tool: set "tickets" in .warden/tools/roles.json. Warden runs start from a ticket: add a ticket tool with /warden:tools (or follow the 0.9.0 upgrade note)';
+
+// 0.9: every run starts from a ticket, so the tickets role is required and its tool must have create. A tool without
+// create exits 2 (bad usage) for it; with it, a create without its flags exits 1, so this probe never makes a ticket.
+function createRow(loaded: LoadedTools, pluginRoot: string): CheckRow | null {
+  const tool = loaded.roles.tickets;
+  if (tool === undefined) return { tool: "warden", status: "FAIL", label: "role tickets", detail: NO_TICKETS };
+  if (!loaded.tools.some((t) => t.name === tool)) return null;
+  const res = spawnSync(process.execPath, [join(pluginRoot, "src", "cli.ts"), "tools", tool, "create"], { stdio: "ignore", timeout: 60_000 });
+  return res.status === EXIT.USAGE
+    ? { tool: "warden", status: "FAIL", label: "role tickets create", detail: `${tool} has no create (it exits 2 for create); add it with /warden:tools` }
+    : { tool: "warden", status: "OK", label: "role tickets create", detail: tool };
+}
+
+async function check(loaded: LoadedTools, word: string | undefined, pluginRoot: string): Promise<number> {
   let tools = loaded.tools;
   if (word !== undefined) {
     const tool = resolveTool(loaded, word);
@@ -187,6 +203,8 @@ async function check(loaded: LoadedTools, word: string | undefined): Promise<num
     tools = [tool];
   }
   const checks = wardenRows(loaded);
+  const create = createRow(loaded, pluginRoot);
+  if (create) checks.push(create);
   for (const tool of tools) checks.push(...(await probeRows(tool)));
   console.log(JSON.stringify({ checks }));
   return checks.some((c) => c.status === "FAIL") ? EXIT.REJECTED : EXIT.OK;
@@ -249,7 +267,7 @@ export async function run(args: string[], ctx: Ctx): Promise<number> {
     console.log(JSON.stringify({ tools: loaded.tools.map((t) => ({ name: t.name, summary: t.summary })), roles: loaded.roles }));
     return EXIT.OK;
   }
-  if (first === "--check") return check(loaded, rest[0]);
+  if (first === "--check") return check(loaded, rest[0], ctx.root);
   const tool = resolveTool(loaded, first);
   return tool ? runTool(tool, rest) : notFound(first);
 }

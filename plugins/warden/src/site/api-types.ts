@@ -215,7 +215,7 @@ export interface RunHeader {
   limits: { fixerRounds: number; reviewRounds: number; codeStrikes: number };
   pr: PrInfo;
   author: Person | null;
-  ticket: boolean;            // started with --ticket
+  ticket: boolean;            // started from a ticket (false only for text runs from before 0.9)
 }
 
 export type StepOutcome =

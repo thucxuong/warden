@@ -6,7 +6,7 @@ It needs a ticket tool: a project tool set as the `tickets` role in `.warden/too
 
 ## Planning an epic from one request
 
-When the ticket tool has the optional `create` (0.8), you can ask for something bigger than one ticket in plain words, with `/warden:compose` or `/warden:orchestrate`. The agent proposes a breakdown: an epic and its child tickets, each with a type and the earlier tickets it waits for. Once you agree, it creates the epic and then the children with `warden orchestrate create` (children get `--epic` and `--blocked-by` with the ids the tool returned before), commits the changed ticket files on the main branch (with a remote, it pushes the main branch, because runs branch from `origin/<mainBranch>`; if the push is refused, it stops and tells you the tickets must reach the main branch first), and points you to the Tickets page of `warden site` (the DAG view) and to `/warden:orchestrate <epic>`. The ticket tool picks every id. Without `create`, the agent shows the breakdown for you to add by hand.
+With the ticket tool's `create` (required since 0.9), you can ask for something bigger than one ticket in plain words, with `/warden:compose` or `/warden:orchestrate`. The agent proposes a breakdown: an epic and its child tickets, each with a type and the earlier tickets it waits for. Once you agree, it creates the epic and then the children with `warden orchestrate create` (children get `--epic` and `--blocked-by` with the ids the tool returned before), commits the changed ticket files on the main branch (with a remote, it pushes the main branch, because runs branch from `origin/<mainBranch>`; if the push is refused, it stops and tells you the tickets must reach the main branch first), and points you to the Tickets page of `warden site` (the DAG view) and to `/warden:orchestrate <epic>`. The ticket tool picks every id. Without `create`, the agent shows the breakdown for you to add by hand.
 
 ## Words
 
@@ -82,7 +82,7 @@ flowchart TD
 
 1. From the main checkout, pulls the main branch (`git pull --ff-only`). If that fails, it stops.
 2. Plans the epic. It stops on `errors`. On the first plan of the conversation it shows a table (wave, id, title, template, phase) and asks you to go ahead.
-3. **Starts runs** for the `todo` tickets of the first wave, one at a time: `warden start <id> --template <template> --ticket --worktree`. Each ticket gets its own worktree, branch and run.
+3. **Starts runs** for the `todo` tickets of the first wave, one at a time: `warden start <id> --template <template> --worktree`. Each ticket gets its own worktree, branch and run.
 4. **Works in parallel.** It starts one `warden:ticket` agent per `todo` or `running` ticket, up to 4 at a time, always in the foreground (a background agent cannot ask for permissions, so its commands would be denied). Each agent drives its run until it reaches the ship step, a fix step, or something a person must do, then replies with one line such as `READY PG-012` or `BLOCKED PG-013: <message>`.
 5. **Hands fix steps to the fixer.** For each ticket in `fix`, the orchestrator gives the step to a `warden:fixer` agent and passes the result to `warden done`. Then the ticket works on.
 6. **Ships one at a time**, in wave order. For each `ready` ticket, a ticket agent in ship mode first merges the latest main branch into the ticket branch, fixes any conflicts, and then lets warden run the gates again on the merged code. Only then does it ship. If a ticket does not end `merged`, no more tickets ship in this call.
@@ -110,11 +110,11 @@ Each ticket was checked and reviewed on its own branch. Once another ticket land
 | `warden orchestrate plan <epic>` | Builds and saves the plan (asks the ticket tool). |
 | `warden orchestrate status <epic>` | The saved plan with runs and phases read again. Exit 3 if there is no saved plan. |
 | `warden orchestrate set-status <id> <status>` | Runs the ticket tool's `set-status` in the main checkout. Status is `backlog`, `todo`, `doing`, `review`, `done` or `archived`. Prints `{id, status, changed}`. |
-| `warden orchestrate create --title <t> --type <type> --body-file <path> [--epic <id>] [--blocked-by <id,id>]` | Runs the ticket tool's optional `create` in the main checkout and checks the id it picked. Prints `{ticket, changed}`. Exit 3 with `the ticket tool has no create` when the tool has none. |
+| `warden orchestrate create --title <t> --type <type> --body-file <path> [--epic <id>] [--blocked-by <id,id>]` | Runs the ticket tool's `create` in the main checkout and checks the id it picked. Prints `{ticket, changed}`. Exit 3 with `the ticket tool has no create` when the tool has none. |
 
 All of them exit 3 when no `tickets` role is set.
 
-At ship, a run started with `--ticket` whose ship output has a `pr` also gets the ticket's optional `link <id> <pr>` (0.8), once, in the main checkout. A tool without `link` is skipped; a failure is a warning and never blocks the ship.
+At ship, a run whose ship output has a `pr` also gets the ticket's optional `link <id> <pr>` (0.8), once, in the main checkout. A tool without `link` is skipped; a failure is a warning and never blocks the ship.
 
 ## See also
 

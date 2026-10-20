@@ -48,7 +48,7 @@ export function lastAssistantText(input: HookInput): string {
   return "";
 }
 
-// At an agent step the agent may stop to ask the user something (the plan skill and missing task text say to).
+// At an agent step the agent may stop to ask the user something (the plan skill says to).
 // `warden ask` is the sure way: the run then waits and this hook is not reached.
 function asksUser(call: HookCall, run: RunJson): boolean {
   if (!isAgentStep(run.current.type) || run.gate || pendingJob(call.main, run)) return false;

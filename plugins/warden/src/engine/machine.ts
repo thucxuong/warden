@@ -37,8 +37,8 @@ export interface StartOptions {
   worktree: string;          // absolute toplevel of the ticket worktree, already created or reused by the caller
   branch: string;
   mainRef: string;           // already fetched by the caller (3.2 start step 2)
-  taskText?: string | null;  // --text-file contents; null stores the task id only
-  ticket?: boolean;          // started with --ticket: the engine marks the ticket done at ship (0.6.1)
+  taskText: string;          // the ticket text
+  ticket?: boolean;          // started from a ticket (always since 0.9; older runs may lack it): the engine marks it done at ship (0.6.1)
   spawnWorker?: SpawnWorker;
 }
 
@@ -569,7 +569,7 @@ async function reviewJob(ctx: Ctx, main: string, task: string, gates: Gates): Pr
 }
 
 // Ship prep (5.6): re-run the gates when they no longer prove HEAD, else write the run record.
-// A run started with --ticket first gets its ticket set to done in the worktree (0.6.1), outside the lock.
+// A run started from a ticket first gets its ticket set to done in the worktree (0.6.1), outside the lock.
 async function shipPrepJob(ctx: Ctx, main: string, task: string): Promise<void> {
   const before = load(ctx, main, task);
   const ticket = before.run.ticket === true && gatesProven(before.run, before.flow).proven ? markTicketDone(ctx, main, before.run) : null;
@@ -739,7 +739,7 @@ export async function start(ctx: Ctx, task: string, flow: FlowJson, opts: StartO
   mkdirSync(dir, { recursive: true });
   writeJsonAtomic(join(dir, "flow.json"), flow);
   writeJsonAtomic(join(dir, "steps.json"), steps);
-  writeFileSync(join(dir, "task.md"), opts.taskText ?? `${task}\n`);
+  writeFileSync(join(dir, "task.md"), opts.taskText);
   await runSetup(ctx, main, task, steps, opts);
 
   const baseSha = mergeBase(opts.worktree, opts.branch, opts.mainRef);
@@ -835,7 +835,7 @@ export async function done(
   return { accepted: result.accepted, errors: result.errors, ...(warning !== null && { warnings: [warning] }), next: nextResponse(ctx, main, task) };
 }
 
-// 0.8: once the ship output of a --ticket run is accepted with a PR, `link <task> <pr>` tells the ticket tool, once,
+// 0.8: once the ship output of a ticket run is accepted with a PR, `link <task> <pr>` tells the ticket tool, once,
 // in the main checkout. A tool without link is silent. A failure is a warning and never undoes the ship.
 // link must not change repo files: reported `changed` paths are a warning and are never committed.
 async function linkPr(ctx: Ctx, main: string, task: string, link: { step: string; url: string }): Promise<string | null> {
@@ -1206,8 +1206,6 @@ function baseMessage(s: S, status: NextResponse["status"], position: string): st
       let text = `${run.task}: ${run.current.id} (${position}).`;
       if (run.current.type === "fix") text += ` Fix for ${s.flow.steps[run.stepIndex]?.id}: ${run.fix?.verdict}.`;
       else if (run.routeBack) text += ` Back from ${run.routeBack.from}: ${BACK_LABEL[run.routeBack.kind]}.`;
-      const taskText = readFileSync(join(taskDir(s.main, run.task), "task.md"), "utf8").trim();
-      if (taskText === run.task) text += " No task text was given: ask the user what the task is.";
       return text;
     }
     case "running_gate":
@@ -1219,6 +1217,10 @@ function baseMessage(s: S, status: NextResponse["status"], position: string): st
       return `${run.task} is waiting for you: ${run.waiting?.reason ?? ""}`;
     case "blocked":
       return `${run.task} is blocked: ${run.waiting?.reason ?? ""}\n${retryHint(run.task)}`;
+    case "done": // 0.9: a flow without a ship step never sets the ticket to done, so the agent does it on the branch
+      if (run.ticket !== true) return `${run.task}: done.`;
+      return `${run.task}: done. Set its ticket to done on this branch: in ${run.worktree}, run warden tools tickets set-status ${run.task} done, `
+        + `then commit the paths it prints in changed with the message "chore(${run.task}): ticket done".`;
     default:
       return `${run.task}: ${status}.`;
   }

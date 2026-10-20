@@ -10,7 +10,7 @@ const expectedSkills = ["init", "compose", "work", "plan", "retro", "report", "u
 // Frontmatter extras from spec section 8 (string values, unquoted).
 const expectedExtras: Record<string, Record<string, string>> = {
   init: { "disable-model-invocation": "true", "allowed-tools": "Bash(warden *) Read Glob Grep Write" },
-  compose: { "argument-hint": "<task-id> [what to do]" },
+  compose: { "argument-hint": "[ticket-id] [what to do]" },
   work: { "argument-hint": "[task-id]", "allowed-tools": "Bash(warden *)" },
   upgrade: {},
   tools: { "argument-hint": "[<name>]" },
@@ -58,6 +58,33 @@ describe("skills", () => {
     });
   }
 
+  test("0.9 (R-a30e-0004): $ARGUMENTS is only ever a last line `Arguments: $ARGUMENTS`, so an empty value reads fine", () => {
+    for (const name of expectedSkills) {
+      const text = read(join(skillsDir, name, "SKILL.md"));
+      const lines = text.split("\n").filter((line) => line.includes("$ARGUMENTS"));
+      expect(lines.every((line) => line === "Arguments: $ARGUMENTS")).toBe(true);
+      if (lines.length > 0) expect(text.trimEnd().endsWith("\nArguments: $ARGUMENTS")).toBe(true);
+    }
+  });
+
+  test("0.9: init and the 0.9.0 upgrade note write the file ticket tool with the same words", () => {
+    const filesLine = (text: string) => text.split("\n").find((line) => line.startsWith("   - Files: write `.warden/tools/backlog.ts`"));
+    const init = filesLine(read(join(skillsDir, "init", "SKILL.md")));
+    expect(init).toContain("`backlog/<ID>.md`");
+    expect(filesLine(read(join(pluginRoot, "upgrades", "v0.9.0.md")))).toBe(init!);
+  });
+
+  test("0.9: the plugin ships the ticket tool guide's complete example, word for word, next to the tools skill", () => {
+    const tsBlock = (text: string) => /```ts\n(\/\/ The `tickets` role[\s\S]*?)```/.exec(text)![1];
+    const guide = read(resolve(pluginRoot, "../../docs/guides/write-a-ticket-tool.md")).replace(/^ {3}/gm, "");
+    expect(tsBlock(read(join(skillsDir, "tools", "ticket-tool-example.md")))).toBe(tsBlock(guide)!);
+  });
+
+  test("0.9: no skill or agent starts a run from text", () => {
+    for (const name of expectedSkills) expect(read(join(skillsDir, name, "SKILL.md"))).not.toMatch(/--text\b|--text-file|--ticket\b/);
+    for (const agent of ["fixer", "ticket"]) expect(read(join(pluginRoot, "agents", `${agent}.md`))).not.toMatch(/--text\b|--ticket\b/);
+  });
+
   test("the plan skill keeps the key parts of the breakdown", () => {
     const text = read(join(skillsDir, "plan", "SKILL.md"));
     for (const part of ["Factor Pool", "Existing Factors", "Reuse ladder", "Completion gate", "PlanOutput"]) {
@@ -82,8 +109,8 @@ describe("retro and report skills", () => {
 
   test("0.6.1: work says how to start a run when next finds none, and when to use warden ask", () => {
     const text = read(join(skillsDir, "work", "SKILL.md"));
-    expect(text).toContain("`warden start <id> --template <do|feature|bugfix|chore> --ticket --worktree` with a Bash timeout of 600000");
-    expect(text).toContain('`warden start <id> --template <do|feature|bugfix|chore> --text "<task text>" --worktree` with a Bash timeout of 600000');
+    expect(text).toContain("`warden start <id> --template <do|feature|bugfix|chore> --worktree` with a Bash timeout of 600000");
+    expect(text).not.toMatch(/--text|--ticket/);
     expect(text).toContain("run `cd <worktree>` as its own command, and `warden next`");
     expect(text).toContain("lists your task among the live runs, run `cd <its worktree>`");
     expect(text).toContain('`warden ask "<question>"`');

@@ -8,7 +8,7 @@ argument-hint: "[<name>]"
 
 This project owns its tools. They live in `.warden/tools/`, and warden sends no fixes for them: change them like any other code in the repo.
 
-`$ARGUMENTS` names the tool to write or change. Without a name, run `warden tools` to see what exists and ask the user what the tool should do.
+The argument (the last line of this skill) names the tool to write or change. Without a name, run `warden tools` to see what exists and ask the user what the tool should do.
 
 ## Layout
 
@@ -73,7 +73,7 @@ export const e2e: Tool = {
 
 | Role | Used by | What the tool must do |
 |---|---|---|
-| `tickets` | `/warden:orchestrate`, `warden start --ticket` and `warden orchestrate create` | `dag [<epic>]`, `show <id>` and `set-status <id> <status>`; optionally `create` and `link`, below |
+| `tickets` | `warden start` (every run starts from a ticket), `/warden:orchestrate` and `warden orchestrate create` | `dag [<epic>]`, `show <id>`, `set-status <id> <status>` and `create`; optionally `link`, below |
 | `graph` | the work skill and the ticket agent | `query "<question>"` prints plain text and exits 0 |
 | `pr` | the push and merge rules | `create` and `merge` subcommands. Warden treats them as the pull request and merge commands |
 
@@ -81,12 +81,14 @@ The `tickets` tool prints one JSON value on stdout. Exit 0 is ok, 1 an error, 2 
 - `dag [<epic>]` prints `DagTicket[]`: `{ id, title, status, blocked_by, epic?, type? }`. With an epic, its direct children; without, every ticket that is not an epic. It has 300 s.
 - `show <id>` prints one `DagTicket` with a `body` (the ticket text). It has 60 s.
 - `set-status <id> <status>` prints `{ id, status, changed }`, where `changed` lists the repo paths the caller must commit. Running it twice changes nothing more. It has 60 s.
-- Optional: `create --title <t> --type <type> --body-file <path> [--epic <id>] [--blocked-by <id,id>]` makes a ticket and prints `{ ticket, changed }`: `ticket` is the new `DagTicket` with its `body` (the text of the body file), `changed` as for set-status. The tool picks the id (its own numbering, or the id the tracker gives), never one a warden run already uses (`.warden/state/<id>` or `.warden/history/<id>`): a run started from text has no ticket. The id must match `^[A-Za-z0-9][A-Za-z0-9._-]*$`, and `taskIdPattern` unless `--type epic`. A new ticket is `todo`. It runs in the main checkout and has 60 s.
-- Optional, for a tracker outside the repo: `link <id> <url>` records the pull request url on the ticket and prints `{ id }`. Warden calls it once, in the main checkout, after the ship step of a `--ticket` run is handed in with a `pr`. It has 60 s. It must not change repo files: warden ignores any `changed` it prints and warns. A tool that keeps tickets as repo files leaves it out: the pull request already carries the ticket change.
-- A tool without `create` or `link` exits 2 for it. Warden reads that as "not supported", so report any other problem with these two as exit 1.
+- `create --title <t> --type <type> --body-file <path> [--epic <id>] [--blocked-by <id,id>]` makes a ticket and prints `{ ticket, changed }`: `ticket` is the new `DagTicket` with its `body` (the text of the body file), `changed` as for set-status. The tool picks the id (its own numbering, or the id the tracker gives), never one a warden run already uses (`.warden/state/<id>` or `.warden/history/<id>`): a run started from text before 0.9 has no ticket. The id must match `^[A-Za-z0-9][A-Za-z0-9._-]*$`, and `taskIdPattern` unless `--type epic`. A new ticket is `todo`. It runs in the main checkout and has 60 s.
+- Optional, for a tracker outside the repo: `link <id> <url>` records the pull request url on the ticket and prints `{ id }`. Warden calls it once, in the main checkout, after the ship step of a run is handed in with a `pr`. It has 60 s. It must not change repo files: warden ignores any `changed` it prints and warns. A tool that keeps tickets as repo files leaves it out: the pull request already carries the ticket change.
+- A tool without `create` or `link` exits 2 for it. Warden reads that as "not supported", so report any other problem with these two as exit 1. `create` is required since 0.9: `warden tools --check` fails with `role tickets create` when the tool exits 2 for it (it calls `create` with no flags, which must exit 1 and write nothing).
 
-The types are in `tool.ts` (`DagTicket`, `TicketDetail`, `SetStatusResult`, `CreateResult`, `LinkResult`).
+The types are in `tool.ts` (`DagTicket`, `TicketDetail`, `SetStatusResult`, `CreateResult`, `LinkResult`). `ticket-tool-example.md` in this skill's base directory is a complete tool that keeps tickets as Markdown files in `backlog/<ID>.md`: copy it, with its steps, for a project without a tracker.
 
 Anything else, such as end-to-end tests or CI status, needs no role. A check in `.warden/steps.json` simply runs `warden tools e2e run ...`.
 
 Git and paths: run `git -C <dir> ...` and use absolute paths, one simple command per call. A plain `cd <dir>` on its own is fine; never chain it as `cd <dir> && ...`.
+
+Arguments: $ARGUMENTS

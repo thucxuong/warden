@@ -23,6 +23,7 @@ This page assumes warden is installed (see [Installation](installation.md)) and 
    | Check commands | The commands warden runs to prove a change, for example `pnpm run lint` and `pnpm run test`. They come from your `package.json` scripts, or from your Makefile and CI files. At least one is needed. |
    | Setup script | `scripts/warden-setup.sh`, which prepares a fresh checkout (for example `pnpm install --frozen-lockfile`). Warden runs it in each new task worktree. |
    | Team install | Whether to add the warden block to `.claude/settings.json`, so teammates get warden when they trust the folder. Yes is recommended. |
+   | Tickets | Where your tickets live. Every warden run starts from a ticket. Without a tracker, the agent writes a small ticket tool that keeps tickets as Markdown files in `backlog/<ID>.md` (your project owns it). For Jira, Linear and others, run `/warden:tools` afterwards; see [Write a ticket tool](../guides/write-a-ticket-tool.md). |
 
    The agent also drafts four context files that describe your project: `overview`, `architecture`, `stack` and `glossary`. They hold facts only, at most 200 lines each.
 
@@ -31,6 +32,8 @@ This page assumes warden is installed (see [Installation](installation.md)) and 
    - `.warden/context/*.md`, an `INDEX.md` in each `.warden` doc folder, and `.warden/tools/`
    - `scripts/warden-setup.sh`
    - the line `.warden/state/` in `.gitignore`
+
+   Then, for Markdown tickets, the agent writes the ticket tool `.warden/tools/backlog.ts` and names it as the `tickets` role in `.warden/tools/roles.json`.
 
    See [Project files](../reference/project-files.md) for the full list.
 
@@ -57,11 +60,13 @@ This page assumes warden is installed (see [Installation](installation.md)) and 
 
 Use the `do` template for a small change: implement, then check.
 
-1. Start the task. Give an id that matches your pattern and say what to do:
+1. Start the task. Say what to do:
 
    ```text
-   /warden:compose APP-1 fix the typo in the settings page title
+   /warden:compose fix the typo in the settings page title
    ```
+
+   Every run starts from a ticket. The agent creates one from your words with the ticket tool, which picks the id (for example `APP-1`, in `backlog/APP-1.md`), commits it on the main branch (and pushes it when you have a remote), and starts the run from it. If the ticket exists already, give its id instead: `/warden:compose APP-1`.
 
 2. The agent picks a template and shows why:
 
@@ -82,7 +87,7 @@ Use the `do` template for a small change: implement, then check.
 The `do` template has no ship step: the commit stays on the task branch. Open a pull request for it yourself. If you want warden to ship small changes too, use the `chore` template (implement, check, ship). `/warden:compose` picks the template itself; to choose it, say so in the text:
 
 ```text
-/warden:compose APP-4 bump the lodash version. Use the chore template.
+/warden:compose bump the lodash version. Use the chore template.
 ```
 
 The first run asks you to allow a few things, such as `warden` commands and edits in the task worktree. To stop the prompts for warden commands, see the allow rule in [Team setup](../guides/team-setup.md#5-permissions).
@@ -92,10 +97,10 @@ The first run asks you to allow a few things, such as `warden` commands and edit
 1. Start the task:
 
    ```text
-   /warden:compose APP-2 add a dark mode switch to the settings page
+   /warden:compose add a dark mode switch to the settings page
    ```
 
-   The agent picks the `feature` template. Its steps:
+   The agent creates the ticket (say `APP-2`) and picks the `feature` template. Its steps:
 
    ```mermaid
    flowchart LR
@@ -131,7 +136,7 @@ To see all tasks with their time and tokens, run `warden site` in a terminal and
 The `feature` template does not stop for you. To read the plan before any code is written, ask for a flow with an `approve` step:
 
 ```text
-/warden:compose APP-3 add CSV export to the reports page. Use a custom flow: plan, then an approve step, then implement, check, review, ship.
+/warden:compose add CSV export to the reports page. Use a custom flow: plan, then an approve step, then implement, check, review, ship.
 ```
 
 The agent writes the flow, checks it with `warden flow check`, and starts it. The flow it writes looks like this:

@@ -41,7 +41,7 @@ An **epic** is a ticket that groups other tickets. Its children can block each o
 
 3. **Let it work.** For each ticket of the wave, the agent:
 
-   - starts a run: `warden start <id> --template <template> --ticket --worktree`. The ticket's text becomes the task text.
+   - starts a run: `warden start <id> --template <template> --worktree`. The ticket's text becomes the task text.
    - hands each ticket to a `warden:ticket` agent, at most 4 at a time, all in the foreground.
    - hands fix steps to the `warden:fixer` agent when a check fails for a reason outside the change.
    - when the wave's work is done, ships the tickets one at a time: each ticket branch first merges the latest main branch, the gates run again on the merged commit, then the pull request is opened or merged.

@@ -39,7 +39,7 @@ When something is off and no message explains it:
 | Symptom or message | Cause | Fix |
 |---|---|---|
 | `pass either --template do\|feature\|bugfix\|chore or --flow <name\|path>` | Neither or both were given. | Pass exactly one. `warden start` lists every missing or wrong flag at once. |
-| `--ticket cannot be used with --text or --text-file` | Two sources for the task text. | Use one. |
+| `unknown option --text` (or `--text-file`, `--ticket`) | These flags are gone in 0.9: every run starts from a ticket. | Create the ticket first (`/warden:compose` does it), then `warden start <id> --template <t> --worktree`. |
 | `--branch needs --worktree` | `--branch` only names the branch of a new worktree. | Add `--worktree`. |
 | `on <branch>: start on a ticket branch, or pass --worktree` | Without `--worktree`, the run uses the current branch, which may not be the main branch. | Add `--worktree`, or switch to a ticket branch first. |
 | `task id <id> does not match <pattern>` | The id does not fit `taskIdPattern` in `.warden/warden.json`. | Use an id that fits, for example `APP-12` for `^APP-\d+$`. |
@@ -53,8 +53,10 @@ When something is off and no message explains it:
 | `<path> exists but is not a worktree of this repo on <branch>` | A folder is in the way at `.worktrees/<task>`. | Move or delete that folder. |
 | `<path> is a worktree on <other>, not on <branch>` | The task's worktree is on another branch. | Switch that worktree back, or remove it. |
 | `setup failed: <cmd> (exit <n>); log: <path>` | A setup command failed. No run was created. | Read the log at that path (it is kept in the temp dir), fix `scripts/warden-setup.sh` or the cause, commit, and start again. |
-| `ticket tool failed (exit <n>): ...` / `ticket tool printed no JSON` | The project's `tickets` tool broke. | Run `warden tools tickets show <id>` and fix the tool, or start with `--text` instead of `--ticket`. See [Write a ticket tool](guides/write-a-ticket-tool.md). |
-| `no tickets tool: set "tickets" in .warden/tools/roles.json` (exit 3) | `--ticket` or orchestrate needs a `tickets` role. | Add the role, or use `--text`. |
+| `ticket tool failed (exit 3): unknown ticket <id>` | The ticket tool does not know the id. | Check the id, or create the ticket first (`/warden:compose <what to do>` creates it). |
+| `ticket tool failed (exit <n>): ...` / `ticket tool printed no JSON` | The project's `tickets` tool broke. | Run `warden tools tickets show <id>` and fix the tool. See [Write a ticket tool](guides/write-a-ticket-tool.md). |
+| `no tickets tool: set "tickets" in .warden/tools/roles.json. ...` (exit 3) | Every run starts from a ticket (0.9), and orchestrate reads tickets too: both need a `tickets` role. | Add a ticket tool with `/warden:tools`, or follow the 0.9.0 upgrade note (`/warden:upgrade`). Without a tracker, the [ticket tool guide](guides/write-a-ticket-tool.md) has a complete tool that keeps tickets as Markdown files. |
+| `the ticket tool has no create: ...` (exit 3), or `role tickets create` is `FAIL` in `warden tools --check` | The tickets tool answers exit 2 for `create`, which is required since 0.9. | Add `create` as the [ticket tool guide](guides/write-a-ticket-tool.md#create-rules-required-since-09) says. |
 
 ## The step loop
 
@@ -65,7 +67,6 @@ When something is off and no message explains it:
 | `task is busy: another warden command holds the lock` (exit 4) | Another warden command is working on the same task. | Try again in a moment. |
 | `engine work is running; run: warden wait` (exit 4) | A gate, ship prep or fix landing is running. | Run `warden wait`. |
 | `gate still running; run: warden wait` | `warden wait` stopped at its time limit (540 seconds by default). | Run `warden wait` again. |
-| `<task>: <step> (...). No task text was given: ask the user what the task is.` | The run was started without `--text`, `--text-file` or `--ticket`. | Tell the agent what the task is. |
 | `warden done` says `accepted: false` | The output did not pass the checks of that step. | Fix each line of `errors`. The common ones are listed in the [Guide for agents](for-agents.md#common-refusals-and-the-fix). |
 | `Back from <step>: dirty tree.` | The gate found uncommitted files when it started. | Commit or remove them in implement, then hand in again. |
 | `warden: stopping although <task> is active; type "continue" to resume.` | The Stop hook kept the turn going three times in a row and gave up. | Type `continue`. If the agent keeps stopping, ask it to run `warden next`. |

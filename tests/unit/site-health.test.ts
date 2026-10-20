@@ -53,7 +53,7 @@ describe("warden tools --check states", () => {
   const tool = (probe: string) => `export default [{ name: "t", summary: "s", probe: ${probe}, run: () => 0 }];\n`;
 
   test("ok, fail, none and error", async () => {
-    const ok = await runToolsCheck(repo("ok", { ".warden/tools/index.ts": tool(`() => [{ status: "OK", label: "l", detail: "d" }]`) }), PLUGIN_ROOT, base);
+    const ok = await runToolsCheck(repo("ok", { ".warden/tools/index.ts": tool(`() => [{ status: "OK", label: "l", detail: "d" }]`), ".warden/tools/roles.json": '{"tickets":"t"}' }), PLUGIN_ROOT, base);
     expect(ok.state).toBe("ok");
     expect(ok.rows).toContainEqual({ tool: "t", status: "OK", label: "l", detail: "d" });
     const fail = await runToolsCheck(repo("fail", { ".warden/tools/index.ts": tool(`() => [{ status: "FAIL", label: "l", detail: "d" }]`) }), PLUGIN_ROOT, base);
@@ -104,7 +104,7 @@ describe("config problems and versions", () => {
     expect(by(".warden/flows/ok.json").length).toBe(1);
     expect(by(".warden/flows/ok.json")[0]!.message).toMatch(/^flows\/ok\.json: F\d{3} /);
     expect(by(".warden/tools/roles.json")).toEqual([{
-      file: ".warden/tools/roles.json", severity: "info", message: "no ticket tool: the Tickets page and Epics are off", fix: 'set "tickets" in .warden/tools/roles.json',
+      file: ".warden/tools/roles.json", severity: "error", message: "no ticket tool: warden start refuses every run", fix: "add a ticket tool with /warden:tools",
     }]);
     expect(h.ticketTool).toBeNull();
     expect(h.leftoverWorktrees).toEqual([]);

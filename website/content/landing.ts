@@ -28,7 +28,7 @@ export const HERO = {
 
 /** A short example of what you see in a session. Each line is taken from the docs. */
 export const HERO_SESSION: { kind: "you" | "agent" | "warden"; text: string }[] = [
-  { kind: "you", text: "/warden:compose APP-2 add a dark mode switch to the settings page" },
+  { kind: "you", text: "/warden:compose add a dark mode switch to the settings page" },
   { kind: "agent", text: "Type: feature" },
   { kind: "warden", text: "warden ran: lint (pass, 3.1 s), test (fail, exit 1, 12.4 s) on 1a2b3c4" },
   { kind: "warden", text: "APP-2: implement (2/5). Back from check: CODE." },

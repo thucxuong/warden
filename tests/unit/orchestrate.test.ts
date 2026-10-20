@@ -1,4 +1,4 @@
-// warden orchestrate and warden start --ticket, as subprocesses on a temp CP with a fixture ticket tool.
+// warden orchestrate and warden start (from a ticket), as subprocesses on a temp CP with a fixture ticket tool.
 import { beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -110,7 +110,7 @@ describe("orchestrate status", () => {
     cli(["orchestrate", "plan", "E-1"]);
     const file = join(main, ".warden/state/_orchestrate/E-1.json");
     const before = readFileSync(file, "utf8");
-    const started = cli(["start", "T-1", "--template", "chore", "--ticket", "--worktree"]);
+    const started = cli(["start", "T-1", "--template", "chore", "--worktree"]);
     expect(started.code).toBe(0);
     const r = cli(["orchestrate", "status", "E-1"]);
     expect(r.code).toBe(0);
@@ -197,9 +197,9 @@ describe("orchestrate create (0.8)", () => {
   });
 });
 
-describe("start --ticket", () => {
+describe("start reads the ticket", () => {
   test("task.md is the ticket text", () => {
-    const r = cli(["start", "T-1", "--template", "chore", "--ticket", "--worktree"]);
+    const r = cli(["start", "T-1", "--template", "chore", "--worktree"]);
     expect(r.code).toBe(0);
     expect(readFileSync(join(main, ".warden/state/T-1/task.md"), "utf8")).toBe("# T-1: Title T-1\n\nDo the thing.\n\n- a\n- b\n");
     expect(calls()).toEqual(["show T-1"]);
@@ -208,27 +208,30 @@ describe("start --ticket", () => {
 
   test("an id mismatch is exit 1 and creates nothing", () => {
     put("show-T-2.json", { ...row("T-3"), body: "x" });
-    const r = cli(["start", "T-2", "--template", "chore", "--ticket", "--worktree"]);
+    const r = cli(["start", "T-2", "--template", "chore", "--worktree"]);
     expect(r.code).toBe(1);
     expect(existsSync(join(main, ".warden/state/T-2"))).toBe(false);
     expect(existsSync(wt("T-2"))).toBe(false);
   });
 
-  test("--ticket with --text or --text-file is exit 2", () => {
-    expect(cli(["start", "T-1", "--template", "chore", "--ticket", "--text", "hi"]).code).toBe(2);
-    expect(cli(["start", "T-1", "--template", "chore", "--ticket", "--text-file", "x.md"]).code).toBe(2);
-    expect(calls()).toEqual([]);
+  test("no tickets role is exit 3, tells how to add a ticket tool and creates nothing", () => {
+    setTickets(false);
+    const r = cli(["start", "T-1", "--template", "chore", "--worktree"]);
+    expect(r.code).toBe(3);
+    expect(r.err).toContain('no tickets tool: set "tickets" in .warden/tools/roles.json. Warden runs start from a ticket: add a ticket tool with /warden:tools');
+    expect(existsSync(join(main, ".warden/state/T-1"))).toBe(false);
+    expect(existsSync(wt("T-1"))).toBe(false);
   });
 
-  test("no tickets role is exit 3", () => {
-    setTickets(false);
-    const r = cli(["start", "T-1", "--template", "chore", "--ticket", "--worktree"]);
-    expect(r.code).toBe(3);
-    expect(r.err).toContain('no tickets tool: set "tickets" in .warden/tools/roles.json');
+  test("an unknown ticket is exit 1 and creates nothing", () => {
+    const r = cli(["start", "T-7", "--template", "chore", "--worktree"]);
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("ticket tool failed (exit 3)");
+    expect(existsSync(wt("T-7"))).toBe(false);
   });
 
   test("the chore template is accepted", () => {
-    const r = cli(["start", "T-1", "--template", "chore", "--text", "tiny", "--worktree"]);
+    const r = cli(["start", "T-1", "--template", "chore", "--worktree"]);
     expect(r.code).toBe(0);
     expect(r.json.flow).toBe("chore");
   });

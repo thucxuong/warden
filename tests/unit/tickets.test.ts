@@ -484,7 +484,7 @@ describe("runTicketTool", () => {
         throw new Error("did not throw");
       } catch (err) {
         expect((err as WardenError).code).toBe(3);
-        expect((err as WardenError).message).toBe('no tickets tool: set "tickets" in .warden/tools/roles.json');
+        expect((err as WardenError).message).toStartWith('no tickets tool: set "tickets" in .warden/tools/roles.json. Warden runs start from a ticket');
       }
     }
     expect(() => runTicketTool(main, PLUGIN, ["dag"], 10)).toThrow("no tickets tool");

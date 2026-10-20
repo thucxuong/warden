@@ -68,7 +68,7 @@ A full example with a probe is in [Write a tool](../guides/write-a-tool.md).
 
 - In the root of the checkout you run it from, with `WARDEN_MAIN_ROOT` set to the main checkout and warden's `bin` first on `PATH`.
 - In a task worktree, the worktree's own tools run, so a change to a tool can be tried before it merges.
-- When the **engine** runs the ticket tool (at `warden start --ticket`, at ship, and for orchestration), it always loads the tool code and `roles.json` from the main checkout. A task branch cannot change what the engine runs.
+- When the **engine** runs the ticket tool (at `warden start`, at ship, and for orchestration), it always loads the tool code and `roles.json` from the main checkout. A task branch cannot change what the engine runs.
 - `warden tools <name> -h` (or `--help`) prints the tool's `usage`, or its `summary`.
 - A `run` that throws exits 1 with its message on stderr. A `run` that returns something other than a whole number from 0 to 255 also exits 1.
 
@@ -81,7 +81,7 @@ A full example with a probe is in [Write a tool](../guides/write-a-tool.md).
 | `warden tools --check [<name>]` | `{"checks":[{"tool","status","label","detail"}]}` | 1 when any row is `FAIL` |
 | `warden tools --init` | `{"written":[...]}` | 0 |
 
-`--check` has warden's own rows first: `index.ts` loads, and each role names a tool in `index.ts`. Then it runs each tool's `probe`. A probe returns rows with status `OK`, `FAIL`, `WARN` or `SKIP`; a tool without a probe gets one `SKIP` row. Use a probe to check that a program or a token the tool needs is there. Run `warden tools --check` before you commit a tool change.
+`--check` has warden's own rows first: `index.ts` loads, each role names a tool in `index.ts`, and the `tickets` tool has `create` (`role tickets create`: warden calls `create` with no flags, which must exit 1; exit 2 means it is missing). Then it runs each tool's `probe`. A probe returns rows with status `OK`, `FAIL`, `WARN` or `SKIP`; a tool without a probe gets one `SKIP` row. Use a probe to check that a program or a token the tool needs is there. Run `warden tools --check` before you commit a tool change.
 
 ## Roles
 
@@ -98,15 +98,15 @@ A full example with a probe is in [Write a tool](../guides/write-a-tool.md).
 
 | Role | Used by | What the tool must do |
 |---|---|---|
-| `tickets` | `/warden:orchestrate`, `warden start --ticket` and `warden orchestrate create` | `dag [<epic>]`, `show <id>` and `set-status <id> <status>`, each printing JSON; optionally `create` and `link`. See [Write a ticket tool](../guides/write-a-ticket-tool.md). |
+| `tickets` | `warden start` (every run), `/warden:orchestrate` and `warden orchestrate create` | `dag [<epic>]`, `show <id>`, `set-status <id> <status>` and `create`, each printing JSON; optionally `link`. See [Write a ticket tool](../guides/write-a-ticket-tool.md). |
 | `graph` | the work skill and the ticket agent | `query "<question>"` prints plain text and exits 0. The agent runs it before a broad search of the repo. |
 | `pr` | the push and merge rules of the PreToolUse hook | `create` and `merge` subcommands. Warden treats `warden tools pr create` and `warden tools pr merge` like `gh pr create` and `gh pr merge`: allowed only in the ship step after the gates pass. |
 
 Anything else needs no role. A check in `.warden/steps.json` can simply run `warden tools e2e run`.
 
-### The tickets role and `--ticket`
+### The tickets role
 
-With a `tickets` role, `warden start <task> --ticket` reads the task text from `warden tools tickets show <task>` (the ticket's title and body). For a run started with `--ticket`, when the run reaches its ship step, the engine runs `set-status <task> done` in the task's worktree and the ship step commits the changed ticket files with the run record. If the ticket tool fails, the ship goes on and the instructions tell the agent to have you set the status after the merge. Once the ship output is handed in with a `pr`, the engine also runs the optional `link <task> <pr>` in the main checkout (0.8).
+Every run starts from a ticket (0.9), so every project needs a `tickets` role; `/warden:init` sets one up. `warden start <task>` reads the task text from `warden tools tickets show <task>` (the ticket's title and body). When the run reaches its ship step, the engine runs `set-status <task> done` in the task's worktree and the ship step commits the changed ticket files with the run record. If the ticket tool fails, the ship goes on and the instructions tell the agent to have you set the status after the merge. Once the ship output is handed in with a `pr`, the engine also runs the optional `link <task> <pr>` in the main checkout (0.8).
 
 ## Changing tools during a run
 

@@ -957,7 +957,7 @@ The tool is the project's own code. `dag` and `show` are read-only by contract (
 | `triage-rules.json` | `loadTriageRules`; a missing file is fine | error | — |
 | `.warden/flows/*.json` | invalid JSON, or `lintFlow(json, Object.keys(steps.check))` errors as `flows/<f>: <code> <message>` | error | — |
 | `.warden/tools/roles.json` | `readRoles` `ToolsError` problems | error | — |
-| tickets role | no tickets role: `no ticket tool: the Tickets page and Epics are off` | info | `set "tickets" in .warden/tools/roles.json` |
+| tickets role | no tickets role: `no ticket tool: warden start refuses every run` (0.9) | error | `add a ticket tool with /warden:tools` |
 | `site.thresholds` | problems from 3.4 | warn | — |
 
 - `ticketTool` = `readRoles(main).tickets ?? null` (null on error).

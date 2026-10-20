@@ -5,7 +5,7 @@
 // the lock briefly themselves, so do not call it from inside withLock.
 import { join } from "node:path";
 import { DEFAULT_COMMAND_TIMEOUT_SEC } from "../config/config.ts";
-import { porcelain } from "../lib/git.ts";
+import { dirtyOutsideHistory } from "../engine/proof.ts";
 import * as proc from "../lib/proc.ts";
 import { taskDir } from "../state/paths.ts";
 import { appendEvent, readRun, withLock, writeRun } from "../state/store.ts";
@@ -63,12 +63,6 @@ export function commandTimeout(cmd: CommandDef): number {
   return cmd.timeoutSec ?? DEFAULT_COMMAND_TIMEOUT_SEC;
 }
 
-// Porcelain paths, ignoring this task's uncommitted history (5.4) and live state.
-export function leftFiles(worktree: string, task: string): string[] {
-  const history = `.warden/history/${task}/`;
-  return porcelain(worktree).filter((path) => !path.startsWith(history) && !path.startsWith(".warden/state/"));
-}
-
 export async function runCheck(set: { commands: CommandDef[] }, ctx: GateContext): Promise<CheckResult> {
   const { run } = ctx;
   const dir = taskDir(ctx.main, run.task);
@@ -84,7 +78,8 @@ export async function runCheck(set: { commands: CommandDef[] }, ctx: GateContext
     });
     await recordEvent(ctx, "gate.command", { name: cmd.name, exit, durationMs, log }, run.current.id);
 
-    const left = leftFiles(run.worktree, run.task);
+    // Uncommitted history (5.4), live state and the ticket files as the engine set them at ship are not left files.
+    const left = dirtyOutsideHistory(run.worktree, run.ticketFiles ?? {});
     if (left.length > 0) return { passed: false, failedIndex: index, exit, log, leftFiles: left };
     if (exit !== 0) return { passed: false, failedIndex: index, exit, log, leftFiles: [] };
   }

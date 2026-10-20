@@ -101,7 +101,6 @@ function RunHeaderCard({ d }: { d: RunDetailResponse }) {
               <h1 className="font-mono text-2xl font-semibold tracking-tight">{r.task}</h1>
               <StatusBadge status={r.status} />
               {r.source === "history" && <ToneBadge tone="muted">from history</ToneBadge>}
-              {r.ticket && <ToneBadge tone="muted">ticket</ToneBadge>}
             </div>
             <p className="mt-1 text-[15px] text-foreground/90">{r.title ?? <span className="text-muted-foreground">No title</span>}</p>
           </div>

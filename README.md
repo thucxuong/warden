@@ -48,7 +48,7 @@ You need [Claude Code](https://docs.anthropic.com/en/docs/claude-code), git, [Bu
    /warden:init
    ```
 
-   It scans your stack, drafts context files and check commands, asks you to confirm, then writes `.warden/`.
+   It scans your stack, drafts context files and check commands, asks you to confirm, then writes `.warden/`. It also sets up the ticket tool: every run starts from a ticket, and without a tracker your tickets are Markdown files in `backlog/`.
 
 3. Commit the result and get it onto your main branch. `warden start` reads `.warden/` from there.
 
@@ -60,13 +60,13 @@ You need [Claude Code](https://docs.anthropic.com/en/docs/claude-code), git, [Bu
 
    If your main branch is protected, push a branch, open a pull request with these files, and merge it before your first task.
 
-4. Start a task. The task id must match the pattern you chose during init.
+4. Start a task. Say what to do, or give the id of an existing ticket:
 
    ```text
-   /warden:compose APP-101 fix the typo in the settings page title
+   /warden:compose fix the typo in the settings page title
    ```
 
-   The agent picks a template, starts the run in its own worktree and works through the steps. When a step waits for you, the agent tells you what to type.
+   The agent creates the ticket with your ticket tool, picks a template, starts the run in its own worktree and works through the steps. When a step waits for you, the agent tells you what to type.
 
 The [quick start guide](docs/getting-started/quickstart.md) walks through a first feature task from start to ship.
 
@@ -105,7 +105,7 @@ The full table of contents is in [docs/README.md](docs/README.md).
 
 ## Project status
 
-Version 0.8.1. Warden is young and changes often. Each version that changes your project's files ships an upgrade note, and `/warden:upgrade` applies it (see [Upgrading](docs/getting-started/upgrading.md)). Changes are listed in [CHANGELOG.md](CHANGELOG.md).
+Version 0.9.0. Warden is young and changes often. Each version that changes your project's files ships an upgrade note, and `/warden:upgrade` applies it (see [Upgrading](docs/getting-started/upgrading.md)). Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

@@ -9,6 +9,7 @@ import { WardenError } from "../../plugins/warden/src/lib/exit.ts";
 import { taskDir, worktreesDir } from "../../plugins/warden/src/state/paths.ts";
 import { readEvents, readRun, runExists, writeRun } from "../../plugins/warden/src/state/store.ts";
 import { commit, sh as git, write } from "../helpers/repo.ts";
+import { ticketFiles, ticketToolFiles } from "../helpers/tools-fixture.ts";
 import { CLI, IMPLEMENT_OUTPUT, base, main, WARDEN_FILES, cleanEnv, cli, humanCtx, inProcess, until, wt, writeFlow, startDoAndCommit, installCommandsFixture } from "../helpers/commands-fixture.ts";
 
 setDefaultTimeout(60_000);
@@ -29,15 +30,13 @@ describe("start", () => {
       "warden: on main: start on a ticket branch, or pass --worktree",
     ]);
 
-    const many = cli(["start", "--template", "nope", "--ticket", "--text", "a", "--text-file", "b", "--branch", "x"]);
+    const many = cli(["start", "--template", "nope", "--branch", "x"]);
     expect(many.code).toBe(2);
     const lines = many.err.trim().split("\n");
-    expect(lines).toHaveLength(6);
-    expect(lines[0]).toStartWith("warden: usage: warden start <task>");
+    expect(lines).toHaveLength(4);
+    expect(lines[0]).toStartWith("warden: usage: warden start <ticket>");
     expect(lines.slice(1)).toEqual([
       "warden: --template must be one of do, feature, bugfix, chore",
-      "warden: --ticket cannot be used with --text or --text-file",
-      "warden: use --text or --text-file, not both",
       "warden: --branch needs --worktree",
       "warden: on main: start on a ticket branch, or pass --worktree",
     ]);
@@ -51,7 +50,7 @@ describe("start", () => {
     git(fresh, "config", "user.name", "Test User");
     git(fresh, "config", "user.email", "test@example.com");
     commit(fresh, { "README.md": "x\n" });
-    for (const [rel, text] of Object.entries(WARDEN_FILES)) write(fresh, rel, text);
+    for (const [rel, text] of Object.entries({ ...WARDEN_FILES, ...ticketToolFiles(), ...ticketFiles(["T-1"]) })) write(fresh, rel, text);
     const r = cli(["start", "T-1", "--template", "do", "--worktree"], { cwd: fresh });
     expect(r.code).toBe(1);
     expect(r.err).toContain("commit and push .warden/ to main first");
@@ -82,18 +81,18 @@ describe("start", () => {
     expect(cli(["start", "T-1", "--template", "do", "--bogus"]).code).toBe(2);
   });
 
-  test("--worktree creates the worktree in <main>/.worktrees and stores task.md; settings.local.json is left alone (0.8)", () => {
+  test("--worktree creates the worktree in <main>/.worktrees and stores the ticket as task.md; settings.local.json is left alone (0.8)", () => {
     const settingsText = JSON.stringify({ foo: 1, permissions: { allow: ["Bash(ls)"] } });
     write(main, ".claude/settings.local.json", settingsText);
-    writeFileSync(join(base, "task.txt"), "Add a greeting.\n");
-    const r = cli(["start", "T-1", "--template", "do", "--worktree", "--text-file", join(base, "task.txt")]);
+    const r = cli(["start", "T-1", "--template", "do", "--worktree"]);
     expect(r.code).toBe(0);
     expect(r.json.worktree).toBe(join(main, ".worktrees", "T-1"));
     expect(r.json.worktree).toBe(wt());
     expect(r.json.status).toBe("agent");
     expect(r.json.step.id).toBe("implement");
     expect(git(wt(), "branch", "--show-current")).toBe("t-1");
-    expect(readFileSync(join(taskDir(main, "T-1"), "task.md"), "utf8")).toBe("Add a greeting.\n");
+    expect(readFileSync(join(taskDir(main, "T-1"), "task.md"), "utf8")).toBe("# T-1: Task T-1\n\nAdd a greeting.\n");
+    expect(readRun(main, "T-1").ticket).toBe(true);
     expect(readFileSync(join(main, ".claude/settings.local.json"), "utf8")).toBe(settingsText);
     expect(git(main, "status", "--porcelain", "--untracked-files=all", "--", ".worktrees")).toBe("");
   });
@@ -163,7 +162,7 @@ describe("start", () => {
     const n = cli(["next"]);
     expect(n.code).toBe(0);
     expect(n.json.task).toBe("T-2");
-    expect(n.json.message).toContain("No task text was given");
+    expect(n.json.message).toBe("T-2: implement (1/2).");
     expect(cli(["next", "T-9"]).code).toBe(3);
   });
 
@@ -178,7 +177,8 @@ describe("start", () => {
 
     const n = cli(["next"]);
     expect(n.code).toBe(0);
-    expect(n.json).toMatchObject({ task: "T-3", status: "done", message: "T-3: done." });
+    expect(n.json).toMatchObject({ task: "T-3", status: "done" });
+    expect(n.json.message).toStartWith(`T-3: done. Set its ticket to done on this branch: in ${run.worktree}, run warden tools tickets set-status T-3 done, then commit`);
     const w = cli(["wait"]);
     expect(w.code).toBe(0);
     expect(w.json).toMatchObject({ task: "T-3", status: "done" });
@@ -249,11 +249,13 @@ describe("done and wait", () => {
     expect(readRun(main, "T-1").proofs.map((p) => p.stepId)).toEqual(["check"]);
   });
 
-  test("start --text stores the task text; --text with --text-file is a usage error", () => {
-    const r = cli(["start", "T-1", "--template", "do", "--worktree", "--text", "Add a greeting."]);
-    expect(r.code).toBe(0);
-    expect(readFileSync(join(taskDir(main, "T-1"), "task.md"), "utf8")).toBe("Add a greeting.");
-    expect(cli(["start", "T-2", "--template", "do", "--worktree", "--text", "x", "--text-file", "y"]).code).toBe(2);
+  test("0.9: --text, --text-file and --ticket are gone; start always reads the ticket", () => {
+    for (const flag of [["--text", "x"], ["--text-file", "y"], ["--ticket"]]) {
+      const r = cli(["start", "T-2", "--template", "do", "--worktree", ...flag]);
+      expect(r.code).toBe(2);
+      expect(r.err).toContain(`unknown option ${flag[0]}`);
+    }
+    expect(runExists(main, "T-2")).toBe(false);
   });
 
   test("done --json takes the output as one argument, like stdin", () => {

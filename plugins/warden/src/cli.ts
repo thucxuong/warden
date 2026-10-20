@@ -14,7 +14,7 @@ export const COMMANDS = [
 export const HELP: Record<string, string> = {
   version: "warden version",
   init: "warden init --scan | --write [--file <payload>] [--force]",
-  start: "warden start <task> --template do|feature|bugfix|chore | --flow <name|path> [--text <t> | --text-file <p> | --ticket] [--worktree] [--branch <b>]",
+  start: "warden start <ticket> --template do|feature|bugfix|chore | --flow <name|path> [--worktree] [--branch <b>]",
   next: "warden next [<task>]",
   done: "warden done [<task>] [--json <text> | --file <path>]",
   wait: "warden wait [<task>] [--max-seconds <n>]",

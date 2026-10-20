@@ -3,7 +3,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { loadStepsJson, loadWardenJson } from "../config/config.ts";
-import { readRoles, TOOLS_MAIN_ENV } from "../commands/tools.ts";
+import { NO_TICKETS, readRoles, TOOLS_MAIN_ENV } from "../commands/tools.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
 import { readJson, writeJsonAtomic } from "../lib/json.ts";
 import { killGroup, pathWithBin } from "../lib/proc.ts";
@@ -20,7 +20,6 @@ export const CLOSED_STATUSES: TicketStatus[] = ["done", "archived"];
 export const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const DAG_TIMEOUT_SEC = 300;
 const SHORT_TIMEOUT_SEC = 60;
-const NO_TICKETS = 'no tickets tool: set "tickets" in .warden/tools/roles.json';
 
 // ---------------------------------------------------------------------------
 // 5.1 Running the ticket tool (0.6: the `tickets` role, through `warden tools`)
@@ -150,7 +149,7 @@ export function showTicket(main: string, root: string, id: string): TicketDetail
 
 const isPaths = (v: unknown): boolean => Array.isArray(v) && v.every((p) => typeof p === "string");
 
-// `create` and `link` are optional (0.8). A tool without one exits 2 (bad usage): null.
+// A tool without `create` or `link` exits 2 (bad usage) for it: null. `link` is optional; `create` is required since 0.9.
 function runOptional(main: string, root: string, args: string[]): Record<string, unknown> | null {
   let out: unknown;
   try {
@@ -171,7 +170,7 @@ export function createTicket(main: string, root: string, t: NewTicket): { ticket
   if (t.epic !== undefined) args.push("--epic", t.epic);
   if (t.blockedBy !== undefined && t.blockedBy.length > 0) args.push("--blocked-by", t.blockedBy.join(","));
   const out = runOptional(main, root, args);
-  if (out === null) throw new WardenError("the ticket tool has no create", EXIT.NOT_FOUND);
+  if (out === null) throw new WardenError("the ticket tool has no create: add it with /warden:tools", EXIT.NOT_FOUND);
   const pattern = loadWardenJson(join(main, ".warden", "warden.json")).taskIdPattern;
   const bad = detailProblem(out.ticket);
   const id = (out.ticket as TicketDetail | undefined)?.id;

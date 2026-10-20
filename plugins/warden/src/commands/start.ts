@@ -1,6 +1,7 @@
-// warden start <task> (spec 3.2 "start"): steps 1, 2, 3 and 5 here; the machine does 4, 6, 7 and 8.
+// warden start <ticket> (spec 3.2 "start"): steps 1, 2, 3 and 5 here; the machine does 4, 6, 7 and 8.
 // Step 4 is also checked here first, so a bad flow or an existing run never creates a worktree.
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+// 0.9: every run starts from a ticket; its text comes from the ticket tool's show.
+import { existsSync, realpathSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { loadStepsJson, loadWardenJson, parseStepsJson } from "../config/config.ts";
 import { lintFlow } from "../engine/flow-lint.ts";
@@ -15,7 +16,7 @@ import { readFlowFile, resolveFlowPath, TEMPLATES } from "./flow.ts";
 import { parseArgs, printJson, type ParsedArgs } from "./next.ts";
 
 const USAGE =
-  "warden start <task> --template do|feature|bugfix|chore | --flow <name|path> [--text <t> | --text-file <p> | --ticket] [--worktree] [--branch <b>]";
+  "warden start <ticket> --template do|feature|bugfix|chore | --flow <name|path> [--worktree] [--branch <b>]";
 
 function checkTaskId(task: string, pattern: string): void {
   if (task === SESSIONS_DIR_NAME) throw new WardenError(`${SESSIONS_DIR_NAME} is a reserved name`);
@@ -33,10 +34,6 @@ function usageProblems(parsed: ParsedArgs): string[] {
   } else if (template !== undefined && !TEMPLATES.includes(template)) {
     problems.push(`--template must be one of ${TEMPLATES.join(", ")}`);
   }
-  if (switches.has("--ticket") && (values["--text"] !== undefined || values["--text-file"] !== undefined)) {
-    problems.push("--ticket cannot be used with --text or --text-file");
-  }
-  if (values["--text"] !== undefined && values["--text-file"] !== undefined) problems.push("use --text or --text-file, not both");
   if (!switches.has("--worktree") && values["--branch"] !== undefined) problems.push("--branch needs --worktree");
   return problems;
 }
@@ -59,21 +56,11 @@ function chooseFlow(ctx: Ctx, parsed: ParsedArgs): FlowJson {
   return readFlowFile(resolveFlowPath(ctx, name!)) as FlowJson;
 }
 
-// 0.3 spec 4.2: the task text comes from the ticket tool.
+// The task text comes from the ticket tool (0.3 spec 4.2; the only source since 0.9).
 function ticketText(main: string, root: string, task: string): string {
   const ticket = showTicket(main, root, task);
   if (ticket.id !== task) throw new WardenError(`ticket tool returned ${ticket.id} for ${task}`);
   return `# ${ticket.id}: ${ticket.title}\n\n${ticket.body}\n`;
-}
-
-function readTaskText(ctx: Ctx, text: string | undefined, file: string | undefined): string | null {
-  if (text !== undefined) return text;
-  if (file === undefined) return null;
-  try {
-    return readFileSync(resolve(ctx.cwd, file), "utf8");
-  } catch {
-    throw new WardenError(`cannot read ${file}`, EXIT.USAGE);
-  }
 }
 
 // Step 2: the run's config comes from mainRef, so .warden/ must be committed there.
@@ -140,7 +127,7 @@ function ensureWorktree(main: string, task: string, branch: string, ref: string)
 }
 
 export async function run(args: string[], ctx: Ctx): Promise<number | void> {
-  const parsed = parseArgs(args, ["--template", "--flow", "--text", "--text-file", "--branch"], ["--worktree", "--ticket"]);
+  const parsed = parseArgs(args, ["--template", "--flow", "--branch"], ["--worktree"]);
   const problems = usageProblems(parsed);
   const onMain = branchProblem(ctx, parsed);
   if (onMain) problems.push(onMain);
@@ -150,29 +137,19 @@ export async function run(args: string[], ctx: Ctx): Promise<number | void> {
   }
   const task = parsed.positional[0]!;
   const useWorktree = parsed.switches.has("--worktree");
-  const ticket = parsed.switches.has("--ticket");
   const flow = chooseFlow(ctx, parsed);
-  let taskText = readTaskText(ctx, parsed.values["--text"], parsed.values["--text-file"]);
 
   const main = mainRoot(ctx.cwd);
   checkTaskId(task, loadWardenJson(join(main, ".warden", "warden.json")).taskIdPattern);
-  if (ticket) taskText = ticketText(main, ctx.root, task);
   const { mainBranch } = loadStepsJson(join(main, ".warden", "steps.json"));
   const ref = fetchRef(main, mainBranch);
 
-  let worktree: string;
-  let branch: string;
-  if (useWorktree) {
-    branch = parsed.values["--branch"] ?? task.toLowerCase();
-    precheck(main, task, flow, ref, mainBranch);
-    worktree = ensureWorktree(main, task, branch, ref);
-  } else {
-    branch = currentBranch(ctx.cwd);
-    if (branch === mainBranch || branch === "") throw new WardenError("start on a ticket branch, or pass --worktree");
-    precheck(main, task, flow, ref, mainBranch);
-    worktree = worktreeRoot(ctx.cwd);
-  }
+  const branch = useWorktree ? (parsed.values["--branch"] ?? task.toLowerCase()) : currentBranch(ctx.cwd);
+  if (!useWorktree && (branch === mainBranch || branch === "")) throw new WardenError("start on a ticket branch, or pass --worktree");
+  precheck(main, task, flow, ref, mainBranch);
+  const taskText = ticketText(main, ctx.root, task); // after precheck: an existing run is reported as such
+  const worktree = useWorktree ? ensureWorktree(main, task, branch, ref) : worktreeRoot(ctx.cwd);
 
-  const response = await start(ctx, task, flow, { worktree, branch, mainRef: ref, taskText, ticket });
+  const response = await start(ctx, task, flow, { worktree, branch, mainRef: ref, taskText, ticket: true });
   printJson(useWorktree ? { ...response, worktree } : response);
 }

@@ -295,7 +295,7 @@ Folder names that start with `_` are not tasks.
 | `gate` | The running engine job (`check`, `review`, `ship-prep`, `fix-landing`), or null |
 | `fix` | The fix in progress: `{n, worktree, branch, baseSha, verdict, report, mayMerge}`, or null |
 | `leftovers` | Path of `review/leftover.md`, or null |
-| `ticket`, `ticketFiles`, `ticketError` | Set for a run started with `--ticket`: the ticket files set to done at ship, or why that failed |
+| `ticket`, `ticketFiles`, `ticketError` | `ticket` is `true` for a run started from a ticket (every run since 0.9; runs started from text before 0.9 have none). The ticket files set to done at ship, or why that failed |
 
 ### Event types
 

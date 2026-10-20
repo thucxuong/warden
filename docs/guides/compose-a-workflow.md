@@ -12,11 +12,13 @@ A **flow** is a JSON file that lists the steps of a run in order. Warden ships f
 
 ## The easy way: let the agent compose it
 
-Run the compose skill with a task id and what to do:
+Run the compose skill with what to do, or with the id of an existing ticket:
 
 ```
-/warden:compose PG-104 Move user emails to a separate table, with a rollback
+/warden:compose Move user emails to a separate table, with a rollback
 ```
+
+Every run starts from a ticket. Without an id, the agent first creates the ticket with your ticket tool, which picks the id (say `PG-104`).
 
 The project's agent picks a template from the task type. For a shape no template covers, it writes a flow, runs `warden flow check` on it until it passes, and starts the run. It prints a short routing block first:
 
@@ -87,10 +89,10 @@ The rest of this page shows how to do the same by hand, and what the agent does 
 5. **Start a run with it.** Use `--flow` with a saved name or a path, instead of `--template`:
 
    ```bash
-   warden start PG-104 --flow migration --text "Move user emails to a separate table, with a rollback" --worktree
+   warden start PG-104 --flow migration --worktree
    ```
 
-   `--worktree` gives the task its own git worktree and branch. `warden start` checks the flow again before it creates anything. Then drive the run with `/warden:work`.
+   `PG-104` is the ticket; its text becomes the task text. `--worktree` gives the task its own git worktree and branch. `warden start` checks the flow again before it creates anything. Then drive the run with `/warden:work`.
 
 ## Step types
 

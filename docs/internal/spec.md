@@ -333,7 +333,7 @@ All machine-facing commands print **one JSON object on stdout**. Diagnostics go 
 | `warden version` | — | Prints the plugin version. | `{"version":"0.1.0"}` |
 | `warden init --scan` | — | Read-only scan of the repo (8.1). Exit 3 if not a git repo. | `InitScan` (4.11) |
 | `warden init --write` | `[--file <path>]` (default stdin) | Validates `InitPayload` (4.11) and writes `.warden/` (8.1), `scripts/warden-setup.sh`, `.gitignore` lines and INDEX.md files; with `teamInstall: true` also merges the 10.3 block into `.claude/settings.json`. Refuses if `.warden/warden.json` exists, unless `--force`. Does not commit. | `{"written":[paths...]}` |
-| `warden start <task>` | `--template do\|feature\|bugfix` or `--flow <name\|path>`; `[--text-file <p>]` `[--worktree]` `[--branch <b>]` | See "start" below. | `NextResponse` (4.9), plus `"worktree"` when created or reused |
+| `warden start <task>` | `--template do\|feature\|bugfix` or `--flow <name\|path>`; `[--worktree]` `[--branch <b>]` | See "start" below. | `NextResponse` (4.9), plus `"worktree"` when created or reused |
 | `warden next` | `[<task>]` | Returns what the current step needs. With no live run in the worktree, returns the most recent finished run's response (3.1). Mutates only through `ensureGate` (5.4), the light ship precheck (5.6) and the approve skip (5.5). | `NextResponse` |
 | `warden done` | `[<task>] [--file <path>]` (default stdin) | Only for agent steps (`analyze`, `plan`, `implement`, `ship`, `fix`). Validates the output and evidence (5.3). On accept, advances the run and, when the next step is engine work, starts the worker and **returns at once** with `status: "running_gate"`. It never waits. On a check or review step, exits 1 with `check steps are run by the engine` (or `review steps …`). Exit 4 while a gate is running. | `DoneResponse` (4.9) |
 | `warden wait` | `[<task>] [--max-seconds <n>]` (default 540, max 590) | The only blocking command. Calls `ensureGate`, then polls `run.json` every 2 s until no engine work is running or time runs out. The caller sets the Bash timeout to 600000. | `NextResponse` |
@@ -365,7 +365,7 @@ All machine-facing commands print **one JSON object on stdout**. Diagnostics go 
    - Else: `git worktree add -b <branch> <path> <mainRef>`.
    - The path exists but is not such a worktree, or the branch is checked out elsewhere: refuse and name the path or worktree.
    - Make sure `<mainRoot>/.claude/settings.local.json` has `worktreesDir` in `permissions.additionalDirectories` (merge, keep other keys), so the session can edit files there **[U-12]**.
-6. Write the snapshots into `state/<task>/`: `flow.json`, `steps.json` (from `git show <mainRef>:.warden/steps.json`, validated), and `task.md` (the `--text-file` contents; if absent, `task.md` holds the task id only and `next` says so).
+6. Write the snapshots into `state/<task>/`: `flow.json`, `steps.json` (from `git show <mainRef>:.warden/steps.json`, validated), and `task.md` (the ticket's text from the ticket tool's `show`; 0.9 removed `--text-file` and the id-only `task.md`).
 7. Run the snapshot's `setup.commands` in the ticket worktree. On a failure, keep the worktree, delete `state/<task>/`, and exit 1 with the log path.
 8. `baseSha` = `git merge-base <branch> <mainRef>`. Create `run.json`, write `run.started`, and enter step 0.
 

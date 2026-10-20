@@ -72,19 +72,16 @@ The Stop hook keeps your turn going while the run needs you. If it says `<task> 
 
 ### Starting a run
 
-Usually the user starts with `/warden:compose <task-id> <what to do>`, or the `/warden:work` skill starts one. When you must start it yourself:
+Usually the user starts with `/warden:compose <what to do>` or `/warden:compose <ticket id>`, or the `/warden:work` skill starts one. Every run starts from a ticket. When you must start it yourself:
 
 1. Run `warden next`. If it says there is no active run here and lists your task among the live runs, run `cd <its worktree>` as its own command, then `warden next`. Skip the rest of this list.
-2. The task id must match `taskIdPattern` in `.warden/warden.json`. If the user gave only text and the ticket tool has `create`, create the ticket as `/warden:compose` says ("No task id"): the tool picks the id. Otherwise ask for an id.
+2. The task id is the ticket id and must match `taskIdPattern` in `.warden/warden.json`. If the user gave only text, create the ticket as `/warden:compose` says ("No task id"): the tool picks the id. Without a `tickets` role, `warden start` refuses: tell the user to add a ticket tool (`/warden:tools`).
 3. Pick the template as `/warden:compose` does: `feature` for a new feature, schema or API change, many files, new UI, an auth entry point, or no label; `bugfix` for a bug in existing code; `do` for docs, config only, a typo or a single-file obvious edit; `chore` for a small change that must be merged, such as a chore ticket.
-4. Run one of these, with a Bash timeout of 600000 (start runs the project setup):
+4. Run this, with a Bash timeout of 600000 (start reads the ticket and runs the project setup):
 
    ```bash
-   warden start APP-12 --template feature --ticket --worktree
-   warden start APP-12 --template feature --text "Add a CSV export to the report page" --worktree
+   warden start APP-12 --template feature --worktree
    ```
-
-   Use `--ticket` only when `warden tools` lists a `tickets` role and `warden tools tickets show <id>` finds the ticket.
 5. Run `cd <worktree>` as its own command, then `warden next`.
 
 ## What each step asks of you
@@ -110,7 +107,7 @@ One command, the JSON on one line in single quotes:
 warden done --json '{"summary":"Apply tax once","filesChanged":["src/cart.ts","tests/cart.test.ts"],"testsAdded":["tests/cart.test.ts"]}'
 ```
 
-- Write a single quote inside the JSON as `\u0027`. (For `--text` in `warden start`, the compose skill writes a single quote as `’` instead.)
+- Write a single quote inside the JSON as `\u0027`.
 - `warden done --file <path>` also works, but `--json` keeps it to one simple command.
 - `warden done` returns at once. It prints `{"accepted", "errors", "next"}`, where `next` is the same shape as `warden next`. Exit 0 when accepted, 1 when not, 4 while engine work is running.
 - For implement, `filesChanged` is exactly what `git -C <worktree> diff --name-only <step start> HEAD` prints. The step start SHA is in the instructions (`Step start: <sha>`).

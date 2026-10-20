@@ -18,7 +18,7 @@ describe("happy path (feature template)", () => {
 
     // Session S1 starts, and its PreToolUse links it to T-001 before the run exists.
     expect(sessionStart(cp, "S1").code).toBe(0);
-    expect(bashHook(cp, "S1", "warden start T-001 --template feature --worktree --text-file task.txt").denied).toBe(false);
+    expect(bashHook(cp, "S1", "warden start T-001 --template feature --worktree").denied).toBe(false);
 
     const started = start(cp, "T-001", { template: "feature" });
     expect(started.code).toBe(0);

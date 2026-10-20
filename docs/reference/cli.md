@@ -114,32 +114,29 @@ It prints `{"written": [<repo paths>]}` and, when the team install was skipped, 
 ## warden start
 
 ```
-warden start <task> --template do|feature|bugfix|chore [--text <t> | --text-file <p> | --ticket] [--worktree] [--branch <b>]
-warden start <task> --flow <name|path>             [--text <t> | --text-file <p> | --ticket] [--worktree] [--branch <b>]
+warden start <ticket> --template do|feature|bugfix|chore [--worktree] [--branch <b>]
+warden start <ticket> --flow <name|path>             [--worktree] [--branch <b>]
 ```
 
-Starts a run. Run it with a long Bash timeout (the skills use 600000 ms): it runs the project's setup commands.
+Starts a run for a ticket. Every run starts from a ticket (0.9): the task text is the ticket, read from the project's `tickets` tool with `show <ticket>`, and at the ship step warden sets the ticket to `done`. `--text`, `--text-file` and `--ticket` are gone; for a request without a ticket, create one first (`warden orchestrate create`, as `/warden:compose` does). Run it with a long Bash timeout (the skills use 600000 ms): it runs the project's setup commands.
 
 | Flag | Meaning |
 |---|---|
 | `--template <t>` | One of the built-in flows: `do`, `feature`, `bugfix`, `chore`. See [flow files](flow-files.md#built-in-templates) |
 | `--flow <name\|path>` | A saved flow (`.warden/flows/<name>.json`) or a path to a flow file. A template name also works here |
-| `--text <t>` | The task text, stored as `task.md` |
-| `--text-file <p>` | Read the task text from a file |
-| `--ticket` | Read the task text from the project's `tickets` tool (`show <task>`). At the ship step, warden also sets the ticket to `done` |
 | `--worktree` | Make (or reuse) a separate git worktree for the task |
 | `--branch <b>` | The branch for `--worktree`. Default: the task id in lower case |
 
 Rules, all reported in one go (exit 2):
 
 - Pass exactly one of `--template` or `--flow`.
-- `--ticket` cannot be used with `--text` or `--text-file`. `--text` and `--text-file` cannot be used together.
 - `--branch` needs `--worktree`.
 - Without `--worktree`, you must be on a branch other than the main branch.
 
 What it does, in order:
 
 1. Checks the task id against `taskIdPattern` (from the main checkout's `.warden/warden.json`). The id `_sessions` is reserved.
+   Then reads the ticket with the `tickets` tool's `show <ticket>`. The task text is `# <id>: <title>`, a blank line and the body. Without a `tickets` role it stops (exit 3): `no tickets tool: set "tickets" in .warden/tools/roles.json. Warden runs start from a ticket: add a ticket tool with /warden:tools ...`. An unknown ticket stops it too (`ticket tool failed (exit 3): ...`).
 2. Fetches the main branch from `origin` (when there is a remote). A failed fetch prints a warning and uses the last fetched copy.
 3. Takes the run's `steps.json` **from the main branch** (`origin/<main>` when there is a remote), not from your working tree. If `.warden/warden.json` or `.warden/steps.json` is not committed there, it stops: `commit and push .warden/ to <main> first`.
 4. Lints the flow against the check sets of that `steps.json`. A bad flow stops the start.
@@ -214,7 +211,7 @@ Output (`DoneResponse`):
 { accepted: boolean; errors: string[]; warnings?: string[]; next: NextResponse }
 ```
 
-`warnings` (0.8) appears only after the ship step of a `--ticket` run with a `pr`, when the ticket tool's `link` failed or printed `changed` paths (link must not change repo files; warden ignores them). It never undoes the ship; see [write a ticket tool](../guides/write-a-ticket-tool.md#link-rules-optional).
+`warnings` (0.8) appears only after the ship step of a run with a `pr`, when the ticket tool's `link` failed or printed `changed` paths (link must not change repo files; warden ignores them). It never undoes the ship; see [write a ticket tool](../guides/write-a-ticket-tool.md#link-rules-optional).
 
 | Case | Exit |
 |---|---|
@@ -455,7 +452,7 @@ Runs the project's own tools from `.warden/tools/`. See [tools and roles](../con
 | Form | What it does | Output |
 |---|---|---|
 | `warden tools` | Lists the tools and roles | `{"tools":[{name, summary}], "roles":{...}}` |
-| `--check [<name>]` | Checks `roles.json` against the tool list and runs each tool's `probe` (or only the named one). Exit 1 when any row is `FAIL` | `{"checks":[{tool, status, label, detail}]}`, status `OK`, `FAIL`, `WARN` or `SKIP` |
+| `--check [<name>]` | Checks `roles.json` against the tool list and runs each tool's `probe` (or only the named one). With a `tickets` role it also calls the tickets tool's `create` with no flags: exit 2 there means it has no `create`, a `FAIL` row `role tickets create` (0.9). Exit 1 when any row is `FAIL` | `{"checks":[{tool, status, label, detail}]}`, status `OK`, `FAIL`, `WARN` or `SKIP` |
 | `--init` | Writes the missing files of `.warden/tools/` (`index.ts`, `tool.ts`, `roles.json`). Never overwrites | `{"written":[...]}` |
 | `<name> [args]` | Runs the tool. A word is a tool name first, then a role | The tool's own output. warden prints nothing on stdout |
 | `<name> -h` | Prints the tool's `usage`, or its `summary` | Text |
@@ -489,14 +486,14 @@ warden orchestrate set-status <id> <status>
 warden orchestrate create --title <t> --type <type> --body-file <path> [--epic <id>] [--blocked-by <id,id>]
 ```
 
-Used by the `/warden:orchestrate` skill. Works on the main checkout. Needs a `tickets` role in `.warden/tools/roles.json` (exit 3: `no tickets tool: set "tickets" in .warden/tools/roles.json`). See [orchestration](../concepts/orchestration.md).
+Used by the `/warden:orchestrate` skill. Works on the main checkout. Needs a `tickets` role in `.warden/tools/roles.json` (exit 3: `no tickets tool: set "tickets" in .warden/tools/roles.json. ...`). See [orchestration](../concepts/orchestration.md).
 
 | Subcommand | What it does | Exit |
 |---|---|---|
 | `plan <epic>` | Runs the tickets tool (`dag <epic>`), builds waves, adds each ticket's run state, saves the plan in `.warden/state/_orchestrate/<epic>.json` and prints it | 1 when `errors` is not empty |
 | `status <epic>` | Prints the saved plan with run state read again. Does not ask the tickets tool | 3 when there is no saved plan |
 | `set-status <id> <status>` | Runs the tickets tool (`set-status`). Status is `backlog`, `todo`, `doing`, `review`, `done` or `archived`. Prints `{"id","status","changed":[paths]}` | 2 for a bad status |
-| `create ...` | 0.8. Runs the tickets tool's optional `create` in the main checkout; the tool picks the id. Passes the body file as an absolute path. Checks the new id (`^[A-Za-z0-9][A-Za-z0-9._-]*$`, and `taskIdPattern` unless `--type epic`). Prints `{"ticket":{...,"body"},"changed":[paths]}`; the caller adds and commits `changed` on the main branch. Used by `/warden:compose` for a request without an id and to plan an epic | 2 for bad usage or a missing body file; 3 with `the ticket tool has no create` when the tool answers exit 2; 1 for a bad id or result |
+| `create ...` | 0.8. Runs the tickets tool's `create` (required since 0.9) in the main checkout; the tool picks the id. Passes the body file as an absolute path. Checks the new id (`^[A-Za-z0-9][A-Za-z0-9._-]*$`, and `taskIdPattern` unless `--type epic`). Prints `{"ticket":{...,"body"},"changed":[paths]}`; the caller adds and commits `changed` on the main branch. Used by `/warden:compose` for a request without an id and to plan an epic | 2 for bad usage or a missing body file; 3 with `the ticket tool has no create` when the tool answers exit 2; 1 for a bad id or result |
 
 Plan output:
 

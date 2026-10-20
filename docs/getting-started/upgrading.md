@@ -88,6 +88,10 @@ Each version that ships has a note in the plugin's `upgrades/` folder, named `v<
 
 Skipping versions is fine: `warden upgrade --notes` joins the notes of every version in between, in order.
 
+## Every run starts from a ticket in 0.9.0
+
+From 0.9.0 `warden start <id>` always reads the task from the ticket tool, and `--text`, `--text-file` and `--ticket` are gone. The ticket tool must have `create`. `/warden:upgrade` writes a ticket tool that keeps tickets as Markdown files in `backlog/` when your project has none, and adds a ticket by hand for each live run that started from text. Those runs keep working either way.
+
 ## Worktrees move into the repo in 0.8.0
 
 From 0.8.0 task worktrees live in `<repo>/.worktrees/<task>`, not next to the repo. `/warden:upgrade` adds `.worktrees/` to `.gitignore` and to your tools' ignore lists where needed. Runs started before the upgrade keep their old worktrees, so keep the old `<repo>.worktrees` entry in `.claude/settings.local.json` until `warden clean` has removed them.

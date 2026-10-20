@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.0 — 2026-10-20
+
+- Every run starts from a ticket. `warden start <id> --template <t> --worktree` reads the task from the ticket tool (`show <id>`); `--text`, `--text-file` and `--ticket` are gone. A project without a `tickets` role gets a refusal that says how to add a ticket tool. Runs started from text before 0.9 keep working: the engine finishes them as before.
+- `create` is required in a ticket tool now (`link` stays optional). `/warden:compose` and `/warden:work` always create the ticket for a request that has none. `warden tools --check` fails with `role tickets` when there is no ticket tool, and with `role tickets create` when the tool has no `create`. When the push of a new ticket to a protected main branch is refused, the ticket goes with the run's pull request instead.
+- `/warden:init` asks where your tickets live. Without a tracker, the project's agent writes a small ticket tool that keeps tickets as Markdown files in `backlog/<ID>.md`, by copying the complete example of the ticket tool guide, and makes it the `tickets` role. The plugin now ships that example as text next to the tools skill (`skills/tools/ticket-tool-example.md`), so the agent can read it; warden ships no tool code for it: the project owns it. `/warden:upgrade` does the same for a project without one, and adds a ticket by hand for each live run that started from text and has none.
+- A run whose flow has no ship step (such as `do`) ends with a message to set its ticket to done on its branch and commit it, so small fixes no longer leave open tickets.
+- Skills that take arguments end with a line `Arguments: ...`, so an empty argument no longer reads as an empty pair of backticks (`/warden:compose`, `/warden:orchestrate`, `/warden:tools`).
+- The Bash hook no longer takes a `>` or a word like `rm` inside quotes for a write: `git commit -m "... <name@example.com>" -- .warden/warden.json` was refused while a run was live. This applies to `git` commands only, and not to double-quoted text with `$(...)` or backticks, which the shell runs.
+- A stale proof at ship no longer blocks the run with "check left files": the ticket file the engine set to done at ship is its own change.
+
 ## 0.8.1 — 2026-10-20
 
 - `warden orchestrate create` refuses an id that a warden run already uses (a run started from text has no ticket), and the ticket tool guide's example skips those ids.

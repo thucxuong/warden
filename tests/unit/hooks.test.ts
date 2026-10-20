@@ -352,6 +352,31 @@ describe("PreToolUse: Bash, chained and compound commands", () => {
     expect(reason(await bash(`echo x > .warden/state/${T}/x 2>&1`, { cwd: main }))).toBe(B3);
   });
 
+  test("B3 (R-a30e-0005): a > or a command word inside a quoted commit message is not a write", async () => {
+    await startFlow(FEATURE);
+    const message = '"chore: warden upgrade to 0.8.1\n\nCo-Authored-By: Claude <noreply@anthropic.com>"';
+    expect(await bash(`git commit -m ${message} -- .warden/reports.md .warden/warden.json && git status --short`, { cwd: main })).toBeNull();
+    expect(await bash(`git commit -m 'rm the old > step' -- .warden/steps.json`, { cwd: main })).toBeNull();
+    expect(reason(await bash(`echo "x" > ".warden/steps.json"`, { cwd: main }))).toBe(B3);
+    expect(reason(await bash(`sh -c "echo x > .warden/state/${T}/run.json"`, { cwd: main }))).toBe(B3);
+    expect(reason(await bash(`bash -lc 'rm -rf .warden/history'`, { cwd: main }))).toBe(B3);
+    // Outside git, and for $(...) or backticks in double quotes, quoted text still counts.
+    for (const cmd of [
+      `echo "$(rm -rf .warden/state/${T})"`,
+      `x="$(cp /tmp/r .warden/state/${T}/run.json)"`,
+      `echo "\`rm .warden/history/x\`"`,
+      `git commit -m "$(rm -rf .warden/state/${T})"`,
+      `"rm" -rf .warden/state/${T}`,
+      `'sed' -i s/a/b/ .warden/state/${T}/run.json`,
+      `cat x | sudo "tee" .warden/steps.json`,
+      `find .warden/state -name "*.json" -exec "rm" {} +`,
+      `/bin/sh -c "echo x > .warden/state/${T}/run.json"`,
+      `bash --login -c "echo x > .warden/state/${T}/run.json"`,
+      `awk 'BEGIN{print "x" > ".warden/state/${T}/run.json"}'`,
+      `perl -e 'open(F,">.warden/state/${T}/run.json")'`,
+    ]) expect(reason(await bash(cmd, { cwd: main }))).toBe(B3);
+  });
+
   test("B3: the fixer writes config files only inside its fix worktree", async () => {
     await startFlow(FEATURE);
     const fixWt = atFix();

@@ -7,6 +7,7 @@ import { worktreesDir } from "../../plugins/warden/src/state/paths.ts";
 import { readRun, runExists } from "../../plugins/warden/src/state/store.ts";
 import type { Ctx } from "../../plugins/warden/src/types.ts";
 import { cloneTemplate, commit, makeTemplate, removeAll, tmpBase, type Template } from "./repo.ts";
+import { ticketFiles, ticketToolFiles } from "./tools-fixture.ts";
 
 export const PLUGIN_ROOT = resolve(import.meta.dir, "../../plugins/warden");
 export const CLI = join(PLUGIN_ROOT, "src", "cli.ts");
@@ -102,7 +103,9 @@ export function installCommandsFixture(): void {
   let template: Template;
 
   beforeAll(() => {
-    template = makeTemplate("warden-commands", { ...WARDEN_FILES, "README.md": "demo\n" });
+    // Every run starts from a ticket (0.9): the fixture backlog tool, with tickets T-1 to T-9.
+    const tickets = ticketFiles(Array.from({ length: 9 }, (_, i) => `T-${i + 1}`));
+    template = makeTemplate("warden-commands", { ...WARDEN_FILES, ...ticketToolFiles(), ...tickets, "README.md": "demo\n" });
   });
 
   beforeEach(() => {

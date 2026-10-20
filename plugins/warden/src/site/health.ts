@@ -130,7 +130,7 @@ export function configProblems(ctx: SiteCtx): { problems: ConfigProblem[]; ticke
   try {
     ticketTool = readRoles(ctx.main).tickets ?? null;
     if (ticketTool === null) {
-      add(".warden/tools/roles.json", "info", "no ticket tool: the Tickets page and Epics are off", 'set "tickets" in .warden/tools/roles.json');
+      add(".warden/tools/roles.json", "error", "no ticket tool: warden start refuses every run", "add a ticket tool with /warden:tools");
     }
   } catch (err) {
     for (const p of problemsOf(err)) add(".warden/tools/roles.json", "error", p);

@@ -22,6 +22,7 @@ export type TicketStatus = "backlog" | "todo" | "doing" | "review" | "done" | "a
 export interface DagTicket { id: string; title: string; status: TicketStatus; blocked_by: string[]; epic?: string; type?: string }
 export interface TicketDetail extends DagTicket { body: string }
 export interface SetStatusResult { id: string; status: TicketStatus; changed: string[] }
-// Optional (0.8): a tool without create or link exits 2 (bad usage) for it, so it reports other problems with exit 1.
+// create is required (0.9): every run starts from a ticket. link is optional: a tool without it exits 2 (bad usage).
+// So report any other problem with create or link as exit 1; create with missing flags exits 1 and writes nothing.
 export interface CreateResult { ticket: TicketDetail; changed: string[] }   // create --title --type --body-file [--epic] [--blocked-by]
-export interface LinkResult { id: string }                                   // link <id> <pr url>, for a tracker outside the repo
+export interface LinkResult { id: string }                                   // optional: link <id> <pr url>, for a tracker outside the repo

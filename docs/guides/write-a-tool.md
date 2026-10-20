@@ -176,7 +176,7 @@ export const stats: Tool = {
 
 | Role | Used by | What the tool must do |
 |---|---|---|
-| `tickets` | `/warden:orchestrate` and `warden start --ticket` | `dag [<epic>]`, `show <id>`, `set-status <id> <status>`. See [Write a ticket tool](write-a-ticket-tool.md). |
+| `tickets` | `warden start` (every run starts from a ticket) and `/warden:orchestrate` | `dag [<epic>]`, `show <id>`, `set-status <id> <status>`, `create`. See [Write a ticket tool](write-a-ticket-tool.md). |
 | `graph` | the work skill and the ticket agent | `query "<question>"` prints plain text and exits 0. The agent asks it before a broad search of the repo. |
 | `pr` | the push and merge rules | `create` and `merge` subcommands. The hooks treat `warden tools pr create` and `warden tools pr merge` like `gh pr create` and `gh pr merge`: allowed only in the ship step. |
 

@@ -106,7 +106,7 @@ Any step may also have a `title` (up to 80 characters) and `instructions` (up to
    This writes `.warden/flows/migration.json` and adds a line to `.warden/flows/INDEX.md`. Pass `--force` to overwrite a saved flow.
 4. Start a run with it:
    ```bash
-   warden start PG-042 --flow migration --text "Move users to the new table" --worktree
+   warden start PG-042 --flow migration --worktree
    ```
 
 `--flow` takes a template name, a saved flow name (from `.warden/flows/`), or a path.

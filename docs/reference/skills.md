@@ -9,7 +9,7 @@ A skill is a set of instructions the plugin gives Claude Code. You start one by 
 | Skill | Arguments | Use it to |
 |---|---|---|
 | [`/warden:init`](#wardeninit) | none | Set up warden in a project |
-| [`/warden:compose`](#wardencompose) | `<task-id> [what to do]` | Pick a flow for a task and start the run |
+| [`/warden:compose`](#wardencompose) | `[ticket-id] [what to do]` | Pick a flow for a task and start the run from its ticket (created first for a plain request) |
 | [`/warden:work`](#wardenwork) | `[task-id]` | Drive a run step by step until it ships, waits or blocks |
 | [`/warden:plan`](#wardenplan) | none | Write the plan in a plan step |
 | [`/warden:orchestrate`](#wardenorchestrate) | `<epic>` | Work through all tickets of an epic |
@@ -32,18 +32,20 @@ What it does:
 3. Drafts `steps.json`: the check commands from the scan (or from `Makefile` targets and CI files), `setup.commands` = `["sh scripts/warden-setup.sh"]`, and the setup script body.
 4. Asks you, one question at a time: the task id format (a regex such as `^PG-\d{3}$`), the project id, a yes or no on the checks and setup script, and whether to add the team install block to `.claude/settings.json`.
 5. Writes everything with `warden init --write --file <payload>`.
-6. Optionally runs each check once and reports the result.
-7. Tells you what to `git add`, commit and push to the main branch, and suggests branch protection.
+6. Sets up the ticket tool, because every run starts from a ticket. It asks where your tickets live. Without a tracker, the agent writes `.warden/tools/backlog.ts` (tickets are Markdown files in `backlog/<ID>.md`, as in [Write a ticket tool](../guides/write-a-ticket-tool.md)), makes it the `tickets` role and runs `warden tools --check`. For a tracker, it tells you to run `/warden:tools` afterwards.
+7. Optionally runs each check once and reports the result.
+8. Tells you what to `git add`, commit and push to the main branch, and suggests branch protection.
 
 See [quick start](../getting-started/quickstart.md) and [project files](project-files.md).
 
 ## /warden:compose
 
 ```
-/warden:compose PG-012 Add a CSV export to the orders page
+/warden:compose Add a CSV export to the orders page
+/warden:compose PG-012
 ```
 
-Picks a flow for the task and starts the run.
+Picks a flow for the task and starts the run from its ticket. With only text, it creates the ticket first.
 
 | Signal in the task | Flow |
 |---|---|
@@ -54,9 +56,9 @@ Picks a flow for the task and starts the run.
 | Investigation or spike, no code change | A custom flow with one `analyze` step, variant `spike` |
 | Another shape (for example a migration) | A custom flow |
 
-It reuses a saved flow from `.warden/flows/` when one fits. A custom flow is written to a scratch file, linted with `warden flow check`, and saved with `warden flow save` when the shape will come up again. It then runs `warden start <task> --template <t> --text '<what to do>'` (or `--flow`), adding `--worktree` unless you are already on a ticket branch, and goes on with `/warden:work`.
+It reuses a saved flow from `.warden/flows/` when one fits. A custom flow is written to a scratch file, linted with `warden flow check`, and saved with `warden flow save` when the shape will come up again. It then runs `warden start <id> --template <t>` (or `--flow`), which reads the ticket, adding `--worktree` unless you are already on a ticket branch, and goes on with `/warden:work`. Every run starts from a ticket; without a `tickets` role it tells you to add a ticket tool (`/warden:tools`) and stops.
 
-Without a task id, and with a ticket tool that has `create` (0.8), it creates the ticket first: `warden orchestrate create` with your request as the body. The tool picks the id. It commits the changed ticket files on the main branch, pushes the main branch when the project has a remote (runs branch from `origin/<mainBranch>`; if the push is refused, it stops and tells you the ticket must reach the main branch first), and starts the run with `--ticket`. When the request is bigger than one ticket, it proposes an epic and its child tickets, and after you agree creates them all, commits and pushes them the same way, and points you to the Tickets page of `warden site` and to `/warden:orchestrate <epic>`. Without `create`, it asks you for an id.
+Without a task id, it creates the ticket first: `warden orchestrate create` with your request as the body. The tool picks the id. It commits the changed ticket files on the main branch, pushes the main branch when the project has a remote (runs branch from `origin/<mainBranch>`; if the push is refused, it commits the ticket on the run's branch instead, so it goes with the run's pull request), and starts the run from it. When the request is bigger than one ticket, it proposes an epic and its child tickets, and after you agree creates them all, commits and pushes them the same way, and points you to the Tickets page of `warden site` and to `/warden:orchestrate <epic>`. When the tool has no `create`, it tells you to add it and stops.
 
 See [compose a workflow](../guides/compose-a-workflow.md).
 
@@ -75,7 +77,7 @@ The main loop. It repeats until the status is `shipped`, `done`, `waiting` or `b
 5. When the run waits or is blocked, tell the user the message and end the turn.
 6. To ask the user something in the middle of a step, `warden ask "<question>"`, then end the turn.
 
-When `warden next` finds no run, it starts one: with `--ticket` when the project has a `tickets` role and the ticket exists, else with `--text`. It always uses `--worktree`.
+When `warden next` finds no run, it starts one from the ticket with `--worktree`, creating the ticket first when you gave only text.
 
 The rules it adds are in [for agents](../for-agents.md).
 
@@ -95,7 +97,7 @@ The engine rejects a plan that holds placeholder words such as `TBD` or `TODO`. 
 
 Works through all tickets of an epic. Use it only when you ask for it; the agent does not start it on its own. It needs a `tickets` role in `.warden/tools/roles.json`.
 
-In short: it plans the epic (`warden orchestrate plan`), shows you the waves and asks before it starts, starts one run per ticket with `--ticket --worktree`, drives up to 4 tickets at a time with `warden:ticket` agents, hands fix steps to the fixer, ships the ready tickets one at a time in wave order, marks merged tickets `done`, and at the end runs `warden clean` to remove their worktrees and branches. It stops and shows a table when a ticket is blocked, waiting, has an open PR, or asked a question. Run it again to go on.
+In short: it plans the epic (`warden orchestrate plan`), shows you the waves and asks before it starts, starts one run per ticket with `--worktree`, drives up to 4 tickets at a time with `warden:ticket` agents, hands fix steps to the fixer, ships the ready tickets one at a time in wave order, marks merged tickets `done`, and at the end runs `warden clean` to remove their worktrees and branches. It stops and shows a table when a ticket is blocked, waiting, has an open PR, or asked a question. Run it again to go on.
 
 See [orchestration](../concepts/orchestration.md) and [orchestrate an epic](../guides/orchestrate-an-epic.md).
 

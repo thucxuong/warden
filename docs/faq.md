@@ -16,6 +16,10 @@ No. A step ends only when warden accepts its output, and `check` and `review` st
 
 No. `warden approve`, `warden retry` and `warden reset` need a terminal, and the hook refuses them from the agent. A person types `approve` or `reject: <why>` in the chat, or runs the command in a terminal. See [Blocked and waiting runs](guides/blocked-and-waiting-runs.md).
 
+### Do I need a ticket tracker?
+
+No, but every run starts from a ticket (0.9). Without a tracker, `/warden:init` has the agent write a small ticket tool that keeps tickets as Markdown files in `backlog/<ID>.md`; your project owns it. When you ask for a change in plain words, `/warden:compose` creates the ticket first, and the tool picks the id. For Jira, Linear, GitHub Issues or Azure DevOps, write a tool for them: see [Write a ticket tool](guides/write-a-ticket-tool.md).
+
 ### Which template should I use?
 
 | Task | Template | Steps |

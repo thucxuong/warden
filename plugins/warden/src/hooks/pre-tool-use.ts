@@ -155,6 +155,13 @@ const WRITE_TOKEN = new RegExp([
   String.raw`\bgit\s+(?:rm|checkout|restore)\b`,
 ].join("|"));
 
+// In a git command, quoted text is an argument, not a redirect or a command word: `git commit -m "... <a@b.c>"`
+// writes nothing (0.9). A double-quoted string with `$(` or a backtick stays: the shell runs those.
+const QUOTED = /'[^']*'|"(?:[^"\\]|\\.)*"/g;
+function writeTest(raw: string): string {
+  return /^git\b/.test(raw) ? raw.replace(QUOTED, (q) => (q[0] === '"' && /\$\(|`/.test(q) ? q : "''")) : raw;
+}
+
 // `git`, then any global options (`-C dir`, `-c k=v`, `--no-pager`), then the subcommand.
 const GIT_PREFIX = String.raw`\bgit\b(?:\s+(?:-[Cc]\s+\S+|--?[\w-]+(?:=\S+)?))*\s+`;
 const GIT_PUSH = new RegExp(GIT_PREFIX + String.raw`push\b`);
@@ -343,11 +350,10 @@ function writesEngineFiles(cmd: string, live: RunJson[], fixer: boolean, cwd: st
       cdPaths += ` ${pipeline}`;
       continue;
     }
-    const part = splitCommands(pipeline)
-      .map((raw) => (isWardenCall(raw) ? (raw.match(/\d*>>?\s*\S+/g) ?? []).join(" ") : raw))
-      .join(" | ")
-      .replace(HARMLESS_REDIRECT, " ");
-    if (!WRITE_TOKEN.test(part)) continue;
+    const commands = splitCommands(pipeline).map((raw) => (isWardenCall(raw) ? (raw.match(/\d*>>?\s*\S+/g) ?? []).join(" ") : raw));
+    const joined = (list: string[]) => list.join(" | ").replace(HARMLESS_REDIRECT, " ");
+    const part = joined(commands);
+    if (!WRITE_TOKEN.test(joined(commands.map(writeTest)))) continue;
     const named = `${cdPaths} ${part}`;
     if (ENGINE_PATHS.some((p) => named.includes(p))) return true;
     if (live.length === 0 || !CONFIG_PATHS.some((p) => named.includes(p))) continue;

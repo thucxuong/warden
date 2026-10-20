@@ -114,7 +114,7 @@ Reset deletes a run's live state so you can start the task again. Use it when th
 Reset stops a running gate, removes the fix worktrees, fix branches (`warden-fix/PG-101-*`) and temporary copies, and deletes `.warden/state/PG-101/`. **The ticket worktree and its branch stay**, with your commits. Starting the task again reuses them:
 
 ```bash
-warden start PG-101 --template feature --text "..." --worktree
+warden start PG-101 --template feature --worktree
 ```
 
 You need a reset when `warden start` says `a run for PG-101 exists (status blocked); a person can run warden reset PG-101`.

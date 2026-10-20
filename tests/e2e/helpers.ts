@@ -7,6 +7,7 @@ import { expect } from "bun:test";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import type { EventLine, RunJson } from "../../plugins/warden/src/types.ts";
+import { ticketFiles, ticketToolFiles } from "../helpers/tools-fixture.ts";
 
 export const REPO_ROOT = resolve(import.meta.dir, "../..");
 export const PLUGIN_ROOT = join(REPO_ROOT, "plugins", "warden");
@@ -134,6 +135,8 @@ export function createCp(opts: { checkSh?: string } = {}): Cp {
   };
   const init = warden(cp, ["init", "--write"], { stdin: JSON.stringify(payload) });
   if (init.code !== 0) throw new Error(`warden init --write failed (${init.code}): ${init.err}`);
+  // Every run starts from a ticket (0.9): the fixture backlog tool is the tickets role. start() adds the ticket.
+  for (const [rel, text] of Object.entries(ticketToolFiles())) put(main, rel, text);
   git(main, "add", "-A");
   git(main, "commit", "-q", "-m", "warden init");
   return cp;
@@ -337,12 +340,11 @@ export function done(cp: Cp, task: string, output: unknown, opts: { cwd?: string
   return warden(cp, ["done", task], { stdin: JSON.stringify(output), ...opts });
 }
 
-// Starts a task in a new worktree on a template or a flow file.
-export function start(cp: Cp, task: string, flow: { template: string } | { flowFile: string }, text = "Add a greeting.\n"): Result {
-  const textFile = join(cp.base, `${task}.txt`);
-  writeFileSync(textFile, text);
+// Commits the ticket backlog/<task>.md on main, then starts the task in a new worktree on a template or a flow file.
+export function start(cp: Cp, task: string, flow: { template: string } | { flowFile: string }, text = "Add a greeting."): Result {
+  commitFiles(cp.main, ticketFiles([task], text), `chore(${task}): add ticket`);
   const which = "template" in flow ? ["--template", flow.template] : ["--flow", flow.flowFile];
-  return warden(cp, ["start", task, ...which, "--worktree", "--text-file", textFile]);
+  return warden(cp, ["start", task, ...which, "--worktree"]);
 }
 
 // Commits one file in the task worktree and hands in the implement output. Returns the `done` result.

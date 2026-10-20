@@ -17,7 +17,7 @@ function ticket(id: string, title: string, blockedBy: string[], epic = "T-100"):
 }
 
 describe("orchestrate", () => {
-  test("plan, start --ticket, status and set-status on a backlog epic", () => {
+  test("plan, start, status and set-status on a backlog epic", () => {
     const cp = createCp();
 
     // The project's backlog tool, listed in the barrel and named by the tickets role.
@@ -58,8 +58,8 @@ describe("orchestrate", () => {
     expect(plan.json.tickets.map((t: any) => t.template)).toEqual(Array(6).fill("chore"));
     expect(existsSync(join(cp.main, ".warden", "state", "_orchestrate", "T-100.json"))).toBe(true);
 
-    // start --ticket: the task text is the ticket, the run is in its own worktree.
-    const started = warden(cp, ["start", "T-001", "--template", "chore", "--ticket", "--worktree"]);
+    // start: the task text is the ticket, the run is in its own worktree.
+    const started = warden(cp, ["start", "T-001", "--template", "chore", "--worktree"]);
     expect(started.code, started.err).toBe(0);
     expect(started.json.worktree).toBe(wtOf(cp, "T-001"));
     expect(started.json.instructions).toContain("First");

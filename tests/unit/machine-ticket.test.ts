@@ -1,4 +1,4 @@
-// 0.6.1: a run started with --ticket gets its ticket set to done in the worktree when it moves into ship.
+// 0.6.1: a run started from a ticket gets its ticket set to done in the worktree when it moves into ship.
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -155,7 +155,7 @@ describe("ticket status at ship", () => {
     expect(run().status).not.toBe("shipped");
   });
 
-  test("a run started without --ticket never runs the tool", async () => {
+  test("a run started without a ticket (a text run from before 0.9) never runs the tool", async () => {
     setUpTickets();
     await startTicketRun(false);
     expect(run().ticket).toBeUndefined();
@@ -240,7 +240,7 @@ describe("ticket link at ship", () => {
     expect(sh(main, "status", "--porcelain")).toContain("links.txt");
   });
 
-  test("a run without --ticket never calls link", async () => {
+  test("a run without a ticket (from before 0.9) never calls link", async () => {
     const res = await shipWith(LINK_TOOLS, SHIP_OUTPUT, false);
     expect(res.errors).toEqual([]);
     expect(linkEvents()).toEqual([]);

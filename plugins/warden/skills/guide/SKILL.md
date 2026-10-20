@@ -26,7 +26,7 @@ Warden runs each task as a fixed list of steps. You do the agent steps (analyze,
    ```
    No heredoc, no pipe, no temp file. Write a single quote inside the JSON as `\u0027`. The shape is in `output.schema`, with an example in `output.example`. If `accepted` is false, fix each line of `errors` and run `warden done` again.
 
-No run yet: if `warden next` lists your task among the live runs, run `cd <its worktree>` as its own command, then `warden next`. Never start a second run for a task. To start one, use the work skill or the compose skill (`warden start <id> --template <do|feature|bugfix|chore> --text "<task text>" --worktree`, Bash timeout 600000). Pick the template like the compose skill: `feature` for a new feature, schema or API change, many files, new UI, an auth entry point, or no label; `bugfix` for a bug in existing code; `do` for docs, config only, a typo or a single-file obvious edit; `chore` for a small change that must be merged, such as a chore ticket.
+No run yet: if `warden next` lists your task among the live runs, run `cd <its worktree>` as its own command, then `warden next`. Never start a second run for a task. To start one, use the work skill or the compose skill (`warden start <id> --template <do|feature|bugfix|chore> --worktree`, Bash timeout 600000). Every run starts from a ticket: for a request without one, the compose skill creates it. Pick the template like the compose skill: `feature` for a new feature, schema or API change, many files, new UI, an auth entry point, or no label; `bugfix` for a bug in existing code; `do` for docs, config only, a typo or a single-file obvious edit; `chore` for a small change that must be merged, such as a chore ticket.
 
 ## Rules
 

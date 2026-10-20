@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { NO_TICKETS } from "../../plugins/warden/src/commands/tools.ts";
 import { barrel, TEMPLATES, writeRoles, writeTools } from "../helpers/tools-fixture.ts";
 
 const PLUGIN = resolve(import.meta.dir, "../../plugins/warden");
@@ -190,7 +191,7 @@ describe("--check", () => {
   });
 
   test("one tool by name or role", () => {
-    writeTools(repo, barrel(probes, ""), { ok: "good" });
+    writeTools(repo, barrel(probes, ""), { ok: "good", tickets: "plain" });
     expect(tools(["--check", "good"]).code).toBe(0);
     const byRole = tools(["--check", "ok"]);
     expect(byRole.code).toBe(0);
@@ -207,8 +208,28 @@ describe("--check", () => {
     expect(r.json.checks).toContainEqual(expect.objectContaining({ tool: "warden", status: "WARN", label: "role good" }));
   });
 
+  test("0.9: no tickets role, or a tickets tool without create, is a FAIL; one with create is OK and makes no ticket", () => {
+    const tool = (create: number) => `  { name: "tix", summary: "s", run: (argv) => { console.log(JSON.stringify(argv)); return argv[0] === "create" ? ${create} : 0; } },`;
+    writeTools(repo, barrel(tool(2), ""), { tickets: "tix" });
+    const without = tools(["--check"]);
+    expect(without.code).toBe(1);
+    expect(without.json.checks).toContainEqual({
+      tool: "warden", status: "FAIL", label: "role tickets create", detail: "tix has no create (it exits 2 for create); add it with /warden:tools",
+    });
+    writeTools(repo, barrel(tool(1), ""), { tickets: "tix" });
+    const withCreate = tools(["--check"]);
+    expect(withCreate.code).toBe(0);
+    expect(withCreate.out.trim().split("\n")).toHaveLength(1); // the probe's own output never reaches stdout
+    expect(withCreate.json.checks).toContainEqual({ tool: "warden", status: "OK", label: "role tickets create", detail: "tix" });
+    writeTools(repo, barrel(tool(2), ""), { graph: "tix" });
+    const noRole = tools(["--check"]);
+    expect(noRole.code).toBe(1);
+    expect(noRole.json.checks).toContainEqual({ tool: "warden", status: "FAIL", label: "role tickets", detail: NO_TICKETS });
+    expect(noRole.json.checks.map((c: any) => c.label)).not.toContain("role tickets create");
+  });
+
   test("warns on what 0.5 left: tools.md and a steps.json tickets key", () => {
-    writeTools(repo, barrel(`  { name: "good", summary: "s", run: () => 0 },`, ""), { graph: "good" });
+    writeTools(repo, barrel(`  { name: "good", summary: "s", run: () => 0 },`, ""), { graph: "good", tickets: "good" });
     expect(tools(["--check"]).json.checks.filter((c: any) => c.status === "WARN")).toEqual([]);
     writeFileSync(join(repo, ".warden/tools.md"), "| Name |\n");
     writeFileSync(join(repo, ".warden/steps.json"), JSON.stringify({ schema: 1, tickets: { tool: "backlog" } }));

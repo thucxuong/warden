@@ -209,7 +209,7 @@ export interface RunJson {
   } | null;
   fix: { n: number; worktree: string; branch: string; baseSha: string; verdict: Verdict; report: string; mayMerge: boolean } | null;  // baseSha = mainRef sha the fix branch started from
   leftovers: string | null;        // state-relative path to review/leftover.md
-  ticket?: true;                   // 0.6.1: started with --ticket; the engine marks the ticket done at ship
+  ticket?: true;                   // 0.6.1: started from a ticket (every run since 0.9); the engine marks it done at ship
   ticketFiles?: TicketFiles;       // 0.6.1: what set-status changed at ship; the proofs allow exactly these contents on top of the proven commit
   ticketError?: string;            // 0.6.1: why the engine could not set the ticket status at ship
 }
