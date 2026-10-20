@@ -177,6 +177,14 @@ describe("orchestrate create (0.8)", () => {
     expect(cli(["orchestrate", "create", "--title", "x", "--type", "epic", "--body-file", body()]).code).toBe(0);
   });
 
+  test("an id a warden run already uses is refused", () => {
+    put("create.json", created("T-9"));
+    mkdirSync(join(main, ".warden/history/T-9"), { recursive: true });
+    const r = cli(["orchestrate", "create", "--title", "x", "--type", "feature", "--body-file", body()]);
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("ticket tool: create: id T-9 is already used by a warden run");
+  });
+
   test("bad usage is exit 2 and never runs the tool", () => {
     const b = body();
     for (const args of [[], ["--title", "x", "--type", "feature"], ["--title", "x", "--type", "feature", "--body-file", join(base, "nope.md")],

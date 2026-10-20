@@ -147,9 +147,10 @@ A `tool.ts` written before 0.8 has no `CreateResult` or `LinkResult`; add the tw
      return { id: t.id, title: t.title, status: t.status, blocked_by: t.blocked_by, epic: t.epic, type: t.type };
    }
 
-   // The next id: one more than the highest number in use, with the same prefix and width (PG-103 -> PG-104).
+   // The next id: one more than the highest number used by a ticket or a warden run, same prefix and width (PG-103 -> PG-104).
    function nextId(): string {
-     const ids = allTickets().map((t) => t.id).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+     const runs = [".warden/state", ".warden/history"].flatMap((d) => (existsSync(d) ? readdirSync(d) : []));
+     const ids = [...allTickets().map((t) => t.id), ...runs].filter((id) => ID.test(id)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
      const m = /^(.*?)(\d+)$/.exec(ids.at(-1) ?? "PG-000")!;
      return m[1]! + String(Number(m[2]) + 1).padStart(m[2]!.length, "0");
    }

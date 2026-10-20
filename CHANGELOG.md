@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.1 — 2026-10-20
+
+- `warden orchestrate create` refuses an id that a warden run already uses (a run started from text has no ticket), and the ticket tool guide's example skips those ids.
+- `/warden:compose` reads the task from your request when it gets no arguments, and runs `git add` and `git commit` as separate commands, as the other skills do. `/warden:init` does the same.
+
 ## 0.8.0 — 2026-10-20
 
 - Task worktrees live inside the project now: `<repo>/.worktrees/<task>`, not `<repo>.worktrees/<task>` next to it. Fix worktrees (`<task>-fix-<n>`) and triage's clean copies (`<task>-clean-<n>`, before in the temp folder) go there too. `/warden:init` adds `.worktrees/` to `.gitignore`, and `warden start --worktree` refuses until git ignores the folder, with the line to add. Warden no longer adds the worktrees folder to `.claude/settings.local.json`; it is inside the project.

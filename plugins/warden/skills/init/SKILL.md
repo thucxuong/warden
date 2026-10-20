@@ -43,7 +43,7 @@ Do these steps in order. Ask one question per message. Prefer multiple choice.
    Each check command has a `name` (lowercase, unique in its set) and a `run`.
 6. Optional: run each check command once and report the results. If one fails, report it. Do not fix it.
 7. Tell the user to commit and push to the main branch. `warden start` reads `.warden/` from there.
-   Build the `git add` list from the `written` array that `warden init --write` printed, so it names only files that exist. For example: `git add .warden .gitignore scripts/warden-setup.sh && git commit -m "chore: set up warden" && git push`. Add `.claude/settings.json` only when it is in `written`. If `.claude/` is gitignored, tell the user; `git add` refuses ignored files.
+   Build the `git add` list from the `written` array that `warden init --write` printed, so it names only files that exist. For example, as three separate commands: `git add .warden .gitignore scripts/warden-setup.sh`, `git commit -m "chore: set up warden"`, `git push`. Add `.claude/settings.json` only when it is in `written`. If `.claude/` is gitignored, tell the user; `git add` refuses ignored files.
    Also suggest branch protection on the main branch: a pull request is required and direct pushes are off.
 
 What `warden init --write` creates:

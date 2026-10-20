@@ -6,7 +6,7 @@ argument-hint: "<task-id> [what to do]"
 
 # Compose and start a task
 
-1. Read the task from `$ARGUMENTS`. Keep the task id and the full "what to do" text, plus anything the user said in the chat. `warden start` stores it as the task text. It survives new sessions and compaction.
+1. Read the task from `$ARGUMENTS`, or from the user's request when that is empty. Keep the task id and the full "what to do" text, plus anything the user said in the chat. `warden start` stores it as the task text. It survives new sessions and compaction.
    If there is no task id and `warden tools` lists a `tickets` role, first follow "No task id" below. Without that role, ask the user for an id.
 2. Classify the task with this table.
 
@@ -41,7 +41,7 @@ Never make up an id: the ticket tool picks it. Write a single quote in a title a
 3. If it exits 3 (no tickets tool, or `the ticket tool has no create`), ask the user for an id and go on with step 2 above, starting with `--text`. On any other error, show it and ask the user for an id.
 4. It prints `{ ticket, changed }`. If `changed` is empty, go to step 5. Otherwise the ticket must be on `<mainBranch>` before a run starts:
    - If the main checkout is not on `<mainBranch>`, or has other staged changes, tell the user which files to commit on `<mainBranch>` and stop.
-   - Run `git -C <main> add -- <changed paths> && git -C <main> commit -m "chore(<ticket.id>): add ticket"`.
+   - Run `git -C <main> add -- <changed paths>`, then, as its own command, `git -C <main> commit -m "chore(<ticket.id>): add ticket"`.
    - If the project has a remote (runs branch from `origin/<mainBranch>`), run `git -C <main> push origin HEAD:<mainBranch>`. If the push is refused (for example a protected branch), stop and tell the user the ticket must reach `<mainBranch>` first.
 5. The task id is `ticket.id`. Go on with step 2 above, and in step 6 start with `--ticket` instead of `--text`: `warden start <id> --template <t> --ticket --worktree`.
 
