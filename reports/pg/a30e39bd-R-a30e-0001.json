@@ -6,8 +6,8 @@
   "title": "Upgrade 0.8.0 note: ticket create can reuse the id of a running task",
   "body": "What happened: the 0.8.0 note for adding create to a file ticket tool says to pick one more than the highest number in use. A running task (PG-333) had a branch and worktree but no ticket file, so the highest ticket file was PG-332 and a naive create would hand out PG-333 again. Expected: the note tells tool authors to also count ids used by task branches, worktrees or active runs. Steps: have a run started with --text (no ticket file), then call create on a file tool that only scans the backlog folder. Evidence: warden upgrade --notes step 5, wording 'one more than the highest number in use'. I made our tool also scan local branch names; it then correctly returned PG-334.",
   "createdAt": "2026-10-20T02:40:06.737Z",
-  "status": "accepted",
-  "fixedIn": null,
+  "status": "fixed",
+  "fixedIn": "0.8.1",
   "note": "Accepted. Planned for a coming release.",
   "projectDir": "/Users/cluu/Documents/Work/warden-playground",
   "machineId": "a30e39bd"
