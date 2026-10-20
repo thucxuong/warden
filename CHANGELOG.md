@@ -9,7 +9,8 @@
 - Session start lists the project's tools, and the raw commands they own, so the agent reaches for a tool before writing its own command.
 - `warden tools --verify tickets [--write]` checks the `tickets` tool against its contract, through the same readers the engine and the site use, and says what to fix. `--write` also checks `create` and `set-status` on a ticket it then archives, and puts back the repo files they wrote. `/warden:init` runs it until it passes.
 - Warden no longer ships ticket tool code: `ticket-tool-example.md` is replaced by `ticket-tool-recipe.md`, which says how to write the tool for Markdown files or a tracker. Existing ticket tools keep working.
-- The tools skill has the rules every tool follows (never asks, short output, exit codes 0/1/2/3, logins checked in the probe and never started by the tool, no logging of its own) and common names for `pr`, `dev`, `ci`, `db` and `e2e` tools. Warden still ships no tools.
+- Recipes for the common tools, in the tools skill: `verify` (types, lint, unit tests, build; the same commands as the `check` step), `dev` and `db` (each worktree gets its own ports, database and `.dev-env.json`, so tasks side by side never share a server or data; `db prune` cleans up after removed worktrees), `e2e`, `pr` and `ci`. Each says what to build and how to prove it, never the code.
+- The tools skill has the rules every tool follows (never asks, short output, exit codes 0/1/2/3, logins checked in the probe and never started by the tool, no logging of its own, one environment per worktree, remote systems only through a list). Warden still ships no tools.
 
 ## 0.9.4 — 2026-10-20
 

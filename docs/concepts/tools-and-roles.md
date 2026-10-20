@@ -76,8 +76,10 @@ Every tool follows the same rules, so warden and the agent can use any tool the 
 - It is safe to run twice, and anything that can hang has a time limit.
 - A tool that needs a login checks it in its `probe` and names the command that fixes it (for example `gh auth login`). It never starts a login itself; you run it with `! gh auth login`. Tokens come from the environment, never from args, and are never printed.
 - It needs no logging of its own: warden logs every call.
+- One environment per worktree: a tool that starts the app or touches data uses this checkout's own ports and database, never another task's.
+- Remote systems (a tracker, a CI, a cloud) only through the org, project or resources named in a config file.
 
-When a project needs one of these jobs, the skill suggests the same names everywhere: `pr` (`create`, `merge`, `status`), `dev` (`start`, `stop`, `status`, `url`), `ci` (`status`, `logs`), `db` (`reset`, `seed`, `query`) and `e2e` (`run`). Warden ships none of them.
+For the common jobs, the skill has a **recipe** each: what to build, its subcommands and JSON output, the raw commands it owns, its traps, and how to prove it. Recipes have no code; the agent writes the tool for your stack. They cover `verify` (types, lint, unit tests, build, with the same commands as the `check` step), `dev` (this worktree's app on its own ports, and its `.dev-env.json`), `db` (this worktree's own database, and `prune` for removed worktrees), `e2e`, `pr`, `ci` and `tickets`. Warden ships none of the tools.
 
 ## How warden runs a tool
 

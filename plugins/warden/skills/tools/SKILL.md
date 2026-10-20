@@ -43,8 +43,10 @@ Every tool follows these, so warden and the agent can use any tool the same way.
 - **Logins.** A tool that needs a login or a token checks it in `probe`: a `FAIL` row whose detail is the command that fixes it, such as `gh auth login`. In `run`, a missing login exits 1 with the same message. A tool never starts a login itself: that needs a person, so the agent asks the user to type `! gh auth login`. Tokens come from the environment or the program's own login, never from args, and are never printed.
 - **Time limits.** Anything that can hang (the network, waiting for a port) has one, and says what timed out.
 - **Same in every checkout.** Paths are relative to the checkout the tool runs in; the main checkout is `$WARDEN_MAIN_ROOT`.
+- **One environment per worktree.** Warden runs tasks side by side, each in its own worktree. A tool that starts the app or touches data works on this checkout's own ports and database only, from `.dev-env.json` (see `recipes/dev.md`). Two worktrees never share a server or a database.
+- **Remote systems through a list.** A tool that reaches a tracker, a CI, a cloud or a repo host works only on the org, project or resources named in a config file, and refuses the rest. Reads are open; each write is its own narrow subcommand.
 - **No logging of its own.** Warden logs every call (see "The logs").
-- **Tested.** Logic worth testing sits in plain functions with a `<name>.test.ts` next to the tool.
+- **Tested.** Logic worth testing sits in plain functions with a `<name>.test.ts` next to the tool. Helpers that several tools share go in `.warden/tools/lib/`; tools import those, never each other.
 
 ## The Tool shape
 
@@ -111,15 +113,17 @@ Anything else, such as end-to-end tests or CI status, needs no role. A check in 
 
 ## Common tools
 
-Warden reads only the roles above. When a project needs one of these jobs, give the tool these names and subcommands, so every project's tools look alike. Write one only when a real task needs it.
+Warden reads only the roles above. When a project needs one of these jobs, write the tool from its recipe in `recipes/` (in this skill's base directory), so every project's tools look alike. A recipe says what to build, never the code: write it for this project's stack. Write one only when a real task needs it, and read only the recipe you need.
 
-| Tool | Subcommands | Raw commands it can own |
-|---|---|---|
-| `pr` | `create`, `merge`, `status <branch>` | `gh pr`, `az repos pr`, `glab mr` |
-| `dev` | `start`, `stop`, `status`, `url` | `bun run dev`, `npm run dev`, `docker compose up` |
-| `ci` | `status <branch>`, `logs <run>` | `gh run`, `az pipelines` |
-| `db` | `reset`, `seed`, `query "<sql>"` | `psql`, `sqlite3` |
-| `e2e` | `run [<filter>]` | `npx playwright`, `bunx playwright` |
+| Tool | Recipe | Job | Raw commands it can own |
+|---|---|---|---|
+| `verify` | `recipes/verify.md` | types, lint, unit tests, build; the same commands as the `check` step | `tsc`, `eslint`, `npx jest` |
+| `dev` | `recipes/dev.md` | this worktree's app on its own ports, and its `.dev-env.json` | `pnpm dev`, `docker compose up` |
+| `db` | `recipes/db.md` | this worktree's own database: provision, reset, query, prune | `psql`, `sqlite3` |
+| `e2e` | `recipes/e2e.md` | end-to-end tests against this worktree's app | `npx playwright` |
+| `pr` | `recipes/pr.md` | open, show and merge pull requests (the `pr` role) | `gh pr`, `az repos pr`, `glab mr` |
+| `ci` | `recipes/ci.md` | CI runs of a branch, with the failing step's log | `gh run`, `az pipelines` |
+| `tickets` | `ticket-tool-recipe.md` | the `tickets` role | `az boards`, `jira` |
 
 ## Replaced commands
 

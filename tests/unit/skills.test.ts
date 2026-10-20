@@ -69,6 +69,17 @@ describe("skills", () => {
     expect(filesLine(read(join(pluginRoot, "upgrades", "v0.9.0.md")))).toBe(init!);
   });
 
+  test("0.10: every recipe the tools skill names exists, has the same parts and no tool code", () => {
+    const skill = read(join(skillsDir, "tools", "SKILL.md"));
+    const names = [...skill.matchAll(/`recipes\/([a-z0-9-]+)\.md`/g)].map((m) => m[1]!);
+    expect([...new Set(names)].sort()).toEqual(readdirSync(join(skillsDir, "tools", "recipes")).map((f) => f.replace(/\.md$/, "")).sort());
+    for (const name of new Set(names)) {
+      const recipe = read(join(skillsDir, "tools", "recipes", `${name}.md`));
+      for (const part of ["**Job:**", "## Subcommands", "## Owns (`replaces.json`)", "## Traps", "## Prove it"]) expect(recipe).toContain(part);
+      expect(recipe).not.toMatch(/```(ts|js|typescript|javascript)\b/);
+    }
+  });
+
   test("0.10: the plugin ships the ticket tool recipe and the check, never ticket tool code", () => {
     const recipe = read(join(skillsDir, "tools", "ticket-tool-recipe.md"));
     expect(recipe).not.toContain("```ts");
