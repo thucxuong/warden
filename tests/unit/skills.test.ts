@@ -69,10 +69,14 @@ describe("skills", () => {
     expect(filesLine(read(join(pluginRoot, "upgrades", "v0.9.0.md")))).toBe(init!);
   });
 
-  test("0.9: the plugin ships the ticket tool guide's complete example, word for word, next to the tools skill", () => {
-    const tsBlock = (text: string) => /```ts\n(\/\/ The `tickets` role[\s\S]*?)```/.exec(text)![1];
-    const guide = read(resolve(pluginRoot, "../../docs/guides/write-a-ticket-tool.md")).replace(/^ {3}/gm, "");
-    expect(tsBlock(read(join(skillsDir, "tools", "ticket-tool-example.md")))).toBe(tsBlock(guide)!);
+  test("0.10: the plugin ships the ticket tool recipe and the check, never ticket tool code", () => {
+    const recipe = read(join(skillsDir, "tools", "ticket-tool-recipe.md"));
+    expect(recipe).not.toContain("```ts");
+    expect(recipe).toContain("warden tools --verify tickets --write");
+    expect(existsSync(join(skillsDir, "tools", "ticket-tool-example.md"))).toBe(false);
+    for (const text of [read(join(skillsDir, "init", "SKILL.md")), read(join(pluginRoot, "upgrades", "v0.9.0.md"))]) {
+      expect(text).toContain("warden tools --verify tickets --write");
+    }
   });
 
   test("0.9: no skill or agent starts a run from text", () => {

@@ -446,6 +446,7 @@ warden tools
 warden tools --check [<name|role>]
 warden tools --init
 warden tools --log [--since YYYY-MM-DD]
+warden tools --verify tickets [--write]
 warden tools <name|role> [args...]
 ```
 
@@ -456,6 +457,7 @@ Runs the project's own tools from `.warden/tools/`. See [tools and roles](../con
 | `warden tools` | Lists the tools and roles | `{"tools":[{name, summary}], "roles":{...}}` |
 | `--check [<name>]` | Checks `roles.json` and `replaces.json` against the tool list and runs each tool's `probe` (or only the named one). With a `tickets` role it also calls the tickets tool's `create` with no flags: exit 2 there means it has no `create`, a `FAIL` row `role tickets create` (0.9). Exit 1 when any row is `FAIL` | `{"checks":[{tool, status, label, detail}]}`, status `OK`, `FAIL`, `WARN` or `SKIP` |
 | `--init` | Writes the missing files of `.warden/tools/` (`index.ts`, `tool.ts`, `roles.json`, `replaces.json`). Never overwrites | `{"written":[...]}` |
+| `--verify tickets [--write]` | Checks the `tickets` tool against its contract (0.10), through the same readers the engine and the site use: `dag`, `dag <epic>`, `show`, exit 3 for an unknown id, exit 2 for bad usage, exit 1 and no writes for `create` without flags. `--write` also creates a ticket, sets it to `doing` twice and to `archived`, checks `changed` against the files that changed, and puts them back (a tracker keeps the ticket, archived). Exit 1 when any row is `FAIL` | `{"checks":[{status, label, detail}]}` |
 | `--log [--since YYYY-MM-DD]` | Sums the tool call and command logs (0.10), all of them or since a date: calls and failures per tool, refused raw commands, and commands typed at least twice, costliest first. See [the logs](../concepts/tools-and-roles.md#the-logs). Exit 2 for bad flags | `{"since", "tools":[{tool, calls, failed}], "blocked":[{tool, prefix, count}], "commands":[{shape, count, avgChars, example}]}` |
 | `<name> [args]` | Runs the tool. A word is a tool name first, then a role | The tool's own output. warden prints nothing on stdout |
 | `<name> -h` | Prints the tool's `usage`, or its `summary` | Text |

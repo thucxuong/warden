@@ -137,7 +137,7 @@ describe("list and run", () => {
     expect(tools(["echo", "-h"])).toMatchObject({ code: 0, out: "echo [args...]\n" });
     expect(tools(["show", "--help"])).toMatchObject({ code: 0, out: "echo [args...]\n" });
     expect(tools(["later", "-h"])).toMatchObject({ code: 0, out: "async run\n" });
-    expect(tools(["-h"]).out).toContain("usage: warden tools [--check [<name>] | --init | --log [--since YYYY-MM-DD]]");
+    expect(tools(["-h"]).out).toContain("usage: warden tools [--check [<name>] | --init | --log [--since YYYY-MM-DD] | --verify tickets [--write]]");
   });
 
   test("a throw is exit 1 with the message on stderr; a non-number result is exit 1", () => {

@@ -1,4 +1,4 @@
-// warden tools [--check [<name>] | --init | --log [--since <date>]] | warden tools <name|role> [args...] (0.6): the
+// warden tools [--check [<name>] | --init | --log | --verify tickets] | warden tools <name|role> [args...] (0.6): the
 // project's own tools. They live in <checkout>/.warden/tools/: index.ts lists them, roles.json maps role names to tool
 // names, replaces.json (0.10) names the raw commands each tool owns.
 import { spawnSync } from "node:child_process";
@@ -14,7 +14,7 @@ import type { Ctx, ProjectTool, ToolCheck } from "../types.ts";
 export const TOOL_NAME = /^[a-z][a-z0-9-]{0,40}$/;
 const TOOL_FILES = ["index.ts", "tool.ts", "roles.json", "replaces.json"];
 const STATUSES = ["OK", "FAIL", "WARN", "SKIP"];
-const USAGE = "warden tools [--check [<name>] | --init | --log [--since YYYY-MM-DD]] | warden tools <name|role> [args...]";
+const USAGE = "warden tools [--check [<name>] | --init | --log [--since YYYY-MM-DD] | --verify tickets [--write]] | warden tools <name|role> [args...]";
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export type Roles = Record<string, string>;
@@ -314,6 +314,16 @@ async function runLogged(tool: ProjectTool, argv: string[], main: string, log: b
   return code;
 }
 
+// `warden tools --verify tickets [--write]` (0.10): the tickets contract, checked through the engine's own readers.
+async function verify(root: string, rest: string[], pluginRoot: string): Promise<number> {
+  const write = rest[1] === "--write";
+  if (rest[0] !== "tickets" || rest.length > (write ? 2 : 1)) throw new WardenError(`usage: ${USAGE}`, EXIT.USAGE);
+  const { verifyTickets } = await import("./tools-verify.ts"); // engine/tickets.ts imports this module
+  const checks = verifyTickets(mainRoot(root), pluginRoot, write);
+  console.log(JSON.stringify({ checks }));
+  return checks.some((c) => c.status === "FAIL") ? EXIT.REJECTED : EXIT.OK;
+}
+
 // `warden tools --log [--since YYYY-MM-DD]`: reads the logs only, so a broken barrel never hides them.
 function log(root: string, rest: string[]): number {
   const since = rest[0] === "--since" ? rest[1] : undefined;
@@ -333,6 +343,7 @@ export async function run(args: string[], ctx: Ctx): Promise<number> {
     return EXIT.OK;
   }
   if (first === "--log") return log(root, rest);
+  if (first === "--verify") return verify(root, rest, ctx.root);
   if (first?.startsWith("-") && first !== "--check") throw new WardenError(`usage: ${USAGE}`, EXIT.USAGE);
   if (first === "--check" && (rest.length > 1 || rest[0]?.startsWith("-"))) throw new WardenError(`usage: ${USAGE}`, EXIT.USAGE);
 

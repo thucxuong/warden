@@ -95,6 +95,7 @@ When a project needs one of these jobs, the skill suggests the same names everyw
 | `warden tools <name\|role> <args>` | Whatever the tool prints. | The tool's exit code; 3 when no tool or role has that name |
 | `warden tools --check [<name>]` | `{"checks":[{"tool","status","label","detail"}]}` | 1 when any row is `FAIL` |
 | `warden tools --init` | `{"written":[...]}` | 0 |
+| `warden tools --verify tickets [--write]` | `{"checks":[{"status","label","detail"}]}`: the `tickets` tool against its contract, through the readers the engine and the site use. `--write` also checks `create` and `set-status` and puts back the files they wrote | 1 when any row is `FAIL`; 2 for bad flags |
 | `warden tools --log [--since YYYY-MM-DD]` | `{"since","tools":[...],"blocked":[...],"commands":[...]}`, see [The logs](#the-logs) | 0; 2 for bad flags |
 
 `--check` has warden's own rows first: `index.ts` loads, each role names a tool in `index.ts`, each tool in `replaces.json` is in `index.ts`, and the `tickets` tool has `create` (`role tickets create`: warden calls `create` with no flags, which must exit 1; exit 2 means it is missing). Then it runs each tool's `probe`. A probe returns rows with status `OK`, `FAIL`, `WARN` or `SKIP`; a tool without a probe gets one `SKIP` row. Use a probe to check that a program or a token the tool needs is there. Run `warden tools --check` before you commit a tool change.

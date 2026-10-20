@@ -7,6 +7,8 @@
 - Warden logs what the agent runs, in `.warden/state/_tools/` of the main checkout (gitignored, never sent): every `warden tools` call with its args, exit code and time, and every other Bash command that does more than look around. Secrets (`TOKEN=...`, `--token ...`, auth headers, passwords in URLs) are replaced by `***`. Each log keeps at most two files of 2 MB.
 - `warden tools --log [--since YYYY-MM-DD]` sums the logs: calls and failures per tool, refused raw commands, and the commands typed at least twice with no tool, costliest first. The retro reads it to suggest new tools or fixes to tools that fail often.
 - Session start lists the project's tools, and the raw commands they own, so the agent reaches for a tool before writing its own command.
+- `warden tools --verify tickets [--write]` checks the `tickets` tool against its contract, through the same readers the engine and the site use, and says what to fix. `--write` also checks `create` and `set-status` on a ticket it then archives, and puts back the repo files they wrote. `/warden:init` runs it until it passes.
+- Warden no longer ships ticket tool code: `ticket-tool-example.md` is replaced by `ticket-tool-recipe.md`, which says how to write the tool for Markdown files or a tracker. Existing ticket tools keep working.
 - The tools skill has the rules every tool follows (never asks, short output, exit codes 0/1/2/3, logins checked in the probe and never started by the tool, no logging of its own) and common names for `pr`, `dev`, `ci`, `db` and `e2e` tools. Warden still ships no tools.
 
 ## 0.9.4 — 2026-10-20

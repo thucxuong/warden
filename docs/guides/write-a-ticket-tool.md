@@ -2,7 +2,7 @@
 
 Connect warden to your tickets by writing a tool for the `tickets` role. Every warden run starts from a ticket (0.9), so every project needs one: `warden start` reads the ticket, `/warden:orchestrate` plans and updates them, and the agent creates a ticket for a request that has none.
 
-No tracker? The complete example below keeps tickets as Markdown files in the repo; `/warden:init` writes it for a new project.
+No tracker? The example below keeps tickets as Markdown files in the repo. Warden does not ship it as code: `/warden:init` has the project's agent write the tool from a recipe, then prove it with `warden tools --verify tickets --write` (0.10). The engine and the warden site read the tool's output, so that check is what tells you it works.
 
 Warden does not know where your tickets live. It could be Markdown files in the repo, Jira, Linear or Azure DevOps. You write one small tool that answers a few questions in a fixed format, and point the `tickets` role at it. Everything else (waves, runs, shipping) is warden's job.
 
@@ -92,7 +92,7 @@ A `tool.ts` written before 0.8 has no `CreateResult` or `LinkResult`; add the tw
 
 ## Steps
 
-1. **Write the tool.** This complete example keeps tickets as Markdown files in `backlog/<ID>.md`. Save it as `.warden/tools/backlog.ts`, and set `FIRST_ID` to the first id in the form of `taskIdPattern` in `.warden/warden.json` (for `^PG-\d{3}$`: `PG-001`). The plugin ships the same example as `skills/tools/ticket-tool-example.md`, which `/warden:init` and `/warden:tools` copy:
+1. **Write the tool.** This complete example keeps tickets as Markdown files in `backlog/<ID>.md`. Save it as `.warden/tools/backlog.ts`, and set `FIRST_ID` to the first id in the form of `taskIdPattern` in `.warden/warden.json` (for `^PG-\d{3}$`: `PG-001`). It is one way to meet the contract; yours may differ, as long as the check in step 6 passes:
 
    ```ts
    // The `tickets` role for this project. Tickets are Markdown files: backlog/<ID>.md.
@@ -331,9 +331,12 @@ A `tool.ts` written before 0.8 has no `CreateResult` or `LinkResult`; add the tw
 6. **Check the whole setup.**
 
    ```bash
+   warden tools --verify tickets --write
    warden tools --check
    warden orchestrate plan PG-100
    ```
+
+   `--verify tickets` runs each subcommand through the same readers the engine and the site use, and prints one row per check (`OK`, `WARN`, `FAIL` or `SKIP`). It exits 1 when a row is `FAIL`, and the row says what to fix. Without `--write` it only reads. With `--write` it also creates a ticket, sets it to `doing` twice (the second time must change nothing) and to `archived`, checks that `changed` names exactly the files that changed, and then puts those files back. For a tracker outside the repo, the test ticket stays there, archived.
 
    `--check` must show `role tickets` and `role tickets create` as `OK`. The plan puts PG-101 in wave 1 and PG-102 and PG-103 in wave 2:
 

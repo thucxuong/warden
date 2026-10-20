@@ -103,7 +103,9 @@ The `tickets` tool prints one JSON value on stdout. Exit 0 is ok, 1 an error, 2 
 - Optional, for a tracker outside the repo: `link <id> <url>` records the pull request url on the ticket and prints `{ id }`. Warden calls it once, in the main checkout, after the ship step of a run is handed in with a `pr`. It has 60 s. It must not change repo files: warden ignores any `changed` it prints and warns. A tool that keeps tickets as repo files leaves it out.
 - A tool without `create` or `link` exits 2 for it. Warden reads that as "not supported", so report any other problem with these two as exit 1. `create` is required since 0.9: `warden tools --check` fails with `role tickets create` when the tool exits 2 for it (it calls `create` with no flags, which must exit 1 and write nothing).
 
-The types are in `tool.ts` (`DagTicket`, `TicketDetail`, `SetStatusResult`, `CreateResult`, `LinkResult`). `ticket-tool-example.md` in this skill's base directory is a complete tool that keeps tickets as Markdown files in `backlog/<ID>.md`: copy it, with its steps, for a project without a tracker.
+The types are in `tool.ts` (`DagTicket`, `TicketDetail`, `SetStatusResult`, `CreateResult`, `LinkResult`). `ticket-tool-recipe.md` in this skill's base directory says how to write the tool, for tickets as Markdown files in `backlog/<ID>.md` or for a tracker. Warden ships no ticket tool code.
+
+The engine and the warden site read this tool's output, so prove every change with `warden tools --verify tickets` (read checks only) or `warden tools --verify tickets --write` (also `create` and `set-status`, on a ticket it then archives; repo files it wrote are put back). It must exit 0. In a tracker outside the repo, `--write` leaves the archived test ticket there: ask the user first.
 
 Anything else, such as end-to-end tests or CI status, needs no role. A check in `.warden/steps.json` simply runs `warden tools e2e run ...`.
 
