@@ -23,7 +23,7 @@ A worktree is a second working folder for the same git repo, on its own branch. 
 - An existing worktree for the task on the same branch is reused.
 - Without `--worktree`, the run uses the folder and branch you are on. That branch must not be the main branch.
 - Fix branches get their own worktree, `<task>-fix-<n>`, in the same folder. Triage's clean copies, `<task>-clean-<n>`, go there too and are removed after each use.
-- After a task ships, `warden clean` removes its worktree and branch (see [below](#removing-shipped-worktrees)).
+- After a task ships, `warden clean` removes its worktree and branch (see [below](#removing-finished-worktrees)).
 
 Run records keep the absolute worktree path, so a run started before 0.8 goes on in its old folder next to the repo.
 
@@ -90,7 +90,7 @@ git -C <worktree> commit -m 'chore(<task>): run record'
 | `shipped` | The ship step was handed in. |
 | `done` | The flow ended without a ship step. |
 
-`warden status` lists the live runs (`active`, `waiting`, `blocked`) of this repo as JSON. `warden status --all` also lists `shipped` and `done` runs. `worktree` is `null` when the run's worktree folder is gone.
+`warden status` lists the live runs (`active`, `waiting`, `blocked`) of this repo as JSON. `warden status --all` also lists `shipped`, `done` and `archived` runs. `worktree` is `null` when the run's worktree folder is gone.
 
 ## Time, tokens and cost per task
 
@@ -117,9 +117,9 @@ Sessions are linked to a task by the hooks, for example when a session runs `war
 
 The task's own worktree and branch stay, so a later `warden start` reuses them. See [Blocked and waiting runs](../guides/blocked-and-waiting-runs.md).
 
-## Removing shipped worktrees
+## Removing finished worktrees
 
-`warden clean` looks at each shipped task that still has its worktree, in `.worktrees/` or next to the repo from before 0.8. It removes the worktree and deletes the branch when the worktree has no uncommitted changes and the branch is merged into the main branch. Otherwise it keeps them and prints why. It never touches a live run, a run in the main checkout, or a worktree warden did not make. `--dry-run` only lists. See [CLI](../reference/cli.md#warden-clean).
+`warden clean` looks at each shipped or archived task that still has its worktree, in `.worktrees/` or next to the repo from before 0.8. It removes the worktree and deletes the branch when the worktree has no uncommitted changes and, for a shipped task, the branch is merged into the main branch. An archived task's branch goes unmerged. Otherwise it keeps them and prints why. It never touches a live run, a run in the main checkout, or a worktree warden did not make. `--dry-run` only lists. See [CLI](../reference/cli.md#warden-clean).
 
 ## See also
 

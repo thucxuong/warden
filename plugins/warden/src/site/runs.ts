@@ -24,7 +24,7 @@ export class HttpError extends Error {
   }
 }
 
-const RUN_STATUSES: RunStatus[] = ["active", "waiting", "blocked", "shipped", "done"];
+const RUN_STATUSES: RunStatus[] = ["active", "waiting", "blocked", "shipped", "done", "archived"];
 
 export interface RunsQuery { status?: RunStatus[]; flow?: string; from?: number; to?: number; source?: Source }
 

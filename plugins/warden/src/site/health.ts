@@ -165,7 +165,7 @@ export async function buildHealth(ctx: SiteCtx, check: typeof runToolsCheck = sh
   const tools = await check(ctx.main, ctx.root, ctx.data);
   let leftoverWorktrees: HealthResponse["leftoverWorktrees"] = [];
   try {
-    leftoverWorktrees = removable(ctx.main); // what session start counts: no fetch
+    leftoverWorktrees = removable(ctx.main).map(({ task, worktree, branch }) => ({ task, worktree, branch })); // what session start counts: no fetch
   } catch {
     // health never fails on it
   }

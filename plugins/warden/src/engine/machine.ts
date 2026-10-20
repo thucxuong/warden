@@ -810,29 +810,37 @@ async function linkPr(ctx: Ctx, main: string, task: string, link: { step: string
 }
 
 // 0.9.3: a ticket is done once its task is merged into the main branch, never before. After a ship output with
-// `merged: true`, `set-status <task> done` runs once in the main checkout. A tracker changes no repo file; a tool that
-// keeps tickets as files prints the paths for the agent to commit there. With a PR still open, the agent is told to set
-// it after the merge. A failure is a warning and never undoes the ship.
+// `merged: true`, `set-status <task> done` runs once in the main checkout. With a PR still open, the agent is told to
+// set it after the merge.
 async function markTicketDone(
   ctx: Ctx, main: string, task: string, shipped: { step: string; merged: boolean; mainBranch: string },
 ): Promise<string | null> {
   if (!shipped.merged) {
     return `${task} is not merged yet, so its ticket is not done: once the pull request is merged, run warden tools tickets set-status ${task} done in ${main} (or tell the user to)`;
   }
+  return setTicket(ctx, main, task, "done", shipped);
+}
+
+// `set-status <task> <status>` in the main checkout, with a ticket.status event. A tracker changes no repo file; a tool
+// that keeps tickets as files prints the paths for the agent to commit there. A failure is a warning and never undoes
+// what the run did.
+async function setTicket(
+  ctx: Ctx, main: string, task: string, status: "done" | "archived", at: { step: string; mainBranch: string },
+): Promise<string | null> {
   let data: Record<string, unknown>;
   let warning: string | null = null;
   try {
-    const { changed } = setTicketStatus(main, ctx.root, task, "done");
-    data = { status: "done", changed };
+    const { changed } = setTicketStatus(main, ctx.root, task, status);
+    data = { status, changed };
     if (changed.length > 0) {
-      warning = `the ticket is set to done in ${main}: commit ${changed.join(" ")} there on ${shipped.mainBranch} with the message "chore(${task}): ticket done"`;
+      warning = `the ticket is set to ${status} in ${main}: commit ${changed.join(" ")} there on ${at.mainBranch} with the message "chore(${task}): ticket ${status}"`;
     }
   } catch (err) {
     const error = (err instanceof Error ? err.message : String(err)).split("\n")[0]!;
-    data = { status: "done", error };
-    warning = `the ticket was not set to done: ${error}. The ship is done; tell the user to set ${task} to done`;
+    data = { status, error };
+    warning = `the ticket was not set to ${status}: ${error}. The run is ${status === "done" ? "shipped" : "archived"}; tell the user to set ${task} to ${status}`;
   }
-  await withLock(main, task, () => appendEvent(main, task, "ticket.status", { step: shipped.step, data }));
+  await withLock(main, task, () => appendEvent(main, task, "ticket.status", { step: at.step, data }));
   return warning;
 }
 
@@ -1042,34 +1050,66 @@ function fixBranches(main: string, task: string): string[] {
   return res.status === 0 ? res.stdout.split("\n").map((b) => b.trim()).filter((b) => b !== "") : [];
 }
 
-// Kills a running worker (which stops its checks and reviewer), removes fix worktrees, clean copies
-// and fix branches, then deletes the live state. The ticket worktree stays.
+// Kills a running worker (which stops its checks and reviewer), removes fix worktrees, clean copies and fix branches.
+// The ticket worktree stays. Called under the task lock.
+function stopEngineWork(main: string, task: string): void {
+  const gate = runExists(main, task) ? readRun(main, task).gate : null;
+  if (gate && gate.pid !== process.pid && workerAlive(gate)) {
+    try {
+      process.kill(-gate.pid, "SIGTERM");
+    } catch {
+      try {
+        process.kill(gate.pid, "SIGTERM");
+      } catch {
+        // already gone
+      }
+    }
+  }
+  // A killed worker cannot remove its own triage clean copy. A run from before 0.8 may have its fix worktree next to the repo.
+  const prefixes = [`${task}-fix-`, `${task}-clean-`].map((name) => join(worktreesDir(main), name));
+  prefixes.push(join(legacyWorktreesDir(main), `${task}-fix-`));
+  const ours = (path: string) => prefixes.some((p) => path.startsWith(p) && /^\d+$/.test(path.slice(p.length)));
+  for (const wt of worktreeList(main)) if (ours(wt.path)) worktreeRemove(main, wt.path);
+  for (const branch of fixBranches(main, task)) deleteBranch(main, branch);
+}
+
+// Stops the engine work, then deletes the live state. The ticket worktree stays.
 export async function reset(ctx: Ctx, task: string): Promise<{ reset: string }> {
   const main = mainRoot(ctx.cwd);
   const dir = taskDir(main, task);
   if (!existsSync(dir)) throw new WardenError(`no such run: ${task}`, EXIT.NOT_FOUND);
   await withLock(main, task, () => {
-    const gate = runExists(main, task) ? readRun(main, task).gate : null;
-    if (gate && gate.pid !== process.pid && workerAlive(gate)) {
-      try {
-        process.kill(-gate.pid, "SIGTERM");
-      } catch {
-        try {
-          process.kill(gate.pid, "SIGTERM");
-        } catch {
-          // already gone
-        }
-      }
-    }
-    // A killed worker cannot remove its own triage clean copy. A run from before 0.8 may have its fix worktree next to the repo.
-    const prefixes = [`${task}-fix-`, `${task}-clean-`].map((name) => join(worktreesDir(main), name));
-    prefixes.push(join(legacyWorktreesDir(main), `${task}-fix-`));
-    const ours = (path: string) => prefixes.some((p) => path.startsWith(p) && /^\d+$/.test(path.slice(p.length)));
-    for (const wt of worktreeList(main)) if (ours(wt.path)) worktreeRemove(main, wt.path);
-    for (const branch of fixBranches(main, task)) deleteBranch(main, branch);
+    stopEngineWork(main, task);
     rmSync(dir, { recursive: true, force: true });
   });
   return { reset: task };
+}
+
+export const ARCHIVE_REASON_MAX = 500;
+
+// 0.9.4: closes a live run without doing it (the ticket is stale, a duplicate, no longer wanted). The engine work stops
+// as in reset, but the run keeps its record: it ends as archived, with the reason in a run.archived event. A run
+// started from a ticket gets the ticket set to archived in the main checkout, as at ship; a failure is a warning.
+// warden clean later removes the worktree and the branch.
+export async function archive(ctx: Ctx, task: string, reason: string): Promise<{ archived: string; warnings?: string[] }> {
+  const main = mainRoot(ctx.cwd);
+  if (!runExists(main, task)) throw new WardenError(`no such run: ${task}`, EXIT.NOT_FOUND);
+  const closed = await withLock(main, task, () => {
+    const s = load(ctx, main, task);
+    const { run } = s;
+    if (!LIVE.includes(run.status)) throw new WardenError(`${task} is ${run.status}; only a live run can be archived`);
+    stopEngineWork(main, task);
+    closeCurrent(s);
+    run.status = "archived";
+    run.gate = null;
+    run.waiting = null;
+    run.fix = null;
+    event(s, "run.archived", run.current.id, { reason });
+    writeRun(main, run);
+    return { ticket: run.ticket === true, step: run.current.id, mainBranch: s.steps.mainBranch };
+  });
+  const warning = closed.ticket ? await setTicket(ctx, main, task, "archived", closed) : null;
+  return { archived: task, ...(warning !== null && { warnings: [warning] }) };
 }
 
 // ---------------------------------------------------------------------------

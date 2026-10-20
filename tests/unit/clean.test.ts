@@ -79,7 +79,7 @@ describe("warden clean", () => {
     writeRun(main, runJson("T-4", main, "shipped"));
     git(main, "checkout", "-q", "main");
 
-    expect(clean()).toEqual(["warden: no shipped task has a worktree left"]);
+    expect(clean()).toEqual(["warden: no shipped or archived task has a worktree left"]);
     for (const path of [active, finished, elsewhere, main]) expect(existsSync(path)).toBe(true);
     expect(branches()).toEqual(expect.arrayContaining(["t-1", "t-2", "t-3", "t-4"]));
   });
@@ -127,7 +127,19 @@ describe("warden clean", () => {
     const merged = shipped("T-1");
     write(shipped("T-2"), "notes.txt", "x\n");
     shipped("T-3", wt("T-3"), false);
-    expect(removable(main)).toEqual([{ task: "T-1", worktree: merged, branch: "t-1" }]);
+    expect(removable(main)).toEqual([{ task: "T-1", worktree: merged, branch: "t-1", archived: false }]);
+  });
+
+  test("0.9.4: an archived task's worktree and branch go although the branch is not merged; uncommitted changes keep it", () => {
+    const gone = shipped("T-1", wt("T-1"), false, "archived");
+    const dirty = shipped("T-2", wt("T-2"), false, "archived");
+    write(dirty, "notes.txt", "x\n");
+    expect(clean()).toEqual([
+      `T-1: removed ${gone} and branch t-1`,
+      `T-2: kept ${dirty}: uncommitted changes (1 file, first notes.txt)`,
+    ]);
+    expect(existsSync(gone)).toBe(false);
+    expect(branches()).not.toContain("t-1");
   });
 
   test("an unmerged worktree is reported as not merged before its changes are looked at", () => {

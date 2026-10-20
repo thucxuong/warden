@@ -285,7 +285,7 @@ Folder names that start with `_` are not tasks.
 
 | Field | Meaning |
 |---|---|
-| `status` | `active`, `waiting`, `blocked`, `shipped` or `done` |
+| `status` | `active`, `waiting`, `blocked`, `shipped`, `done` or `archived` (0.9.4: closed without doing it) |
 | `current` | `{id, type, startedAt, startSha, startDirty, attempt, mode?}`. `id` is a flow step id, or `fix-<n>` |
 | `waiting` | `{kind, reason, since}` with kind `approve`, `merge-fix`, `human` (blocked) or `question`, or null |
 | `counters` | `codeStrikes`, `fixerRounds`, `reviewRound`, `checkRuns`, `triageCount`, `staleProofs` |
@@ -301,7 +301,7 @@ Folder names that start with `_` are not tasks.
 
 Events in `events.jsonl` have `{seq, ts, task, type, step?, data?}`. Types:
 
-`run.started`, `step.started`, `step.ended`, `output.accepted`, `output.rejected`, `gate.started`, `gate.command`, `gate.passed`, `gate.failed`, `gate.restarted`, `gate.discarded`, `triage.verdict`, `fix.started`, `fix.result`, `fix.landed`, `review.round`, `route.back`, `approve.waiting`, `approve.granted`, `approve.rejected`, `approve.skipped`, `run.blocked`, `run.retry`, `retry.merged-main`, `history.written`, `run.shipped`, `run.done`, `session.linked`, `stop.blocked`, `hook.denied`, `git.fetch-failed`, `proof.stale`, `ticket.status`, `question.asked`, `question.answered`.
+`run.started`, `step.started`, `step.ended`, `output.accepted`, `output.rejected`, `gate.started`, `gate.command`, `gate.passed`, `gate.failed`, `gate.restarted`, `gate.discarded`, `triage.verdict`, `fix.started`, `fix.result`, `fix.landed`, `review.round`, `route.back`, `approve.waiting`, `approve.granted`, `approve.rejected`, `approve.skipped`, `run.blocked`, `run.retry`, `retry.merged-main`, `history.written`, `run.shipped`, `run.done`, `run.archived` (0.9.4, with the reason), `session.linked`, `stop.blocked`, `hook.denied`, `git.fetch-failed`, `proof.stale`, `ticket.status`, `question.asked`, `question.answered`.
 
 ## Files outside `.warden/`
 

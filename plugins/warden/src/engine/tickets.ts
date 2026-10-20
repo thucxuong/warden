@@ -324,6 +324,7 @@ export function ticketPhase(status: TicketStatus, run: RunJson | null, ship: Shi
       return run.current.type === "ship" && run.gate === null ? "ready" : "running";
     case "shipped": return ship?.merged === true ? "merged" : "pr-open";
     case "done": return "no-ship";
+    case "archived": return "archived";
   }
 }
 

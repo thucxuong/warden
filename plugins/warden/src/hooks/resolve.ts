@@ -174,10 +174,10 @@ export function runForPath(main: string, target: string): PathMatch | null {
   return best && { run: best.run, rel: best.rel, inFix: best.inFix };
 }
 
-// Live, or done/shipped with its worktree still on disk.
+// Live, or finished with its worktree still on disk. An archived run counts (0.9.4), so its branch is never pushed or merged.
 function resolvable(run: RunJson): boolean {
   if (isLive(run)) return true;
-  return (run.status === "done" || run.status === "shipped") && existsSync(run.worktree);
+  return (run.status === "done" || run.status === "shipped" || run.status === "archived") && existsSync(run.worktree);
 }
 
 // The run whose worktree (or fix worktree) is the toplevel of cwd. Live runs win, then the newest.

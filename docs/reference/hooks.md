@@ -49,7 +49,7 @@ The lines it can add:
 | A newer warden is available in the marketplace copy on disk | `warden: version <v> is available; this session runs <installed>. To update, run "claude plugin update warden@<marketplace>" in a terminal (or use /plugin), then /reload-plugins.` |
 | Checks are due (agent checks, and command checks that are not `auto`) | `warden: checks due: <name> (last <date>), .... When the user's current request is done, offer them in one short line. Do not start one unless the user says yes. To run one: warden checks run <name>.` |
 | An `auto` command check failed last time | `warden: auto checks failed on their last run: <name> (<date>). Tell the user in one short line; details: warden checks.` |
-| Shipped tasks still have worktrees that `warden clean` would remove (merged, no changes) | `warden: <n> shipped tasks still have worktrees; run warden clean` (`1 shipped task still has a worktree` for one) |
+| Shipped or archived tasks still have worktrees that `warden clean` would remove (shipped ones merged, no changes) | `warden: <n> finished tasks still have worktrees; run warden clean` (`1 finished task still has a worktree` for one) |
 | An orchestration stopped with tickets left | `warden: orchestration of <epic> stopped with <n> tickets left. When the user's current request is done, offer to go on; with their OK, run /warden:orchestrate <epic>.` |
 | A report's status changed | `warden: report <id> "<title>" is now <status>[ in <version>].[ Note: <note>]` |
 | A report needs info | The line above, plus ` Answer it from this project when the user's request is done: warden report reply <id> --body "<answer>"` |

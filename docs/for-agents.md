@@ -51,7 +51,7 @@ flowchart TD
 
    | Field | What it holds |
    |---|---|
-   | `status` | `agent`, `running_gate`, `waiting`, `blocked`, `shipped` or `done` |
+   | `status` | `agent`, `running_gate`, `waiting`, `blocked`, `shipped`, `done` or `archived` |
    | `step` | `id`, `type`, `index`, `total`, `title`; `null` once the run is over |
    | `message` | One or more lines for you, for example `APP-12: implement (2/5). Back from check: CODE.` |
    | `instructions` | What the step must achieve, the project rules, what to read, and earlier outputs |
@@ -66,7 +66,7 @@ flowchart TD
    | `running_gate` | Run `warden wait` with a Bash timeout of 600000. It waits up to 540 seconds. Repeat until the status changes. |
    | `waiting` | Tell the user the `message` and end your turn. |
    | `blocked` | Tell the user the `message` and end your turn. |
-   | `shipped`, `done` | Tell the user the run is over. |
+   | `shipped`, `done`, `archived` | Tell the user the run is over. |
 
 The Stop hook keeps your turn going while the run needs you. If it says `<task> is at <step> and needs you`, run `warden next` (or `warden wait` while a gate runs).
 

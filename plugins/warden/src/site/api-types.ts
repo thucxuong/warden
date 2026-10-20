@@ -2,7 +2,7 @@
 // Types only: no imports, no runtime code. Imported by plugins/warden/src/site/*.ts and by site-ui (alias "@api").
 
 export type ISO = string; // ISO 8601 UTC, e.g. "2026-10-18T16:07:39.445Z"
-export type RunStatus = "active" | "waiting" | "blocked" | "shipped" | "done";
+export type RunStatus = "active" | "waiting" | "blocked" | "shipped" | "done" | "archived";
 export type StepKind = "analyze" | "plan" | "implement" | "check" | "review" | "approve" | "ship" | "fix";
 export type WaitKind = "human" | "approve" | "question" | "merge-fix";
 export type Verdict = "CODE" | "OPS" | "UNCLEAR";
@@ -137,7 +137,7 @@ export interface HealthResponse {
   };
   config: ConfigProblem[];
   ticketTool: string | null;  // tool named by the tickets role
-  leftoverWorktrees: LeftoverWorktree[];  // 0.8: shipped tasks whose worktree `warden clean` would remove now
+  leftoverWorktrees: LeftoverWorktree[];  // 0.8: shipped (and 0.9.4: archived) tasks whose worktree `warden clean` would remove now
 }
 
 export interface LeftoverWorktree { task: string; worktree: string; branch: string }
@@ -220,7 +220,7 @@ export interface RunHeader {
 
 export type StepOutcome =
   | "running" | "waiting" | "blocked" | "passed" | "failed" | "accepted" | "bounced"
-  | "skipped" | "approved" | "rejected" | "shipped" | "done" | "ended";
+  | "skipped" | "approved" | "rejected" | "shipped" | "done" | "archived" | "ended";
 
 export interface TimelineStep {
   key: string;                // "<stepId>#<attempt>", e.g. "check#2", "fix-1#1"
@@ -237,7 +237,7 @@ export interface TimelineStep {
 export type MarkerKind =
   | "bounce" | "fix-started" | "fix-result" | "blocked" | "retry" | "fix-landed" | "merged-main"
   | "merge-fix-wait" | "proof-stale" | "gate-discarded" | "gate-restarted" | "question" | "answered"
-  | "approve-waiting" | "approved" | "rejected" | "output-rejected" | "shipped" | "done";
+  | "approve-waiting" | "approved" | "rejected" | "output-rejected" | "shipped" | "done" | "archived";
 
 export interface TimelineMarker {
   seq: number; at: ISO; kind: MarkerKind;

@@ -18,7 +18,7 @@ Warden runs each task as a fixed list of steps. You do the agent steps (analyze,
 | `running_gate` | Run `warden wait` with a Bash timeout of 600000. Repeat until the status changes. Do not edit or commit meanwhile. |
 | `waiting` | Tell the user the `message` and end your turn. They type `approve`, `reject: <why>`, `retry`, or the answer to your question. |
 | `blocked` | Tell the user the `message` (the cause) and end your turn. The person fixes the cause in their own editor or terminal: at a check, review or approve step your edits in the ticket worktree are refused. Then they type `retry`. |
-| `shipped`, `done` | The run is over. Tell the user. |
+| `shipped`, `done`, `archived` | The run is over. Tell the user. |
 
 3. Hand in with one command, the JSON on one line in single quotes:
    ```

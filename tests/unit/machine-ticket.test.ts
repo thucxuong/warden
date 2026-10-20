@@ -2,7 +2,7 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { done, next, start } from "../../plugins/warden/src/engine/machine.ts";
+import { archive, done, next, start } from "../../plugins/warden/src/engine/machine.ts";
 import { readEvents } from "../../plugins/warden/src/state/store.ts";
 import { T, IMPL, CHECK, REVIEW, SHIP, main, wt, ctx, spawn, run, drive, implement, installMachineFixture } from "../helpers/machine-fixture.ts";
 import { barrel, writeTools } from "../helpers/tools-fixture.ts";
@@ -96,7 +96,7 @@ describe("ticket status (0.9.3: done once merged)", () => {
     expect(res.accepted).toBe(true);
     expect(run().status).toBe("shipped");
     expect(ticketEvents().map((e) => e.data)).toEqual([{ status: "done", error: "ticket tool failed (exit 1): backlog is broken" }]);
-    expect(res.warnings).toEqual([`the ticket was not set to done: ticket tool failed (exit 1): backlog is broken. The ship is done; tell the user to set ${T} to done`]);
+    expect(res.warnings).toEqual([`the ticket was not set to done: ticket tool failed (exit 1): backlog is broken. The run is shipped; tell the user to set ${T} to done`]);
   });
 
   test("a run started without a ticket (a text run from before 0.9) never runs the tool", async () => {
@@ -184,5 +184,51 @@ describe("ticket link at ship", () => {
     expect(res.errors).toEqual([]);
     expect(linkEvents()).toEqual([]);
     expect(existsSync(join(main, "links.txt"))).toBe(false);
+  });
+});
+
+// 0.9.4: `warden archive` closes a live run without doing it; the record stays and the ticket is set to archived.
+describe("archive", () => {
+  test("a live run ends as archived with the reason; the ticket is set to archived in the main checkout", async () => {
+    setUpTickets();
+    await startTicketRun();
+    const res = await archive(ctx, T, "stale: the feature is gone");
+    expect(res.archived).toBe(T);
+    expect(run().status).toBe("archived");
+    expect(run().gate).toBeNull();
+    const events = readEvents(main, T);
+    expect(events.find((e) => e.type === "run.archived")?.data).toEqual({ reason: "stale: the feature is gone" });
+    expect(events.filter((e) => e.type === "step.ended").map((e) => e.step)).toContain("implement");
+    expect(readFileSync(join(main, TICKET), "utf8")).toBe("status: archived\n");
+    expect(ticketEvents().map((e) => e.data)).toEqual([{ status: "archived", changed: [TICKET] }]);
+    expect(res.warnings).toEqual([`the ticket is set to archived in ${main}: commit ${TICKET} there on main with the message "chore(${T}): ticket archived"`]);
+    expect((await next(ctx, T, spawn)).status).toBe("archived");
+    expect((await done(ctx, T, "{}", spawn)).accepted).toBe(false);
+  });
+
+  test("a failing ticket tool is a warning; the run is still archived", async () => {
+    setUpTickets();
+    await startTicketRun();
+    writeFileSync(join(main, "FAIL"), "");
+    const res = await archive(ctx, T, "duplicate of T-2");
+    expect(run().status).toBe("archived");
+    expect(res.warnings).toEqual([`the ticket was not set to archived: ticket tool failed (exit 1): backlog is broken. The run is archived; tell the user to set ${T} to archived`]);
+  });
+
+  test("only a live run can be archived", async () => {
+    setUpTickets();
+    await startTicketRun();
+    await archive(ctx, T, "stale");
+    await expect(archive(ctx, T, "again")).rejects.toThrow(`${T} is archived; only a live run can be archived`);
+    expect(readEvents(main, T).filter((e) => e.type === "run.archived")).toHaveLength(1);
+  });
+
+  test("a run without a ticket (from before 0.9) is archived without running the tool", async () => {
+    setUpTickets();
+    await startTicketRun(false);
+    const res = await archive(ctx, T, "stale");
+    expect(run().status).toBe("archived");
+    expect(res.warnings).toBeUndefined();
+    expect(ticketEvents()).toEqual([]);
   });
 });

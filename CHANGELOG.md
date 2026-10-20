@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.4 — 2026-10-20
+
+- `warden archive <task> --reason "<why>"` closes a live run without doing it, when the user decides its ticket is stale, a duplicate or no longer wanted. It stops the engine work as `warden reset` does, but keeps the run's record: the run ends with the new status `archived` and a `run.archived` event with the reason, and the site shows it as archived instead of running. For a run started from a ticket, it sets the ticket to `archived` in the main checkout; `changed` paths or a failure come back as `warnings`.
+- Setting a ticket to `archived` with the ticket tool alone left its run live, shown as running on the site for good. The work skill now says to use `warden archive` for a ticket with a live run.
+- `warden clean` also removes the worktree and branch of archived runs (their branch is deleted unmerged). Its messages say "finished tasks" now: `warden: <n> finished tasks still have worktrees; run warden clean`.
+- Hooks treat an archived run like a finished one: its branch is never pushed or merged.
+
 ## 0.9.3 — 2026-10-20
 
 - A ticket is done only once its task is merged into the main branch. Warden no longer sets the ticket to done at ship prep, so nothing is written into the ticket worktree there and the proofs no longer allow ticket files on top of the proven commit. This fixes a ship that left the ticket file uncommitted when the gates re-ran, and then refused `warden done`.

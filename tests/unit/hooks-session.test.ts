@@ -257,15 +257,15 @@ describe("SessionStart", () => {
     patchRun((r) => {
       r.status = "shipped";
     });
-    expect(await hook("session-start")).toBe("warden: 1 shipped task still has a worktree; run warden clean");
+    expect(await hook("session-start")).toBe("warden: 1 finished task still has a worktree; run warden clean");
     const wt2 = addWorktree("T-2");
     await startFlow([IMPL, CHECK], "T-2", wt2);
     patchRun((r) => {
       r.status = "shipped";
     }, "T-2");
-    expect(await hook("session-start")).toBe("warden: 2 shipped tasks still have worktrees; run warden clean");
+    expect(await hook("session-start")).toBe("warden: 2 finished tasks still have worktrees; run warden clean");
     write(wt2, "notes.txt", "x\n"); // warden clean keeps a dirty worktree, so it is not counted
-    expect(await hook("session-start")).toBe("warden: 1 shipped task still has a worktree; run warden clean");
+    expect(await hook("session-start")).toBe("warden: 1 finished task still has a worktree; run warden clean");
   });
 
   test("nothing to say prints nothing", async () => {

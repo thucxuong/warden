@@ -159,7 +159,7 @@ export interface FixOutput {
 // 4.5 state/<task>/run.json
 // ---------------------------------------------------------------------------
 
-export type RunStatus = "active" | "waiting" | "blocked" | "shipped" | "done";
+export type RunStatus = "active" | "waiting" | "blocked" | "shipped" | "done" | "archived";  // archived: 0.9.4, closed without doing it
 export interface Proof { stepId: string; kind: "check" | "review"; sha: string; at: string }
 
 export interface CurrentStep {
@@ -219,7 +219,7 @@ export type EventType =
   | "gate.started" | "gate.command" | "gate.passed" | "gate.failed" | "gate.restarted"
   | "triage.verdict" | "fix.started" | "fix.result" | "review.round" | "route.back"
   | "approve.waiting" | "approve.granted" | "approve.rejected" | "approve.skipped"
-  | "run.blocked" | "run.retry" | "history.written" | "run.shipped" | "run.done"
+  | "run.blocked" | "run.retry" | "history.written" | "run.shipped" | "run.done" | "run.archived"
   | "session.linked" | "stop.blocked" | "hook.denied"
   | "gate.discarded" | "fix.landed" | "git.fetch-failed" | "proof.stale"
   | "ticket.status" | "ticket.linked" | "question.asked" | "question.answered" | "retry.merged-main";
@@ -270,7 +270,7 @@ export interface ReviewRound {
 export interface NextResponse {
   task: string;
   flow: string;
-  status: "agent" | "running_gate" | "waiting" | "blocked" | "shipped" | "done";
+  status: "agent" | "running_gate" | "waiting" | "blocked" | "shipped" | "done" | "archived";
   step: { id: string; type: StepType | "fix"; index: number; total: number; title: string } | null;
   message: string;                 // one line, e.g. "T-001: implement (2/5). Back from check: CODE."
   instructions: string;            // markdown, built by instructions.ts in the fixed order

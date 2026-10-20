@@ -37,7 +37,8 @@ Every `warden` command, its flags, what it prints, and who runs it.
 | [`orchestrate`](#warden-orchestrate) | the `/warden:orchestrate` skill | Plan and track the tickets of an epic |
 | [`checks`](#warden-checks) | agent | List, run and record periodic checks |
 | [`docs`](#warden-docs) | anyone, and the built-in `warden-docs` check | Check the `.warden` doc folders |
-| [`clean`](#warden-clean) | agent, after a ship; anyone | Remove the worktrees and branches of shipped, merged tasks |
+| [`clean`](#warden-clean) | agent, after a ship; anyone | Remove the worktrees and branches of shipped, merged tasks and of archived tasks |
+| [`archive`](#warden-archive) | agent, when the user says so | Close a live run without doing it, and set its ticket to archived |
 | `hook`, `gate` | warden itself | Internal. Do not run them |
 
 The approve, reject and retry actions also work by typing a word in the chat. See [hooks](hooks.md#userpromptsubmit).
@@ -275,7 +276,7 @@ Output: `{"task":"PG-012","status":"waiting","question":"..."}`.
 warden status [--all]
 ```
 
-Lists the runs of this project. Without `--all`, only live runs (`active`, `waiting`, `blocked`). With `--all`, also `shipped` and `done`.
+Lists the runs of this project. Without `--all`, only live runs (`active`, `waiting`, `blocked`). With `--all`, also `shipped`, `done` and `archived`.
 
 ```ts
 { runs: { task, flow, status, step, stepIndex, total, worktree: string | null, updatedAt }[] }
@@ -587,7 +588,7 @@ warden clean [--dry-run]
 
 Run from the main checkout or any worktree. The ship step says to run it after `warden done`, and `/warden:orchestrate` runs it at the end of an epic.
 
-It looks at each shipped run whose worktree is still there, in `<repo>/.worktrees/<task>` or, before 0.8, `<repo>.worktrees/<task>`. When the worktree has no uncommitted or untracked files and its branch is merged into the main branch (`origin/<main>` after a fetch when there is a remote), it removes the worktree and deletes the branch. Otherwise, or when the worktree is locked, it keeps both. It never touches a live run's worktree, a run in the main checkout, any other worktree, or the folder it runs in.
+It looks at each shipped or archived run whose worktree is still there, in `<repo>/.worktrees/<task>` or, before 0.8, `<repo>.worktrees/<task>`. When the worktree has no uncommitted or untracked files and, for a shipped run, its branch is merged into the main branch (`origin/<main>` after a fetch when there is a remote), it removes the worktree and deletes the branch. An archived run's branch is deleted unmerged (0.9.4). Otherwise, or when the worktree is locked, it keeps both. It never touches a live run's worktree, a run in the main checkout, any other worktree, or the folder it runs in.
 
 One line per task:
 
@@ -597,9 +598,23 @@ PG-333: kept /work/app/.worktrees/PG-333: pg-333 is not merged into origin/main 
 PG-334: kept /work/app/.worktrees/PG-334: uncommitted changes (2 files, first notes.txt)
 ```
 
-With nothing to do it prints `warden: no shipped task has a worktree left`. `--dry-run` prints `<task>: would remove <path> and branch <b>` and changes nothing. Exit 0. A squash-merged branch is not on the main branch, so it is kept; remove it by hand.
+With nothing to do it prints `warden: no shipped or archived task has a worktree left`. `--dry-run` prints `<task>: would remove <path> and branch <b>` and changes nothing. Exit 0. A squash-merged branch is not on the main branch, so it is kept; remove it by hand.
 
-Session start says `warden: <n> shipped tasks still have worktrees; run warden clean` when there is something to remove.
+Session start says `warden: <n> finished tasks still have worktrees; run warden clean` when there is something to remove.
+
+---
+
+## warden archive
+
+```
+warden archive <task> --reason "<why>"
+```
+
+0.9.4. Closes a live run (`active`, `waiting` or `blocked`) without doing it: the ticket is stale, a duplicate, or no longer wanted. The agent runs it only when the user decided so. The reason is 1 to 500 characters.
+
+It stops the engine work as [`warden reset`](#warden-reset) does (the worker, its checks and reviewer, fix worktrees, triage clean copies, fix branches), then ends the run with status `archived` and a `run.archived` event that holds the reason. Unlike reset, the run keeps its record: the site shows it as archived, with the reason on the timeline. For a run started from a ticket, it then runs the ticket tool's `set-status <task> archived` in the main checkout.
+
+Output: `{"archived":"PG-005","warnings":[...]}`. `warnings` appears when the ticket tool printed `changed` paths (commit them in the main checkout) or failed (set the ticket by hand); the run is archived either way. Exit 2 for a missing task or reason, 3 when there is no such run, 1 when the run is not live. [`warden clean`](#warden-clean) later removes the worktree and the branch.
 
 ---
 

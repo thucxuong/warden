@@ -41,7 +41,7 @@ Inside your repo, in `<repo>/.worktrees/<task>` (before 0.8 they were next to it
 
 ### How do I remove the worktrees of finished tasks?
 
-Run `warden clean` from the main checkout. For each shipped task it removes the worktree and deletes the branch once the branch is merged and the worktree has no uncommitted changes, and it says why it keeps any other. `warden clean --dry-run` only lists.
+Run `warden clean` from the main checkout. For each shipped task it removes the worktree and deletes the branch once the branch is merged and the worktree has no uncommitted changes (an archived task's branch goes unmerged), and it says why it keeps any other. `warden clean --dry-run` only lists.
 
 ### Can I run several tasks at once?
 

@@ -94,6 +94,7 @@ function outcomeOf(
   if (last(events, w, ["run.shipped"])) return { outcome: "shipped", detail: null };
   const isLast = windows[windows.length - 1] === w;
   if (isLast && events.some((e) => e.type === "run.done" && e.seq > w.startSeq)) return { outcome: "done", detail: null };
+  if (isLast && events.some((e) => e.type === "run.archived" && e.seq > w.startSeq)) return { outcome: "archived", detail: null };
   const back = last(events, w, ["route.back"]);
   if (back) return { outcome: "bounced", detail: str(back.data?.reason) };
   if (last(events, w, ["gate.passed"])) return { outcome: "passed", detail: null };
@@ -129,6 +130,7 @@ const MARKERS: Partial<Record<string, MarkerKind>> = {
   "gate.discarded": "gate-discarded", "gate.restarted": "gate-restarted", "question.asked": "question",
   "question.answered": "answered", "approve.waiting": "approve-waiting", "approve.granted": "approved",
   "approve.rejected": "rejected", "output.rejected": "output-rejected", "run.shipped": "shipped", "run.done": "done",
+  "run.archived": "archived",
 };
 
 function markerText(e: EventLine): { label: string; detail: string | null } {
@@ -151,6 +153,7 @@ function markerText(e: EventLine): { label: string; detail: string | null } {
     case "approve.rejected": return { label: "Rejected", detail: str(d.text) || null };
     case "output.rejected": return { label: "Output rejected", detail: Array.isArray(d.errors) ? d.errors.map(str).join("; ") : null };
     case "run.shipped": return { label: "Shipped", detail: null };
+    case "run.archived": return { label: "Archived", detail: str(d.reason) || null };
     default: return { label: "Done", detail: null };
   }
 }

@@ -411,3 +411,12 @@ describe("status and flow", () => {
     expect(cli(["gate", "T-7"]).code).toBe(3);
   });
 });
+
+describe("archive (0.9.4)", () => {
+  test("needs a task and a reason; a missing run is exit 3", () => {
+    expect(cli(["archive", "T-1"]).code).toBe(2);
+    expect(cli(["archive", "T-1", "--reason", "  "]).code).toBe(2);
+    expect(cli(["archive", "--reason", "stale"]).code).toBe(2);
+    expect(cli(["archive", "T-9", "--reason", "stale"]).code).toBe(3);
+  });
+});

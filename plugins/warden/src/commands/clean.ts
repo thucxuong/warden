@@ -1,4 +1,5 @@
-// warden clean [--dry-run] (0.8): removes the worktree and branch of each shipped task once its branch is merged.
+// warden clean [--dry-run] (0.8): removes the worktree and branch of each shipped task once its branch is merged,
+// and of each archived task (0.9.4), whose branch is never merged.
 // Only warden's own task worktrees (<main>/.worktrees/<task>, or <repo>.worktrees/<task> from before 0.8) are touched,
 // never one an active run uses or the main checkout. One line per task that still has a worktree.
 import { existsSync, realpathSync } from "node:fs";
@@ -18,6 +19,7 @@ export interface Leftover {
   task: string;
   worktree: string;
   branch: string;
+  archived: boolean;
 }
 
 function real(path: string): string {
@@ -33,34 +35,34 @@ function isInside(dir: string, path: string): boolean {
   return rel === "" || (rel !== ".." && !rel.startsWith("../") && !isAbsolute(rel));
 }
 
-// Shipped runs whose task worktree folder is still there and no live run uses. No git calls.
-function shippedWithFolder(main: string): Leftover[] {
-  const shipped: RunJson[] = [];
+// Shipped and archived runs whose task worktree folder is still there and no live run uses. No git calls.
+function finishedWithFolder(main: string): Leftover[] {
+  const finished: RunJson[] = [];
   const live: string[] = [];
   for (const task of listTasks(main)) {
     try {
       if (!runExists(main, task)) continue;
       const run = readRun(main, task);
-      if (run.status === "shipped") shipped.push(run);
+      if (run.status === "shipped" || run.status === "archived") finished.push(run);
       if (LIVE.includes(run.status)) live.push(run.worktree, ...(run.fix ? [run.fix.worktree] : []));
     } catch {
       // an unreadable run is skipped
     }
   }
   const out: Leftover[] = [];
-  for (const run of shipped.sort((a, b) => a.task.localeCompare(b.task))) {
+  for (const run of finished.sort((a, b) => a.task.localeCompare(b.task))) {
     const own = [worktreesDir(main), legacyWorktreesDir(main)].map((dir) => join(dir, run.task));
     if (!own.some((path) => real(path) === real(run.worktree))) continue; // the main checkout, or a worktree warden did not make
     if (!existsSync(run.worktree)) continue;
     if (live.some((path) => real(path) === real(run.worktree))) continue;
-    out.push({ task: run.task, worktree: run.worktree, branch: run.branch });
+    out.push({ task: run.task, worktree: run.worktree, branch: run.branch, archived: run.status === "archived" });
   }
   return out;
 }
 
 // The leftovers that are still worktrees of this repo, and the worktree list. git runs only when a folder is left.
 function leftovers(main: string): { found: Leftover[]; worktrees: WorktreeInfo[] } {
-  const candidates = shippedWithFolder(main);
+  const candidates = finishedWithFolder(main);
   if (candidates.length === 0) return { found: [], worktrees: [] };
   const worktrees = worktreeList(main);
   return { found: candidates.filter((l) => worktrees.some((w) => real(w.path) === real(l.worktree))), worktrees };
@@ -87,14 +89,14 @@ function why(leftover: Leftover, worktrees: WorktreeInfo[], ref: string, main: s
   const checkedOut = info?.branch ?? null;
   if (checkedOut !== branch) return `it is on ${checkedOut ?? "a detached HEAD"}, not on ${branch}`;
   if (info?.locked) return `it is locked (git worktree unlock ${worktree} to allow removal)`;
-  if (!merged(main, branch, ref)) return `${branch} is not merged into ${ref} (a pull request still open?)`;
+  if (!leftover.archived && !merged(main, branch, ref)) return `${branch} is not merged into ${ref} (a pull request still open?)`;
   if (cwd !== null && isInside(worktree, cwd)) return "the current directory is inside it; run warden clean from the main checkout";
   const dirty = porcelain(worktree);
   if (dirty.length > 0) return `uncommitted changes (${dirty.length} file${dirty.length === 1 ? "" : "s"}, first ${dirty[0]})`;
   return null;
 }
 
-// Shipped tasks whose worktree warden clean would remove now. Session start and the site's health read them
+// Shipped and archived tasks whose worktree warden clean would remove now. Session start and the site's health read them
 // without fetching.
 export function removable(main: string): Leftover[] {
   const { found, worktrees } = leftovers(main);
@@ -107,12 +109,12 @@ export function leftoverLine(main: string): string | null {
   const n = removable(main).length;
   if (n === 0) return null;
   return n === 1
-    ? "warden: 1 shipped task still has a worktree; run warden clean"
-    : `warden: ${n} shipped tasks still have worktrees; run warden clean`;
+    ? "warden: 1 finished task still has a worktree; run warden clean"
+    : `warden: ${n} finished tasks still have worktrees; run warden clean`;
 }
 
 // Removes one leftover. why() checked the merge against the fetched ref, so -D is safe also when the main checkout
-// is behind it.
+// is behind it. An archived task's branch is deleted unmerged: the run was closed without doing it.
 function remove(main: string, leftover: Leftover): string {
   const refused = worktreeRemoveClean(main, leftover.worktree);
   if (refused !== null) return `kept ${leftover.worktree}: ${refused}`;
@@ -131,7 +133,7 @@ export async function run(args: string[], ctx: Ctx): Promise<number> {
   const main = mainRoot(ctx.cwd);
   const { found, worktrees } = leftovers(main);
   if (found.length === 0) {
-    console.log("warden: no shipped task has a worktree left");
+    console.log("warden: no shipped or archived task has a worktree left");
     return EXIT.OK;
   }
   const { mainBranch } = loadStepsJson(join(main, ".warden", "steps.json"));

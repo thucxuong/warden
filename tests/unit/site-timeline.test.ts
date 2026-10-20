@@ -149,6 +149,17 @@ describe("outcomes", () => {
     expect(t.markers.map((m) => m.kind)).toEqual(["approve-waiting", "rejected", "done"]);
   });
 
+  test("0.9.4: an archived run's last step is archived, not running, with the reason on its marker", () => {
+    seq = 0;
+    const events = [
+      ev("step.started", 0, "implement", { type: "implement" }), ev("step.ended", 1, "implement"),
+      ev("run.archived", 1, "implement", { reason: "stale" }),
+    ];
+    const { t } = timeline(events, run({ status: "archived", current: { ...run().current, id: "implement", type: "implement" } }), []);
+    expect(t.steps.map((s) => [s.key, s.outcome])).toEqual([["implement#1", "archived"]]);
+    expect(t.markers).toEqual([expect.objectContaining({ kind: "archived", label: "Archived", detail: "stale" })]);
+  });
+
   test("a proof.stale loops from the ship window to the next window", () => {
     seq = 0;
     const events = [
