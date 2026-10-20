@@ -75,7 +75,7 @@ From top to bottom:
 3. **Epics**: each epic in progress, with a bar of done against total tickets, its running tickets, and a warning when an orchestration stopped. It needs a ticket tool (see [Tickets](#tickets)).
 4. **Recently shipped**: the last 8 shipped runs with the pull request, the total time, tokens and cost.
 
-The side column has **Reports** (your open reports to the warden maintainers, any question they wait for you to answer with the reply command, and the last sync) and **Project health**: the warden version against the project's and the newest one known on this machine, the result of `warden tools --check`, and config problems (an invalid `steps.json`, a broken flow file, no ticket tool, a bad `site.thresholds`).
+The side column has **Reports** (your open reports to the warden maintainers, any question they wait for you to answer with the reply command, and the last sync) and **Project health**: the warden version against the project's and the newest one known on this machine, the result of `warden tools --check`, config problems (an invalid `steps.json`, a broken flow file, no ticket tool, a bad `site.thresholds`), and leftover worktrees: shipped, merged tasks whose worktree is still there, with the `warden clean` command to copy. It shows the same tasks that session start counts, and never fetches or removes anything.
 
 ### Run detail
 
@@ -152,7 +152,7 @@ The site is built on a small read-only JSON API on the same address, handy for s
 | Path | Returns |
 |---|---|
 | `/api/home` | needs you, running, recently shipped, reports |
-| `/api/health` | versions, `warden tools --check`, config problems (it runs the project's probes, up to 60 s) |
+| `/api/health` | versions, `warden tools --check`, config problems, leftover worktrees (it runs the project's probes, up to 60 s) |
 | `/api/signals` | the effective thresholds, usual times and the live runs with warnings |
 | `/api/runs?status=&flow=&from=&to=&source=` | one row per run, with totals. `status` is a comma list, `from` and `to` are ISO times, `source` is `live` or `history` |
 | `/api/runs/<task>` | timeline, gates, review, plan, changes, tokens per step |

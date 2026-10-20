@@ -24,8 +24,9 @@ async function atShipWithWorktreeGone(): Promise<void> {
 }
 
 describe("ship after the worktree is removed", () => {
-  test("the ship step text says to hand in before removing the worktree", () => {
-    expect(catalogText("ship", T)).toContain("BEFORE you remove the worktree or the branch");
+  test("the ship step text says to hand in before removing the worktree, then to run warden clean", () => {
+    expect(catalogText("ship", T)).toContain("never remove the worktree or the branch before that");
+    expect(catalogText("ship", T)).toContain("Then run `warden clean` from the main checkout");
   });
 
   test("from the main checkout the one live run with a missing worktree is used; done is accepted", async () => {

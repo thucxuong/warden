@@ -105,7 +105,7 @@ The full table of contents is in [docs/README.md](docs/README.md).
 
 ## Project status
 
-Version 0.7.0. Warden is young and changes often. Each version that changes your project's files ships an upgrade note, and `/warden:upgrade` applies it (see [Upgrading](docs/getting-started/upgrading.md)). Changes are listed in [CHANGELOG.md](CHANGELOG.md).
+Version 0.8.0. Warden is young and changes often. Each version that changes your project's files ships an upgrade note, and `/warden:upgrade` applies it (see [Upgrading](docs/getting-started/upgrading.md)). Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

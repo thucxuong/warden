@@ -5,6 +5,8 @@ import { basename, dirname, join, relative } from "node:path";
 import { EXIT, WardenError } from "../../plugins/warden/src/lib/exit.ts";
 import {
   historyDir,
+  inWorktreesDir,
+  legacyWorktreesDir,
   mainRef,
   mainRoot,
   sessionsDir,
@@ -16,6 +18,7 @@ import {
 let base: string;
 let repo: string;
 let linked: string;
+let nested: string;
 
 function git(cwd: string, ...args: string[]): void {
   const res = Bun.spawnSync(["git", ...args], { cwd, stdout: "ignore", stderr: "pipe" });
@@ -40,6 +43,8 @@ beforeAll(() => {
   git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init");
   linked = join(base, "proj.worktrees", "T-1");
   git(repo, "worktree", "add", "-q", "-b", "t-1", linked);
+  nested = join(repo, ".worktrees", "T-2");
+  git(repo, "worktree", "add", "-q", "-b", "t-2", nested);
 });
 afterAll(() => rmSync(base, { recursive: true, force: true }));
 
@@ -58,6 +63,15 @@ describe("mainRoot / worktreeRoot", () => {
   test("mainRoot from a linked worktree, worktreeRoot is the worktree", () => {
     expect(mainRoot(linked)).toBe(repo);
     expect(worktreeRoot(linked)).toBe(linked);
+  });
+
+  test("a worktree nested in the main checkout (0.8): mainRoot is main, worktreeRoot is the worktree, also from a subfolder", () => {
+    const sub = join(nested, "src");
+    mkdirSync(sub, { recursive: true });
+    expect(mainRoot(nested)).toBe(repo);
+    expect(worktreeRoot(nested)).toBe(nested);
+    expect(mainRoot(sub)).toBe(repo);
+    expect(worktreeRoot(sub)).toBe(nested);
   });
 
   test("not a git repo -> exit 3", () => {
@@ -85,12 +99,21 @@ describe("mainRoot / worktreeRoot", () => {
 });
 
 describe("directories", () => {
-  test("worktreesDir is a sibling outside the repo", () => {
-    const dir = worktreesDir(repo);
-    expect(dir).toBe(join(base, "proj.worktrees"));
-    expect(dirname(dir)).toBe(dirname(repo));
-    expect(relative(repo, dir).startsWith("..")).toBe(true);
-    expect(basename(dir)).toBe("proj.worktrees");
+  test("worktreesDir is .worktrees inside the main checkout (0.8); the old sibling folder is legacyWorktreesDir", () => {
+    expect(worktreesDir(repo)).toBe(join(repo, ".worktrees"));
+    const legacy = legacyWorktreesDir(repo);
+    expect(legacy).toBe(join(base, "proj.worktrees"));
+    expect(dirname(legacy)).toBe(dirname(repo));
+    expect(relative(repo, legacy).startsWith("..")).toBe(true);
+    expect(basename(legacy)).toBe("proj.worktrees");
+  });
+
+  test("inWorktreesDir: only paths in the nested folder itself", () => {
+    expect(inWorktreesDir(".worktrees")).toBe(true);
+    expect(inWorktreesDir(".worktrees/T-1/src/a.ts")).toBe(true);
+    expect(inWorktreesDir(".worktreesX/a")).toBe(false);
+    expect(inWorktreesDir("src/.worktrees/a")).toBe(false);
+    expect(inWorktreesDir("src/a.ts")).toBe(false);
   });
 
   test("state, sessions and history dirs live under .warden", () => {

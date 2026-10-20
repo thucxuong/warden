@@ -34,6 +34,7 @@ describe("the fixture", () => {
       { file: ".warden/warden.json", severity: "warn", message: "warden.json: $.site.thresholds.slowFactor: must be a number from 1 to 10, got 0", fix: null },
     ]);
     expect(h.ticketTool).toBe("backlog");
+    expect(h.leftoverWorktrees).toEqual([{ task: "FX-101", worktree: join(fx.main, "..", "fx.worktrees", "FX-101"), branch: "fx-101" }]);
   }, 30_000);
 });
 
@@ -106,6 +107,7 @@ describe("config problems and versions", () => {
       file: ".warden/tools/roles.json", severity: "info", message: "no ticket tool: the Tickets page and Epics are off", fix: 'set "tickets" in .warden/tools/roles.json',
     }]);
     expect(h.ticketTool).toBeNull();
+    expect(h.leftoverWorktrees).toEqual([]);
     expect(h.versions.project).toBeNull();
     expect(h.versions.upgradeProject).toBe(false);
 

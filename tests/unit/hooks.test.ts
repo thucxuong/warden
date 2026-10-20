@@ -129,6 +129,45 @@ describe("PreToolUse: Edit and Write", () => {
   });
 });
 
+describe("nested worktrees in <main>/.worktrees (0.8)", () => {
+  // T-2 runs in the main checkout itself (started without --worktree) on its own branch, at its plan step.
+  async function mainRun(): Promise<void> {
+    sh(main, "checkout", "-q", "-b", "t-2");
+    await startFlow(FEATURE, "T-2", main);
+  }
+
+  test("an edit in <main>/.worktrees/<task> is that worktree's, never the main checkout run's", async () => {
+    await mainRun();
+    expect(wt.startsWith(join(main, ".worktrees") + "/")).toBe(true);
+    expect(reason(await editAt(join(main, "src/a.ts")))).toBe("warden: plan step does not change code (T-2 at plan)");
+    expect(await editAt(join(wt, "src/a.ts"))).toBeNull(); // T-1 has no run: the main run's plan policy does not reach in
+    await startFlow([IMPL, CHECK]);
+    expect(await editAt(join(wt, "src/a.ts"))).toBeNull(); // T-1 at implement
+    expect(reason(await editAt(join(main, "src/a.ts")))).toBe("warden: plan step does not change code (T-2 at plan)");
+  });
+
+  test("gate files of a nested worktree count only while its own run is live", async () => {
+    await mainRun();
+    expect(reason(await editAt(join(main, ".warden/steps.json")))).toBe("warden: gate files cannot change while a run is live (T-2); finish or reset it first");
+    expect(await editAt(join(wt, ".warden/steps.json"))).toBeNull();
+    await startFlow([IMPL, CHECK]);
+    expect(reason(await editAt(join(wt, ".warden/steps.json")))).toBe(`warden: gate files cannot change while a run is live (${T}); finish or reset it first`);
+    expect(reason(await editAt(join(wt, ".warden/history", T, "run.json")))).toBe("warden: state and history are written by the engine only");
+  });
+
+  test("push block and Stop find the run of the nested worktree from its cwd, not the main checkout's run", async () => {
+    await mainRun();
+    await startFlow(FEATURE);
+    mkdirSync(join(wt, "src"), { recursive: true });
+    expect(reason(await bash("git push origin t-1", { cwd: join(wt, "src") }))).toBe(
+      `warden: push/PR/merge is allowed only in the ship step after all gates pass for HEAD (${T} at plan)`,
+    );
+    expect(reason(await bash(`git -C ${wt} push origin t-1`, { cwd: main, session_id: "S9" }))).toContain(`(${T} at plan)`);
+    const stopped = JSON.parse((await hook("stop", { cwd: wt, session_id: "S8" }))!);
+    expect(stopped.reason).toStartWith(`warden: ${T} is at plan and needs you.`);
+  });
+});
+
 describe("PreToolUse: Bash", () => {
   test("B1: approve, retry and reset are for a person", async () => {
     const msg = 'warden: approve, retry and reset are for a person. Ask the user to type "approve" / "retry".';

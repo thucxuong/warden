@@ -61,12 +61,19 @@ function toolArgv(root: string, tool: string, args: string[]): string[] {
   return [join(root, "src", "cli.ts"), "tools", tool, ...args];
 }
 
+// A ticket tool that exited non-zero; `exit` is its exit code (124 when killed or it could not start).
+export class TicketToolError extends WardenError {
+  constructor(message: string, readonly exit: number) {
+    super(message, EXIT.REJECTED);
+  }
+}
+
 // `status` is null when the tool was killed or could not start.
 function toolResult(status: number | null, stdout: string, stderr: string, startError?: string): unknown {
   if (status !== 0) {
     const exit = status ?? 124; // killed by the timeout, or could not start
     const last = stderr.trim().split("\n").pop()?.trim() || startError || "";
-    throw new WardenError(`ticket tool failed (exit ${exit}): ${last}`, EXIT.REJECTED);
+    throw new TicketToolError(`ticket tool failed (exit ${exit}): ${last}`, exit);
   }
   try {
     return JSON.parse(stdout);
@@ -130,11 +137,59 @@ export function dagRowProblem(row: unknown): string | null {
   return null;
 }
 
+function detailProblem(value: unknown): string | null {
+  return dagRowProblem(value) ?? (typeof (value as { body?: unknown }).body !== "string" ? "body must be a string" : null);
+}
+
 export function showTicket(main: string, root: string, id: string): TicketDetail {
   const out = runTicketTool(main, root, ["show", id], SHORT_TIMEOUT_SEC);
-  const problem = dagRowProblem(out) ?? (typeof (out as { body?: unknown }).body !== "string" ? "body must be a string" : null);
+  const problem = detailProblem(out);
   if (problem) throw new WardenError(`ticket tool: show ${id}: ${problem}`, EXIT.REJECTED);
   return out as TicketDetail;
+}
+
+const isPaths = (v: unknown): boolean => Array.isArray(v) && v.every((p) => typeof p === "string");
+
+// `create` and `link` are optional (0.8). A tool without one exits 2 (bad usage): null.
+function runOptional(main: string, root: string, args: string[]): Record<string, unknown> | null {
+  let out: unknown;
+  try {
+    out = runTicketTool(main, root, args, SHORT_TIMEOUT_SEC);
+  } catch (err) {
+    if (err instanceof TicketToolError && err.exit === EXIT.USAGE) return null;
+    throw err;
+  }
+  return typeof out === "object" && out !== null && !Array.isArray(out) ? out as Record<string, unknown> : {};
+}
+
+export interface NewTicket { title: string; type: string; bodyFile: string; epic?: string; blockedBy?: string[] }
+
+// `create` in the main checkout (0.8). The tool picks the id; warden checks it like a dag row, and a non-epic
+// against taskIdPattern. `changed`: the repo paths the caller commits on main.
+export function createTicket(main: string, root: string, t: NewTicket): { ticket: TicketDetail; changed: string[] } {
+  const args = ["create", "--title", t.title, "--type", t.type, "--body-file", t.bodyFile];
+  if (t.epic !== undefined) args.push("--epic", t.epic);
+  if (t.blockedBy !== undefined && t.blockedBy.length > 0) args.push("--blocked-by", t.blockedBy.join(","));
+  const out = runOptional(main, root, args);
+  if (out === null) throw new WardenError("the ticket tool has no create", EXIT.NOT_FOUND);
+  const pattern = loadWardenJson(join(main, ".warden", "warden.json")).taskIdPattern;
+  const bad = detailProblem(out.ticket);
+  const id = (out.ticket as TicketDetail | undefined)?.id;
+  const problem = bad !== null ? `ticket: ${bad}`
+    : !isPaths(out.changed) ? "changed must be an array of paths"
+    : t.type !== "epic" && !new RegExp(pattern).test(id!) ? `id ${id} does not match taskIdPattern ${pattern}`
+    : null;
+  if (problem) throw new WardenError(`ticket tool: create: ${problem}`, EXIT.REJECTED);
+  return { ticket: out.ticket as TicketDetail, changed: out.changed as string[] };
+}
+
+// `link <id> <url>` in the main checkout (0.8), for a tracker outside the repo. null when the tool has no link.
+// link must not change repo files: returns the `changed` paths a tool still reports, for the caller to warn about.
+export function linkTicket(main: string, root: string, id: string, url: string): string[] | null {
+  const out = runOptional(main, root, ["link", id, url]);
+  if (out === null) return null;
+  if (typeof out.id !== "string") throw new WardenError("ticket tool: link did not print {id}", EXIT.REJECTED);
+  return isPaths(out.changed) ? out.changed as string[] : [];
 }
 
 // ---------------------------------------------------------------------------

@@ -71,6 +71,10 @@ const headings = (text: string) => {
   });
 };
 
+// 0.8 ends the ship text with warden clean. The spec in docs/internal stays as it was written.
+const SHIP_0_7 = "4) Hand in the ship output with `warden done` BEFORE you remove the worktree or the branch.";
+const SHIP_0_8 = "4) Hand in the ship output with `warden done`; never remove the worktree or the branch before that. 5) Then run `warden clean` from the main checkout: it removes the worktree and the branch once the branch is merged.";
+
 describe("catalog", () => {
   test("catalog text is verbatim from the spec", () => {
     const spec = readFileSync(resolve(import.meta.dir, "../../docs/internal/spec.md"), "utf8");
@@ -83,7 +87,7 @@ describe("catalog", () => {
       const line = spec.split("\n").find((l) => l.startsWith(`- **${label}:** "`));
       expect(line).toBeDefined();
       const text = line!.slice(`- **${label}:** "`.length, -1);
-      expect(catalogText(type, "<task>", variant)).toBe(text);
+      expect(catalogText(type, "<task>", variant)).toBe(type === "ship" ? text.replace(SHIP_0_7, SHIP_0_8) : text);
     }
     expect(catalogText("ship", T)).toContain(`git add .warden/history/${T} && git commit -m 'chore(${T}): run record'`);
     expect(catalogText("check", T)).toBe("");

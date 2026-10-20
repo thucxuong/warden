@@ -33,7 +33,11 @@ On the task branch, in its worktree. The `do` template has no ship step, so ward
 
 ### Where do worktrees go?
 
-Next to your repo, in `<repo>.worktrees/<task>`. The branch is the task id in lower case, unless you pass `--branch`. They live outside the repo so that your test runner and linter never see them. `warden reset` keeps the worktree and the branch, so a later start reuses them.
+Inside your repo, in `<repo>/.worktrees/<task>` (before 0.8 they were next to it). The branch is the task id in lower case, unless you pass `--branch`. `.worktrees/` must be in `.gitignore`; `/warden:init` adds it. If your test runner or linter does not follow `.gitignore`, add `.worktrees/` to its ignore list (see [Troubleshooting](troubleshooting.md#tools-in-the-main-checkout-see-worktrees)). `warden reset` keeps the worktree and the branch, so a later start reuses them.
+
+### How do I remove the worktrees of finished tasks?
+
+Run `warden clean` from the main checkout. For each shipped task it removes the worktree and deletes the branch once the branch is merged and the worktree has no uncommitted changes, and it says why it keeps any other. `warden clean --dry-run` only lists.
 
 ### Can I run several tasks at once?
 
@@ -89,7 +93,7 @@ Run `warden site` in the project and open the address it prints (`http://127.0.0
 
 ### What is committed to git?
 
-`.warden/` is committed, except `.warden/state/`, which holds the live runs and is in `.gitignore`. The ship step commits the run record to `.warden/history/<task>/` on the task branch. See [State and history](concepts/state-and-history.md) and [Project files](reference/project-files.md).
+`.warden/` is committed, except `.warden/state/`, which holds the live runs and is in `.gitignore`. So is `.worktrees/`. The ship step commits the run record to `.warden/history/<task>/` on the task branch. See [State and history](concepts/state-and-history.md) and [Project files](reference/project-files.md).
 
 ### How do I stop a run for good?
 

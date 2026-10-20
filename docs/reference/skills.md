@@ -56,6 +56,8 @@ Picks a flow for the task and starts the run.
 
 It reuses a saved flow from `.warden/flows/` when one fits. A custom flow is written to a scratch file, linted with `warden flow check`, and saved with `warden flow save` when the shape will come up again. It then runs `warden start <task> --template <t> --text '<what to do>'` (or `--flow`), adding `--worktree` unless you are already on a ticket branch, and goes on with `/warden:work`.
 
+Without a task id, and with a ticket tool that has `create` (0.8), it creates the ticket first: `warden orchestrate create` with your request as the body. The tool picks the id. It commits the changed ticket files on the main branch, pushes the main branch when the project has a remote (runs branch from `origin/<mainBranch>`; if the push is refused, it stops and tells you the ticket must reach the main branch first), and starts the run with `--ticket`. When the request is bigger than one ticket, it proposes an epic and its child tickets, and after you agree creates them all, commits and pushes them the same way, and points you to the Tickets page of `warden site` and to `/warden:orchestrate <epic>`. Without `create`, it asks you for an id.
+
 See [compose a workflow](../guides/compose-a-workflow.md).
 
 ## /warden:work
@@ -93,7 +95,7 @@ The engine rejects a plan that holds placeholder words such as `TBD` or `TODO`. 
 
 Works through all tickets of an epic. Use it only when you ask for it; the agent does not start it on its own. It needs a `tickets` role in `.warden/tools/roles.json`.
 
-In short: it plans the epic (`warden orchestrate plan`), shows you the waves and asks before it starts, starts one run per ticket with `--ticket --worktree`, drives up to 4 tickets at a time with `warden:ticket` agents, hands fix steps to the fixer, ships the ready tickets one at a time in wave order, and marks merged tickets `done`. It stops and shows a table when a ticket is blocked, waiting, has an open PR, or asked a question. Run it again to go on.
+In short: it plans the epic (`warden orchestrate plan`), shows you the waves and asks before it starts, starts one run per ticket with `--ticket --worktree`, drives up to 4 tickets at a time with `warden:ticket` agents, hands fix steps to the fixer, ships the ready tickets one at a time in wave order, marks merged tickets `done`, and at the end runs `warden clean` to remove their worktrees and branches. It stops and shows a table when a ticket is blocked, waiting, has an open PR, or asked a question. Run it again to go on.
 
 See [orchestration](../concepts/orchestration.md) and [orchestrate an epic](../guides/orchestrate-an-epic.md).
 

@@ -75,7 +75,7 @@ The Stop hook keeps your turn going while the run needs you. If it says `<task> 
 Usually the user starts with `/warden:compose <task-id> <what to do>`, or the `/warden:work` skill starts one. When you must start it yourself:
 
 1. Run `warden next`. If it says there is no active run here and lists your task among the live runs, run `cd <its worktree>` as its own command, then `warden next`. Skip the rest of this list.
-2. The task id must match `taskIdPattern` in `.warden/warden.json`. If the user gave only text, ask for an id.
+2. The task id must match `taskIdPattern` in `.warden/warden.json`. If the user gave only text and the ticket tool has `create`, create the ticket as `/warden:compose` says ("No task id"): the tool picks the id. Otherwise ask for an id.
 3. Pick the template as `/warden:compose` does: `feature` for a new feature, schema or API change, many files, new UI, an auth entry point, or no label; `bugfix` for a bug in existing code; `do` for docs, config only, a typo or a single-file obvious edit; `chore` for a small change that must be merged, such as a chore ticket.
 4. Run one of these, with a Bash timeout of 600000 (start runs the project setup):
 
@@ -97,7 +97,7 @@ Usually the user starts with `/warden:compose <task-id> <what to do>`, or the `/
 | `analyze` (spike) | Answer the question in one note, pass it as `notePath`. | `.warden/knowledge/`, `.warden/decisions/`, `docs/` |
 | `plan` | Follow the plan skill. Hand in `PlanOutput`. No placeholders such as `TBD` or `TODO`. | `.warden/knowledge/`, `.warden/decisions/` |
 | `implement` | Make the change with tests. Commit all of it. When back from a gate, fix exactly what it reports. | Anything but gate files |
-| `ship` | Commit the run record, open the PR or merge as the project says, hand in `ShipOutput` before you remove the worktree. | `.warden/history/<task>/` and the ticket files warden changed |
+| `ship` | Commit the run record, open the PR or merge as the project says, hand in `ShipOutput`, then run `warden clean` from the main checkout. Never remove the worktree before the hand-in. | `.warden/history/<task>/` and the ticket files warden changed |
 | `fix` | Hand the step to the `warden:fixer` agent in the foreground, wait, and pass its JSON to `warden done`. | Nothing. The fixer works in its own fix worktree. |
 | `check`, `review` | Nothing. The engine runs them. `warden done` refuses. | Nothing |
 | `approve` | Nothing. A person types `approve` or `reject: <why>`. | Nothing |

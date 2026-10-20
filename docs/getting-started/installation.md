@@ -93,6 +93,10 @@ Each team member still needs Bun, as above. See [Team setup](../guides/team-setu
 
 Inside Claude Code, the project's agent can run `warden` directly; it does not need the alias.
 
+## Your tools and the worktrees folder
+
+Each task runs in a worktree in `<your repo>/.worktrees/<task>`, which `/warden:init` adds to `.gitignore`. A test runner, linter or formatter that does not follow `.gitignore` would see every task's copy of the code there: add `.worktrees/` to its ignore list. See [Troubleshooting](../troubleshooting.md#tools-in-the-main-checkout-see-worktrees).
+
 Next: set up your project with the [Quick start](quickstart.md).
 
 ## Uninstall
@@ -109,9 +113,10 @@ Next: set up your project with the [Quick start](quickstart.md).
 3. To remove warden from your project as well, delete what `/warden:init` and the runs created, and commit:
    - the `.warden/` folder
    - `scripts/warden-setup.sh`
-   - the line `.warden/state/` in `.gitignore`
-   - the task worktrees, in the folder `<your repo>.worktrees/` next to your repo (remove them with `git worktree remove <path>`)
-   - the `<your repo>.worktrees` entry under `permissions.additionalDirectories` in `.claude/settings.local.json`
+   - the lines `.warden/state/` and `.worktrees/` in `.gitignore`
+   - the task worktrees, in `<your repo>/.worktrees/` (before 0.8, in `<your repo>.worktrees/` next to your repo): remove each with `git worktree remove <path>`
+   - any `.worktrees` entry you added to your tools' ignore lists
+   - from versions before 0.8, the `<your repo>.worktrees` entry under `permissions.additionalDirectories` in `.claude/settings.local.json`
 
 Warden keeps per-machine data in `~/.claude/plugins/data/warden-warden-marketplace/`. You can delete that folder too.
 

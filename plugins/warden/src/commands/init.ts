@@ -8,7 +8,7 @@ import { EXIT, WardenError } from "../lib/exit.ts";
 import { readJson, writeJsonAtomic } from "../lib/json.ts";
 import { branchExists, currentBranch } from "../lib/git.ts";
 import { readPluginVersion } from "../lib/version.ts";
-import { worktreeRoot } from "../state/paths.ts";
+import { worktreeRoot, WORKTREES_DIR_NAME } from "../state/paths.ts";
 import type { CommandDef, Ctx, InitPayload, InitScan, StepsJson, WardenJson } from "../types.ts";
 import { RETRO_CHECK } from "./checks.ts";
 import { DOCS_CHECK } from "./docs.ts";
@@ -335,7 +335,8 @@ async function write(args: string[], ctx: Ctx): Promise<{ written: string[]; not
   out.fileIfMissing(".warden/checks/warden-docs.md", DOCS_CHECK);
   for (const dir of INDEX_DIRS) out.fileIfMissing(`.warden/${dir}/INDEX.md`, indexBody(root, dir));
   out.file(SETUP_SCRIPT, payload.setupScript.endsWith("\n") ? payload.setupScript : payload.setupScript + "\n");
-  if (ensureGitignoreLine(root, ".warden/state/")) out.written.push(".gitignore");
+  const ignored = [".warden/state/", `${WORKTREES_DIR_NAME}/`].map((line) => ensureGitignoreLine(root, line));
+  if (ignored.some(Boolean)) out.written.push(".gitignore");
   if (settings && source && mergeSettings(settings, source)) out.json(relative(root, settingsPath), settings);
 
   return notes.length > 0 ? { written: out.written, notes } : { written: out.written };

@@ -1,8 +1,8 @@
 # Write a ticket tool
 
-Connect warden to your tickets by writing a tool for the `tickets` role, so `/warden:orchestrate` and `warden start --ticket` can read and update them.
+Connect warden to your tickets by writing a tool for the `tickets` role, so `/warden:orchestrate` and `warden start --ticket` can read and update them, and the agent can create tickets for you.
 
-Warden does not know where your tickets live. It could be Markdown files in the repo, Jira, Linear or Azure DevOps. You write one small tool that answers three questions in a fixed format, and point the `tickets` role at it. Everything else (waves, runs, shipping) is warden's job.
+Warden does not know where your tickets live. It could be Markdown files in the repo, Jira, Linear or Azure DevOps. You write one small tool that answers a few questions in a fixed format, and point the `tickets` role at it. Everything else (waves, runs, shipping) is warden's job.
 
 ## Before you start
 
@@ -11,7 +11,7 @@ Warden does not know where your tickets live. It could be Markdown files in the 
 
 ## The contract
 
-The tool has three subcommands. Each prints **one JSON value** on stdout. Messages go to stderr.
+The tool has three subcommands, and two optional ones. Each prints **one JSON value** on stdout. Messages go to stderr.
 
 | Command | Prints | Time limit |
 |---|---|---|
@@ -19,6 +19,8 @@ The tool has three subcommands. Each prints **one JSON value** on stdout. Messag
 | `dag` | `DagTicket[]`: every ticket that is not an epic | 300 s |
 | `show <id>` | one `DagTicket` plus `body` (the ticket text) | 60 s |
 | `set-status <id> <status>` | `{ id, status, changed }` | 60 s |
+| `create --title <t> --type <type> --body-file <path> [--epic <id>] [--blocked-by <id,id>]` (optional) | `{ ticket, changed }`: the new ticket with its `body` | 60 s |
+| `link <id> <url>` (optional, a tracker outside the repo) | `{ id }` | 60 s |
 
 Exit codes:
 
@@ -29,7 +31,7 @@ Exit codes:
 | 2 | bad usage |
 | 3 | unknown ticket or epic |
 
-Warden treats any exit other than 0 as a failure and shows the last line of stderr: `ticket tool failed (exit 3): unknown epic PG-999`. When stdout is not JSON, it says `ticket tool printed no JSON`.
+Warden treats any exit other than 0 as a failure and shows the last line of stderr: `ticket tool failed (exit 3): unknown epic PG-999`. When stdout is not JSON, it says `ticket tool printed no JSON`. The one exception: exit 2 from `create` or `link` means the tool does not have that subcommand, so report any other problem with them as exit 1.
 
 The types are in `.warden/tools/tool.ts`:
 
@@ -38,7 +40,11 @@ export type TicketStatus = "backlog" | "todo" | "doing" | "review" | "done" | "a
 export interface DagTicket { id: string; title: string; status: TicketStatus; blocked_by: string[]; epic?: string; type?: string }
 export interface TicketDetail extends DagTicket { body: string }
 export interface SetStatusResult { id: string; status: TicketStatus; changed: string[] }
+export interface CreateResult { ticket: TicketDetail; changed: string[] }
+export interface LinkResult { id: string }
 ```
+
+A `tool.ts` written before 0.8 has no `CreateResult` or `LinkResult`; add the two lines if you want them.
 
 ### DagTicket fields
 
@@ -67,15 +73,30 @@ export interface SetStatusResult { id: string; status: TicketStatus; changed: st
 - Write files **relative to the working directory**. At the ship step, warden runs `set-status <id> done` inside the ticket's worktree, so the ticket file change goes into the same pull request as the code. A path outside that worktree, or a gate file such as `.warden/steps.json`, is refused.
 - It must also accept an epic id: the orchestrator sets the epic to `done` when every ticket is done.
 
+### create rules (optional)
+
+- **The tool picks the id**: the next number of its own numbering, or the id the tracker gives. The agent never makes one up.
+- The id must match `^[A-Za-z0-9][A-Za-z0-9._-]*$`, and `taskIdPattern` unless `--type epic`. Warden checks it and stops with `ticket tool: create: ...` when it does not.
+- `--body-file` is an absolute path to the ticket text. `--epic` makes the ticket a child of that epic; `--blocked-by` lists ids, comma-separated. `--type epic` creates an epic. A new ticket is `todo`.
+- `changed` follows the set-status rule: the repo paths to commit, `[]` for a tracker outside the repo. Warden runs `create` in the main checkout, and the agent commits `changed` on the main branch. With a remote, runs branch from `origin/<mainBranch>`, so the agent pushes the main branch before a run starts. If the push is refused (a protected branch), it stops and tells you the ticket must reach the main branch first.
+- Without it, the agent asks you for an id as before.
+
+### link rules (optional)
+
+- Warden calls `link <id> <url>` once, in the main checkout, after the ship step of a run started with `--ticket` is handed in with a `pr`. A local merge without a pull request url (`pr: null`) has nothing to link, so warden does not call it.
+- It is for a ticket system outside the repo: record the url as a field, a comment, or a remote link, and print `{ id }`. Running it twice changes nothing more.
+- It must not change repo files. A tool that keeps tickets as repo files leaves it out (exit 2): the pull request already carries the ticket change. If `link` prints `changed` paths anyway, warden ignores them (it never commits them) and `warden done` prints a warning.
+- A failure never blocks the ship: warden writes a `ticket.linked` event with the error, and `warden done` prints a warning.
+
 ## Steps
 
 1. **Write the tool.** This complete example keeps tickets as Markdown files in `tickets/<ID>.md`. Save it as `.warden/tools/backlog.ts`:
 
    ```ts
    // The `tickets` role for this project. Tickets are Markdown files: tickets/<ID>.md.
-   import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+   import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
    import { join } from "node:path";
-   import type { DagTicket, SetStatusResult, TicketDetail, TicketStatus, Tool } from "./tool";
+   import type { CreateResult, DagTicket, SetStatusResult, TicketDetail, TicketStatus, Tool } from "./tool";
 
    const DIR = "tickets"; // relative to the checkout the tool runs in
    const STATUSES: TicketStatus[] = ["backlog", "todo", "doing", "review", "done", "archived"];
@@ -126,6 +147,20 @@ export interface SetStatusResult { id: string; status: TicketStatus; changed: st
      return { id: t.id, title: t.title, status: t.status, blocked_by: t.blocked_by, epic: t.epic, type: t.type };
    }
 
+   // The next id: one more than the highest number in use, with the same prefix and width (PG-103 -> PG-104).
+   function nextId(): string {
+     const ids = allTickets().map((t) => t.id).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+     const m = /^(.*?)(\d+)$/.exec(ids.at(-1) ?? "PG-000")!;
+     return m[1]! + String(Number(m[2]) + 1).padStart(m[2]!.length, "0");
+   }
+
+   // --name value pairs, for create.
+   function flags(args: string[]): Record<string, string> {
+     const out: Record<string, string> = {};
+     for (let i = 0; i + 1 < args.length; i += 2) out[args[i]!.replace(/^--/, "")] = args[i + 1]!;
+     return out;
+   }
+
    function print(value: unknown): number {
      console.log(JSON.stringify(value));
      return 0;
@@ -139,7 +174,8 @@ export interface SetStatusResult { id: string; status: TicketStatus; changed: st
    export const backlog: Tool = {
      name: "backlog",
      summary: "Tickets in tickets/<ID>.md (the tickets role)",
-     usage: "backlog dag [<epic>] | backlog show <id> | backlog set-status <id> backlog|todo|doing|review|done|archived",
+     usage: "backlog dag [<epic>] | backlog show <id> | backlog set-status <id> backlog|todo|doing|review|done|archived"
+       + " | backlog create --title <t> --type <type> --body-file <path> [--epic <id>] [--blocked-by <id,id>]",
      probe: () => {
        if (!existsSync(DIR)) return [{ status: "FAIL", label: "tickets", detail: `${DIR}/ is missing` }];
        try {
@@ -172,6 +208,24 @@ export interface SetStatusResult { id: string; status: TicketStatus; changed: st
            writeFileSync(ticket.path, ticket.text.replace(/^status:.*$/m, `status: ${status}`));
            result.changed.push(ticket.path);
          }
+         return print(result);
+       }
+       if (sub === "create") {
+         const f = flags(args);
+         // exit 1, not 2: warden reads exit 2 as "this tool has no create"
+         if (!f.title || !f.type || !f["body-file"]) return fail(1, "create needs --title, --type and --body-file");
+         const ticket: TicketDetail = {
+           id: nextId(), title: f.title, status: "todo",
+           blocked_by: f["blocked-by"] ? f["blocked-by"].split(",") : [], epic: f.epic, type: f.type,
+           body: readFileSync(f["body-file"], "utf8").trim(),
+         };
+         const header = [`title: ${ticket.title}`, `status: ${ticket.status}`, `type: ${ticket.type}`];
+         if (ticket.epic) header.push(`epic: ${ticket.epic}`);
+         if (ticket.blocked_by.length > 0) header.push(`blocked_by: ${ticket.blocked_by.join(", ")}`);
+         const path = join(DIR, `${ticket.id}.md`);
+         mkdirSync(DIR, { recursive: true });
+         writeFileSync(path, `---\n${header.join("\n")}\n---\n${ticket.body}\n`);
+         const result: CreateResult = { ticket, changed: [path] };
          return print(result);
        }
        return fail(2, `usage: ${backlog.usage}`);
@@ -255,6 +309,19 @@ export interface SetStatusResult { id: string; status: TicketStatus; changed: st
 
    Set it back with `warden tools tickets set-status PG-101 todo`. Also try an unknown id: `warden tools tickets dag PG-999` prints `unknown epic PG-999` on stderr and exits 3.
 
+   Then try `create` through warden, which also checks the id:
+
+   ```bash
+   echo "Let people reset a forgotten password." > /tmp/body.md
+   warden orchestrate create --title "Password reset" --type feature --body-file /tmp/body.md --epic PG-100 --blocked-by PG-101
+   ```
+
+   ```json
+   {"ticket":{"id":"PG-104","title":"Password reset","status":"todo","blocked_by":["PG-101"],"epic":"PG-100","type":"feature","body":"Let people reset a forgotten password."},"changed":["tickets/PG-104.md"]}
+   ```
+
+   Delete `tickets/PG-104.md` again, or keep it.
+
 6. **Check the whole setup.**
 
    ```bash
@@ -279,7 +346,60 @@ For Jira, Linear or Azure DevOps, the shape is the same; only the data source ch
 - Map the system's states to `todo`, `doing`, `review` and `done`, and its links to `blocked_by`. Parked or not planned → `backlog`; closed without doing (won't do, duplicate, obsolete) → `archived`.
 - Pass the system's work item type through as `type`, so bugs get the `bugfix` template.
 - `set-status` updates the remote ticket and prints `changed: []`, because no repo file changed.
+- `create` lets the tracker pick the id, prints it in the form your `taskIdPattern` expects, and prints `changed: []`. `link` adds the url to the remote ticket and prints `{ id }`.
 - Keep each call well inside the time limits (300 s for `dag`, 60 s for the others).
+
+### create and link: examples for three trackers
+
+These are **examples only**. Warden ships no GitHub, Jira or Azure DevOps code: your project writes and owns this code in its tool, and should check each command against its own tracker. `f` is the parsed flags of `create`, `sh` runs a program and returns its stdout, and `ticket` builds the `TicketDetail` to print.
+
+GitHub Issues, with the `gh` CLI. Ids look like `GH-123` (`taskIdPattern` `^GH-\d+$`):
+
+```ts
+// create: GitHub picks the number; gh prints the issue url.
+// The type label must exist first, or gh fails: gh label create feature (and chore, bug, epic).
+const url = sh("gh", ["issue", "create", "--title", f.title, "--body-file", f["body-file"], "--label", f.type]);
+const id = `GH-${url.trim().split("/").pop()}`;
+// keep the epic and blocked_by as lines in the body, or as labels, so that dag can read them back
+// link: a comment on the issue
+sh("gh", ["issue", "comment", id.slice(3), "--body", `Pull request: ${prUrl}`]);
+```
+
+Jira, with its REST API and a token from the environment. The issue key is the id (`taskIdPattern` `^PG-\d+$`):
+
+```ts
+const jira = (path: string, body: unknown) => fetch(`${process.env.JIRA_URL}/rest/api/2/${path}`, {
+  method: "POST", body: JSON.stringify(body),
+  headers: { Authorization: `Bearer ${process.env.JIRA_TOKEN}`, "Content-Type": "application/json" },
+});
+// create: Jira picks the key
+const issueType = f.type === "epic" ? "Epic" : f.type === "bug" ? "Bug" : "Story";
+const res = await jira("issue", { fields: {
+  project: { key: "PG" }, summary: f.title, issuetype: { name: issueType },
+  description: readFileSync(f["body-file"], "utf8"), ...(f.epic && { parent: { key: f.epic } }),
+} });
+const { key } = await res.json() as { key: string };
+// one "Blocks" link per id in --blocked-by
+for (const b of f["blocked-by"]?.split(",") ?? []) await jira("issueLink", { type: { name: "Blocks" }, inwardIssue: { key: b }, outwardIssue: { key } });
+// link: a remote link on the issue
+await jira(`issue/${id}/remotelink`, { object: { url: prUrl, title: "Pull request" } });
+```
+
+Azure DevOps Boards, with the `az` CLI (`az extension add --name azure-devops`). Ids look like `AB-1234` (`taskIdPattern` `^AB-\d+$`):
+
+```ts
+// create: Azure DevOps picks the number
+const wiType = f.type === "epic" ? "Epic" : f.type === "bug" ? "Bug" : "User Story";
+const item = JSON.parse(sh("az", ["boards", "work-item", "create", "--type", wiType, "--title", f.title,
+  "--description", readFileSync(f["body-file"], "utf8"), "--output", "json"]));
+const id = `AB-${item.id}`;
+if (f.epic) sh("az", ["boards", "work-item", "relation", "add", "--id", String(item.id), "--relation-type", "parent", "--target-id", f.epic.slice(3)]);
+for (const b of f["blocked-by"]?.split(",") ?? []) {
+  sh("az", ["boards", "work-item", "relation", "add", "--id", String(item.id), "--relation-type", "predecessor", "--target-id", b.slice(3)]);
+}
+// link: a comment on the work item
+sh("az", ["boards", "work-item", "update", "--id", id.slice(3), "--discussion", `Pull request: ${prUrl}`]);
+```
 
 ## What warden does with it
 
@@ -289,6 +409,8 @@ For Jira, Linear or Azure DevOps, the shape is the same; only the data source ch
 | `warden start <id> --ticket` | `show <id>` | the run's task text becomes `# <id>: <title>` and the body |
 | the engine, at the ship step of a run started with `--ticket` | `set-status <id> done`, in the ticket worktree | the change is committed with the run record. A failure never blocks the ship; the agent is told to ask you to set the status after the merge |
 | `warden orchestrate set-status <id> <status>` | `set-status <id> <status>`, in the main checkout | after merges, and for the epic at the end |
+| `warden orchestrate create ...` | `create ...`, in the main checkout | the agent got a request without a ticket id, or planned an epic (`/warden:compose`). Exit 3 with `the ticket tool has no create` when the tool answers exit 2 |
+| the engine, once the ship step of a `--ticket` run is handed in with a `pr` | `link <id> <pr>`, in the main checkout | exit 2 is silent; another failure, or `changed` paths (ignored), is a warning in `warden done`; a `ticket.linked` event |
 | `warden site` | `dag`, and `show <epic>` for each epic (at most 4 at a time) | each time the Tickets page or the Epics section opens. It never calls `set-status` |
 
 ## See also

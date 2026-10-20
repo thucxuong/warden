@@ -14,7 +14,7 @@ import { ring } from "../lib/doorbell.ts";
 import { newReportId, startReportSync } from "../lib/reports-git.ts";
 import { readJson, writeJsonAtomic } from "../lib/json.ts";
 import * as proc from "../lib/proc.ts";
-import { mainRef, mainRoot, sessionsDir, taskDir, worktreesDir } from "../state/paths.ts";
+import { inWorktreesDir, legacyWorktreesDir, mainRef, mainRoot, sessionsDir, taskDir, worktreesDir } from "../state/paths.ts";
 import { appendEvent, listTasks, readEvents, readRun, runExists, withLock, writeRun } from "../state/store.ts";
 import {
   DEFAULT_LIMITS,
@@ -28,7 +28,7 @@ import { writeHistory, historyDirFor } from "./history.ts";
 import { buildInstructions } from "./instructions.ts";
 import { fixOnRef, readTriageReport, statePath, validateOutput } from "./outputs.ts";
 import { gatesProven, ticketFileAsSet } from "./proof.ts";
-import { setTicketStatus } from "./tickets.ts";
+import { linkTicket, setTicketStatus } from "./tickets.ts";
 
 export type SpawnWorker = (task: string) => { pid: number; pidStart: string };
 export type GateJob = NonNullable<RunJson["gate"]>["job"];
@@ -603,7 +603,7 @@ function markTicketDone(ctx: Ctx, main: string, run: RunJson): TicketResult {
     const refused: string[] = [];
     for (const reported of out.changed) {
       const path = (isAbsolute(reported) ? relative(run.worktree, reported) : reported).replace(/^\.\//, "");
-      if (path === "" || path === ".." || path.startsWith("../") || isAbsolute(path) || isGateFile(path)) {
+      if (path === "" || path === ".." || path.startsWith("../") || isAbsolute(path) || inWorktreesDir(path) || isGateFile(path)) {
         refused.push(reported);
       } else if (after.has(path) && (!before.has(path) || Object.hasOwn(prior, path))) {
         files[path] = workingBlob(run.worktree, path);
@@ -808,19 +808,21 @@ export async function done(
     if (type === "check" || type === "review") throw new WardenError(`${type} steps are run by the engine`);
     if (run.gate || pendingJob(main, run)) throw new WardenError("engine work is running; run: warden wait", EXIT.BUSY);
     if (run.status !== "active" || !isAgentStep(type)) {
-      return { accepted: false, errors: [`${task} is ${run.status} at ${run.current.id}; there is no agent step to hand in`] };
+      return { accepted: false, errors: [`${task} is ${run.status} at ${run.current.id}; there is no agent step to hand in`], link: null };
     }
 
     const check = validateOutput({ main, run, flow: s.flow, steps: s.steps, text: outputText, fetchMainRef: () => fetchRef(s) });
     const accepted = check.errors.length === 0;
-    const path = `outputs/${nextSeq(main, task)}-${run.current.id}.json`;
+    const step = run.current.id;
+    const path = `outputs/${nextSeq(main, task)}-${step}.json`;
     writeJsonAtomic(join(taskDir(main, task), path), check.output ?? { raw: outputText });
-    event(s, accepted ? "output.accepted" : "output.rejected", run.current.id, accepted ? { path } : { path, errors: check.errors });
-    if (accepted) {
-      acceptOutput(s, check.output as Record<string, unknown>);
-      writeRun(main, run);
-    }
-    return { accepted, errors: check.errors };
+    event(s, accepted ? "output.accepted" : "output.rejected", step, accepted ? { path } : { path, errors: check.errors });
+    if (!accepted) return { accepted, errors: check.errors, link: null };
+    acceptOutput(s, check.output as Record<string, unknown>);
+    writeRun(main, run);
+    const pr = (check.output as { pr?: unknown } | undefined)?.pr;
+    const link = type === "ship" && run.ticket === true && typeof pr === "string" && pr !== "" ? { step, url: pr } : null;
+    return { accepted, errors: check.errors, link };
   });
   try {
     await ensureGate(ctx, task, spawnWorker);
@@ -829,7 +831,30 @@ export async function done(
     // The next `warden wait` or `warden next` starts the worker again.
     if (!result.accepted) throw err;
   }
-  return { ...result, next: nextResponse(ctx, main, task) };
+  const warning = result.link ? await linkPr(ctx, main, task, result.link) : null;
+  return { accepted: result.accepted, errors: result.errors, ...(warning !== null && { warnings: [warning] }), next: nextResponse(ctx, main, task) };
+}
+
+// 0.8: once the ship output of a --ticket run is accepted with a PR, `link <task> <pr>` tells the ticket tool, once,
+// in the main checkout. A tool without link is silent. A failure is a warning and never undoes the ship.
+// link must not change repo files: reported `changed` paths are a warning and are never committed.
+async function linkPr(ctx: Ctx, main: string, task: string, link: { step: string; url: string }): Promise<string | null> {
+  let data: Record<string, unknown>;
+  let warning: string | null = null;
+  try {
+    const changed = linkTicket(main, ctx.root, task, link.url);
+    if (changed === null) return null;
+    data = { url: link.url };
+    if (changed.length > 0) {
+      warning = `the ticket tool's link reported changed repo files (${changed.join(", ")}); link must not change repo files, so warden ignored them. Tell the user to undo them in ${main} and fix the ticket tool`;
+    }
+  } catch (err) {
+    const error = (err instanceof Error ? err.message : String(err)).split("\n")[0]!;
+    data = { url: link.url, error };
+    warning = `the ticket was not linked to ${link.url}: ${error}. The ship is done; tell the user to link ${task} to it by hand`;
+  }
+  await withLock(main, task, () => appendEvent(main, task, "ticket.linked", { step: link.step, data }));
+  return warning;
 }
 
 function acceptOutput(s: S, output: Record<string, unknown>): void {
@@ -1038,16 +1063,6 @@ function fixBranches(main: string, task: string): string[] {
   return res.status === 0 ? res.stdout.split("\n").map((b) => b.trim()).filter((b) => b !== "") : [];
 }
 
-// Triage clean copies (6.2) of this task; a killed worker cannot remove its own.
-function cleanCopyPrefix(main: string, task: string): string[] {
-  try {
-    const projectId = loadWardenJson(join(main, ".warden", "warden.json")).projectId;
-    return [join(realpathSync(tmpdir()), `warden-clean-${projectId}-${task}-`)];
-  } catch {
-    return [];
-  }
-}
-
 // Kills a running worker (which stops its checks and reviewer), removes fix worktrees, clean copies
 // and fix branches, then deletes the live state. The ticket worktree stays.
 export async function reset(ctx: Ctx, task: string): Promise<{ reset: string }> {
@@ -1067,7 +1082,9 @@ export async function reset(ctx: Ctx, task: string): Promise<{ reset: string }> 
         }
       }
     }
-    const prefixes = [join(worktreesDir(main), `${task}-fix-`), ...cleanCopyPrefix(main, task)];
+    // A killed worker cannot remove its own triage clean copy. A run from before 0.8 may have its fix worktree next to the repo.
+    const prefixes = [`${task}-fix-`, `${task}-clean-`].map((name) => join(worktreesDir(main), name));
+    prefixes.push(join(legacyWorktreesDir(main), `${task}-fix-`));
     const ours = (path: string) => prefixes.some((p) => path.startsWith(p) && /^\d+$/.test(path.slice(p.length)));
     for (const wt of worktreeList(main)) if (ours(wt.path)) worktreeRemove(main, wt.path);
     for (const branch of fixBranches(main, task)) deleteBranch(main, branch);

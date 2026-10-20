@@ -180,7 +180,7 @@ export function installHooksFixture(): void {
 
   beforeAll(() => {
     template = makeTemplate("warden-hooks", {
-      ".gitignore": ".warden/state/\n",
+      ".gitignore": ".warden/state/\n.worktrees/\n",
       ".warden/warden.json": wardenJson(),
       ".warden/steps.json": JSON.stringify({
         schema: 1, mainBranch: "main", setup: { commands: ["true"] },

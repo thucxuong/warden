@@ -31,6 +31,7 @@ case "$1" in
   dag) if [ -n "$2" ]; then cat '${fx}'/dag-"$2".json || exit 3; else cat '${fx}'/all.json; fi ;;
   show) cat '${fx}'/show-"$2".json || exit 3 ;;
   set-status) if [ -f '${fx}'/bad-set ]; then echo '{}'; else printf '{"id":"%s","status":"%s","changed":["backlog/%s.md"]}' "$2" "$3" "$2"; fi ;;
+  create) cat '${fx}'/create.json 2>/dev/null || exit 2 ;;
 esac
 `);
   writeTools(main, barrel(`  { name: "fake", summary: "fixture ticket tool", run: command(${JSON.stringify(`sh '${script}'`)}) },`));
@@ -140,6 +141,51 @@ describe("orchestrate set-status", () => {
   test("a result of the wrong shape is exit 1", () => {
     writeFileSync(join(fx, "bad-set"), "");
     expect(cli(["orchestrate", "set-status", "T-1", "done"]).code).toBe(1);
+  });
+});
+
+describe("orchestrate create (0.8)", () => {
+  const body = () => {
+    writeFileSync(join(base, "body.md"), "Add a dark mode.\n");
+    return join(base, "body.md");
+  };
+  const created = (id: string, extra: object = {}) => ({ ticket: { ...row(id), type: "feature", body: "Add a dark mode.", ...extra }, changed: [`backlog/${id}.md`] });
+
+  test("passes the flags on, the body file as an absolute path, and prints the tool's result", () => {
+    put("create.json", created("T-7"));
+    const r = cli(["orchestrate", "create", "--title", "Dark mode", "--type", "feature", "--body-file", body(), "--epic", "E-1", "--blocked-by", "T-1, T-2"]);
+    expect(r.code).toBe(0);
+    expect(r.json).toEqual(created("T-7"));
+    expect(calls()).toEqual([`create --title Dark mode --type feature --body-file ${body()} --epic E-1 --blocked-by T-1,T-2`]);
+  });
+
+  test("a tool without create (exit 2) is exit 3 with a clear message", () => {
+    const r = cli(["orchestrate", "create", "--title", "Dark mode", "--type", "feature", "--body-file", body()]);
+    expect(r.code).toBe(3);
+    expect(r.err).toContain("the ticket tool has no create");
+  });
+
+  test("the returned id is checked: path-safe, and taskIdPattern for a non-epic", () => {
+    put("create.json", created("../x"));
+    const unsafe = cli(["orchestrate", "create", "--title", "x", "--type", "feature", "--body-file", body()]);
+    expect(unsafe.code).toBe(1);
+    expect(unsafe.err).toContain("ticket tool: create: ticket: id must be a string like PG-001");
+    put("create.json", created("EPIC-1", { type: "epic" }));
+    const story = cli(["orchestrate", "create", "--title", "x", "--type", "story", "--body-file", body()]);
+    expect(story.code).toBe(1);
+    expect(story.err).toContain("ticket tool: create: id EPIC-1 does not match taskIdPattern ^T-\\d+$");
+    expect(cli(["orchestrate", "create", "--title", "x", "--type", "epic", "--body-file", body()]).code).toBe(0);
+  });
+
+  test("bad usage is exit 2 and never runs the tool", () => {
+    const b = body();
+    for (const args of [[], ["--title", "x", "--type", "feature"], ["--title", "x", "--type", "feature", "--body-file", join(base, "nope.md")],
+      ["--title", "x", "--type", "feature", "--body-file", b, "--epic", "../E"], ["--title", "x", "--type", "feature", "--body-file", b, "--status", "open"],
+      ["--title", "x", "--type", "feature", "--body-file", b, "extra"],
+      ["--title", "x", "--type", "feature", "--body-file", b, "--blocked-by", "T-1", "--blocked-by", "T-2"]]) {
+      expect(cli(["orchestrate", "create", ...args]).code).toBe(2);
+    }
+    expect(calls()).toEqual([]);
   });
 });
 

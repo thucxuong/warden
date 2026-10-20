@@ -148,7 +148,7 @@ export function installMachineFixture(): void {
 
   beforeAll(() => {
     template = makeTemplate("warden-machine", {
-      ".gitignore": ".warden/state/\n",
+      ".gitignore": ".warden/state/\n.worktrees/\n",
       ".warden/warden.json": JSON.stringify({ schema: 1, wardenVersion: "0.1.0", projectId: "demo", taskIdPattern: "^T-\\d+$", sitePort: 4400, lastRetro: null }),
       ".warden/steps.json": JSON.stringify({
         schema: 1, mainBranch: "main", setup: { commands: ["true"] },

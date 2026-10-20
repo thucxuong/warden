@@ -4,15 +4,15 @@
 // Log files (state-relative): attempt 1 keeps its original checks/<r>/<name>.log. The clean
 // attempt writes triage/<n>/2-setup-<i>.log and triage/<n>/2-<name>.log. Branch re-runs write
 // triage/<n>/<attempt>.log.
-import { existsSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DEFAULT_COMMAND_TIMEOUT_SEC, loadStepsJson, loadWardenJson, parseTriageRules } from "../config/config.ts";
+import { DEFAULT_COMMAND_TIMEOUT_SEC, loadStepsJson, parseTriageRules } from "../config/config.ts";
 import { WardenError } from "../lib/exit.ts";
 import { branchBase, fetchMain, head, showFile, worktreeAdd, worktreeRemove } from "../lib/git.ts";
 import { writeJsonAtomic } from "../lib/json.ts";
 import * as proc from "../lib/proc.ts";
-import { mainRef, taskDir } from "../state/paths.ts";
+import { mainRef, taskDir, worktreesDir } from "../state/paths.ts";
 import { readEvents } from "../state/store.ts";
 import type { Attempt, CheckStep, CommandDef, Signature, StepsJson, TriageReport, TriageRule, Verdict } from "../types.ts";
 import { bumpCounter, commandEnv, commandTimeout, recordEvent, type Env, type GateContext } from "./check.ts";
@@ -98,8 +98,7 @@ async function prepare(step: CheckStep, failure: CheckFailure, ctx: GateContext)
   if (!failing) throw new WardenError(`check set ${step.check} has no command at index ${failure.failedIndex}`);
 
   const n = await bumpCounter(ctx, "triageCount");
-  const projectId = loadWardenJson(join(main, ".warden", "warden.json")).projectId;
-  const cleanPath = join(realpathSync(tmpdir()), `warden-clean-${projectId}-${run.task}-${n}`);
+  const cleanPath = join(worktreesDir(main), `${run.task}-clean-${n}`); // next to the ticket worktree, so both see the same parent folders
   const roots = { worktree: run.worktree, clean: cleanPath, main, tmp: tmpdir() };
   const base = branchBase(run.worktree, run.baseSha, mainRef(main, steps.mainBranch));
   return { ctx, dir, n, steps, commands, failing, failedIndex: failure.failedIndex, base, cleanPath, roots };

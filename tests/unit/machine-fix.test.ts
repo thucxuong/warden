@@ -1,10 +1,9 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, realpathSync, renameSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readFileSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { machineId } from "../../plugins/warden/src/lib/reports-git.ts";
-import { taskDir, worktreesDir } from "../../plugins/warden/src/state/paths.ts";
+import { legacyWorktreesDir, taskDir, worktreesDir } from "../../plugins/warden/src/state/paths.ts";
 import { readEvents, readRun, withLock, writeRun } from "../../plugins/warden/src/state/store.ts";
 import { done, ensureGate, findRunForWorktree, next, reset, retry, start, statusLines } from "../../plugins/warden/src/engine/machine.ts";
 import { commit, sh, write } from "../helpers/repo.ts";
@@ -178,19 +177,22 @@ describe("views and reset", () => {
     expect(statusLines(ctx, true)).toEqual([]);
   });
 
-  test("reset removes the task's triage clean copies left by a killed worker, not another task's", async () => {
+  test("reset removes the task's triage clean copies left by a killed worker, not other worktrees, and fix worktrees left next to the repo before 0.8", async () => {
     await startFlow([IMPL, CHECK]);
-    const tmp = realpathSync(tmpdir());
-    const mine = join(tmp, `warden-clean-demo-${T}-${process.pid}`);
-    const other = join(tmp, `warden-clean-demo-${T}-x-${process.pid}`);
-    sh(main, "worktree", "add", "-q", "--detach", mine, "main");
+    const clean = join(worktreesDir(main), `${T}-clean-2`);
+    const oldFix = join(legacyWorktreesDir(main), `${T}-fix-1`);
+    const other = join(worktreesDir(main), `${T}-cleanup`);
+    sh(main, "worktree", "add", "-q", "--detach", clean, "main");
+    sh(main, "worktree", "add", "-q", "-b", `warden-fix/${T}-1`, oldFix, "main");
     sh(main, "worktree", "add", "-q", "--detach", other, "main");
     try {
       await reset(ctx, T);
-      expect(existsSync(mine)).toBe(false);
+      expect(existsSync(clean)).toBe(false);
+      expect(existsSync(oldFix)).toBe(false);
+      expect(sh(main, "branch", "--list", "warden-fix/*")).toBe("");
       expect(existsSync(other)).toBe(true);
     } finally {
-      for (const path of [mine, other]) if (existsSync(path)) sh(main, "worktree", "remove", "--force", path);
+      for (const path of [clean, oldFix, other]) if (existsSync(path)) sh(main, "worktree", "remove", "--force", path);
     }
   });
 });

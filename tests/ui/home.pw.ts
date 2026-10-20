@@ -53,6 +53,9 @@ test("reports and project health", async ({ page }) => {
   await expect(page.getByTestId("health-tools-row").filter({ hasText: "api key" })).toContainText("FAIL");
   await expect(page.locator('[data-testid="config-problem"][data-severity="error"]', { hasText: "flows/broken.json" })).toBeVisible();
   await expect(page.locator('[data-testid="config-problem"][data-severity="warn"]', { hasText: "slowFactor" })).toBeVisible();
+  await expect(page.getByTestId("leftover-worktree")).toHaveCount(1);
+  await expect(page.locator('[data-testid="leftover-worktree"][data-task="FX-101"]')).toContainText("fx.worktrees/FX-101");
+  await expect(page.getByTestId("leftover-worktrees").getByTestId("command-block")).toContainText("warden clean");
 });
 
 test("the page never shows the answer runner's secrets", async ({ page }) => {

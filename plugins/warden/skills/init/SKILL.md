@@ -55,7 +55,7 @@ What `warden init --write` creates:
 - `.warden/context/<topic>.md` for each topic
 - an `INDEX.md` in each of `context/`, `rules/`, `decisions/`, `knowledge/`, `checks/`, `retros/`, `fixes/` and `flows/`
 - `scripts/warden-setup.sh`
-- the line `.warden/state/` in `.gitignore`
+- the lines `.warden/state/` and `.worktrees/` in `.gitignore`. Task worktrees live in `.worktrees/`. If the project's test runner, linter or formatter would scan that folder (it does not follow `.gitignore`), offer to add `.worktrees/` to its ignore list. Leave `tsconfig.json` alone.
 - with `teamInstall`, the warden block in `.claude/settings.json`. If warden cannot find the marketplace entry it needs, it skips this file. Then tell the user to add the warden team-install block from the warden docs (team setup) to `.claude/settings.json`.
 
 `warden init --write` refuses if `.warden/warden.json` already exists. Never pass `--force` unless the user asks.

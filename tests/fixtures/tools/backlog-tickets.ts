@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 // Test fixture (the 0.5 registry backlog tool): ticket tool for local Markdown tickets in backlog/*.md.
-//   tickets.ts dag [<epic>] | show <id> | set-status <id> <status>
+//   tickets.ts dag [<epic>] | show <id> | set-status <id> <status> | create ...
 // Stdout is one JSON value, errors go to stderr. Exit: 0 ok, 1 data error, 2 usage, 3 unknown ticket.
-import { existsSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -31,7 +31,8 @@ export class ToolError extends Error {
 const USAGE = `usage:
   tickets.ts dag [<epic>]
   tickets.ts show <id>
-  tickets.ts set-status <id> <status>   (status: ${STATUSES.join(" | ")})`;
+  tickets.ts set-status <id> <status>   (status: ${STATUSES.join(" | ")})
+  tickets.ts create --title <t> --type <type> --body-file <path> [--epic <id>] [--blocked-by <id,id>]`;
 
 // Numeric-aware order, so PG-9 comes before PG-10.
 export function compareIds(a: string, b: string): number {
@@ -228,6 +229,43 @@ export function setStatus(cwd: string, id: string, status: string): { id: string
   return { id, status, changed: [rel] };
 }
 
+// The next id after the highest numbered ticket, with its prefix and width: PG-009 -> PG-010. T-001 when there is none.
+export function nextId(ids: string[]): string {
+  const nums = ids.map((id) => /^(.*?)(\d+)$/.exec(id)).filter((m) => m !== null);
+  const top = nums.sort((a, b) => Number(a[2]) - Number(b[2])).pop();
+  if (!top) return "T-001";
+  return top[1] + String(Number(top[2]) + 1).padStart(top[2]!.length, "0");
+}
+
+// create: the tool picks the id. Writes backlog/<id>.md in the checkout it runs in. Exit 1 for bad input:
+// warden reads exit 2 as "this tool has no create".
+export function create(cwd: string, args: string[]): { ticket: DagTicket & { body: string }; changed: string[] } {
+  const flags: Record<string, string> = {};
+  for (let i = 0; i < args.length; i += 2) {
+    const [k, v] = [args[i]!, args[i + 1]];
+    if (!["--title", "--type", "--body-file", "--epic", "--blocked-by"].includes(k) || v === undefined) throw new ToolError(USAGE, 1);
+    flags[k] = v;
+  }
+  const { "--title": title, "--type": type, "--body-file": bodyFile } = flags;
+  if (!title || !type || !bodyFile) throw new ToolError(USAGE, 1);
+  const root = git(cwd, ["rev-parse", "--show-toplevel"]);
+  const known = existsSync(join(root, "backlog")) ? loadTickets(root).map((i) => i.ticket.id) : [];
+  const epic = flags["--epic"];
+  const blockedBy = (flags["--blocked-by"] ?? "").split(",").map((b) => b.trim()).filter((b) => b !== "");
+  for (const ref of [...(epic ? [epic] : []), ...blockedBy]) if (!known.includes(ref)) throw new ToolError(`unknown ticket ${ref}`, 3);
+  const id = nextId(known);
+  const body = readFileSync(bodyFile, "utf8").trim();
+  const ticket: DagTicket = { id, title: title.replace(/\s+/g, " ").trim(), status: "todo", blocked_by: blockedBy, type: type.toLowerCase() };
+  if (epic) ticket.epic = epic;
+  const fm = [`id: ${id}`, `title: ${JSON.stringify(ticket.title)}`, "status: todo", `type: ${ticket.type}`];
+  if (epic) fm.push(`epic: ${epic}`);
+  if (blockedBy.length > 0) fm.push(`blocked_by: [${blockedBy.join(", ")}]`);
+  const rel = `backlog/${id}.md`;
+  mkdirSync(join(root, "backlog"), { recursive: true });
+  writeFileSync(join(root, rel), tidy(["---", ...fm, "---", "", body].join("\n")));
+  return { ticket: { ...ticket, body }, changed: [rel] };
+}
+
 export function main(args: string[], cwd: string): unknown {
   const [cmd, a, b] = args;
   if (cmd === "dag" && args.length <= 2) return dag(loadTickets(mainCheckout(cwd)), a);
@@ -237,6 +275,7 @@ export function main(args: string[], cwd: string): unknown {
     return { ...found.ticket, body: found.body };
   }
   if (cmd === "set-status" && args.length === 3) return setStatus(cwd, a!, b!);
+  if (cmd === "create") return create(cwd, args.slice(1));
   throw new ToolError(USAGE, 2);
 }
 

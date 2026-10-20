@@ -49,7 +49,7 @@ describe("cli", () => {
   test("allowlist is exactly the spec list", () => {
     expect([...COMMANDS]).toEqual([
       "version", "init", "start", "next", "done", "wait", "ask", "status", "approve", "retry", "reset",
-      "flow", "report", "retro", "upgrade", "tools", "site", "hook", "gate", "checks", "orchestrate", "docs",
+      "flow", "report", "retro", "upgrade", "tools", "site", "hook", "gate", "checks", "orchestrate", "docs", "clean",
     ]);
   });
 
@@ -79,7 +79,7 @@ describe("help", () => {
     expect(await main(["bun", "cli.ts", "report", "--help"], ctx)).toBe(0);
     expect(HELP.report).toContain("warden report --status");
     expect(HELP.start).toBe("warden start <task> --template do|feature|bugfix|chore | --flow <name|path> [--text <t> | --text-file <p> | --ticket] [--worktree] [--branch <b>]");
-    expect(HELP.orchestrate).toBe("warden orchestrate plan <epic> | status <epic> | set-status <id> <status>");
+    expect(HELP.orchestrate).toBe("warden orchestrate plan <epic> | status <epic> | set-status <id> <status> | create --title <t> --type <type> --body-file <path> [--epic <id>] [--blocked-by <id,id>]");
     expect(HELP.report).toBe(
       "warden report --kind bug|enhancement --title <t> --body <b>|--file <p> | warden report --status [--all | --write] | warden report reply <id> --body <answer>|--file <p> | warden report sync [--background] | warden report inbox [--all] | warden report set <key|file> --status <s> [--note <t>] [--fixed-in <v>] | warden report ask <key> --question <q>",
     );

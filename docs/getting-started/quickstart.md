@@ -71,7 +71,7 @@ Use the `do` template for a small change: implement, then check.
    Why: one-line text fix
    ```
 
-3. Warden creates a worktree (a second checkout of the repo) for the task, on a new branch named after the task id (`app-1`). It sits next to your repo, in `<your repo>.worktrees/APP-1`, and the setup script runs there first. Your main checkout is not touched.
+3. Warden creates a worktree (a second checkout of the repo) for the task, on a new branch named after the task id (`app-1`). It sits inside your repo, in `<your repo>/.worktrees/APP-1` (a folder `.gitignore` lists), and the setup script runs there first. Your main checkout's files are not touched.
 
 4. The agent works through the steps on its own:
    - **implement**: it makes the change, commits it and hands in its output with `warden done`.

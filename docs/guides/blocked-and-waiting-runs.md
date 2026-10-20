@@ -88,7 +88,7 @@ Read the reason, fix the cause, then type `retry`. Common reasons:
 
 You do, in your own editor or terminal. While a run is blocked at a check, review or approve step, the agent's edits in the ticket worktree are refused (`<type> step does not change code`), so asking the agent to "fix it" does not work. The agent can still read files and tell you what to change.
 
-1. Open the ticket worktree, `<your repo>.worktrees/<task>` (`warden status` prints its path).
+1. Open the ticket worktree, `<your repo>/.worktrees/<task>` (`warden status` prints its path; a run started before 0.8 keeps `<your repo>.worktrees/<task>`).
 2. Fix the cause there and commit it on the ticket branch. For a cause on the main branch (for example a `.gitignore` line or the setup script), fix and merge it on main first; `retry` merges the latest main branch in.
 3. Type `retry` in the chat.
 

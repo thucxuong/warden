@@ -13,7 +13,7 @@ Warden chooses the task's worktree and branch (`warden start` prints them). Use 
 
 1. Run `warden next <id>` when you have a task id, else `warden next`. Read `message`, `instructions`, `output` and `context`.
    If it says there is no active run here and lists your task among the live runs, run `cd <its worktree>` as its own command, then `warden next`. Never start a second run for it.
-   Start a run only when no live run is listed, or your task is not among them. `<id>` is the task id: it must match `taskIdPattern` in `.warden/warden.json`; if the user gave only text, ask them for an id. Pick the template as the warden:compose table says: `bugfix` for a bug in existing code, `do` for docs, config, a typo or an obvious one-file edit, `chore` for a small change that must be merged, and `feature` for everything else. When `warden tools` lists a `tickets` role and `warden tools tickets show <id>` finds the ticket, run `warden start <id> --template <do|feature|bugfix|chore> --ticket --worktree` with a Bash timeout of 600000. Otherwise, or when that fails with a ticket tool error, run `warden start <id> --template <do|feature|bugfix|chore> --text "<task text>" --worktree` with a Bash timeout of 600000 (it runs the project setup). Then run `cd <worktree>` as its own command, and `warden next`.
+   Start a run only when no live run is listed, or your task is not among them. `<id>` is the task id: it must match `taskIdPattern` in `.warden/warden.json`; if the user gave only text, get the id as the warden:compose "No task id" section says (the ticket tool creates the ticket), or else ask them for one. Pick the template as the warden:compose table says: `bugfix` for a bug in existing code, `do` for docs, config, a typo or an obvious one-file edit, `chore` for a small change that must be merged, and `feature` for everything else. When `warden tools` lists a `tickets` role and `warden tools tickets show <id>` finds the ticket, run `warden start <id> --template <do|feature|bugfix|chore> --ticket --worktree` with a Bash timeout of 600000. Otherwise, or when that fails with a ticket tool error, run `warden start <id> --template <do|feature|bugfix|chore> --text "<task text>" --worktree` with a Bash timeout of 600000 (it runs the project setup). Then run `cd <worktree>` as its own command, and `warden next`.
 2. If the status is `agent`, do the step as the instructions say.
    - plan step: follow the plan skill.
    - fix step: hand it to the `warden:fixer` agent in the foreground (never `run_in_background`) and wait for it to return.
@@ -27,6 +27,7 @@ Warden chooses the task's worktree and branch (`warden start` prints them). Use 
    ```
    Do not use a heredoc, a pipe or a temp file. Write a single quote inside the JSON as `\u0027`.
    `warden done` returns at once. If `accepted` is false, fix each item in `errors`. Then call `warden done` again.
+   If it prints `warnings` (after the ship step: the ticket link), do what each one says or tell the user. They never undo the ship.
 4. If the status is `running_gate`, run `warden wait` with a Bash timeout of 600000. It blocks for up to 540 seconds. Repeat until the status is no longer `running_gate`.
    Do not edit files or commit while a gate runs. The engine throws the result away if HEAD or the tree moves.
 5. If the status is `waiting` or `blocked`, tell the user the `message`. Then end your turn. The user types `approve`, `reject: <why>` or `retry`.
@@ -38,7 +39,7 @@ Rules
 - Index files: when a step adds a file under `.warden/decisions/`, `.warden/knowledge/` or `.warden/rules/`, add its one-line entry to that folder's `INDEX.md` in the same commit. When session start says warden-docs failed, run warden docs check and fix what it lists once the user agrees.
 - Never run the checks yourself to prove a step.
 - Never write files under `.warden/state` or `.warden/history`.
-- Never push, open a pull request or merge outside the ship step.
+- Never push, open a pull request or merge outside the ship step. The one exception: the push of new tickets in warden:compose "No task id" and "Plan an epic".
 - Never set `PROJECT_AGENT` or any other `WARDEN_*` variable on a command. Never start a nested `claude -p`.
 - When something surprises you, add a line to `.warden/knowledge/<area>.md`.
 - When you make a choice, write `.warden/decisions/NNNN-<slug>.md`. Never edit an old decision. Write a new one that replaces it.

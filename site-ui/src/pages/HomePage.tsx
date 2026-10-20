@@ -415,6 +415,22 @@ function HealthBody({ h }: { h: HealthResponse }) {
         {h.ticketTool && <p className="text-[11px] text-muted-foreground">Ticket tool: <span className="font-mono">{h.ticketTool}</span></p>}
       </div>
 
+      {h.leftoverWorktrees.length > 0 && (
+        <div className="space-y-2" data-testid="leftover-worktrees">
+          <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Leftover worktrees</h3>
+          <p className="text-[13px]">These shipped tasks are merged but still have a worktree. Remove them from the main checkout:</p>
+          <ul className="divide-y rounded-md border">
+            {h.leftoverWorktrees.map((l) => (
+              <li key={l.task} data-testid="leftover-worktree" data-task={l.task} className="px-2.5 py-2 text-[13px]">
+                <TaskLink task={l.task} /> <span className="font-mono text-xs text-muted-foreground">{l.branch}</span>
+                <div className="break-all font-mono text-xs text-muted-foreground">{l.worktree}</div>
+              </li>
+            ))}
+          </ul>
+          <CommandBlock command="warden clean" />
+        </div>
+      )}
+
       <div className="space-y-2">
         <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Config</h3>
         {h.config.length === 0 ? (

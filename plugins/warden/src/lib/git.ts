@@ -14,6 +14,7 @@ export interface WorktreeInfo {
   path: string;
   head: string;
   branch: string | null; // short branch name, null when detached
+  locked: boolean; // `git worktree lock`
 }
 
 export interface FileHunks {
@@ -166,6 +167,11 @@ export function deleteBranch(cwd: string, branch: string): void {
   gitOk(cwd, ["branch", "-D", branch]);
 }
 
+// Whether git ignores path (relative to cwd), also when it does not exist yet. A trailing / asks about a folder.
+export function isIgnored(cwd: string, path: string): boolean {
+  return git(cwd, ["check-ignore", "-q", path]).code === 0;
+}
+
 // With newBranch: creates it at ref and checks it out in the new worktree. Without: checks out ref.
 export function worktreeAdd(main: string, path: string, ref: string, newBranch?: string): void {
   const args = ["worktree", "add"];
@@ -178,15 +184,23 @@ export function worktreeRemove(main: string, path: string): void {
   gitOk(main, ["worktree", "remove", "--force", path]);
 }
 
+// Without --force: git refuses when the worktree has changes or untracked files (ignored files go with it).
+// Returns null, or git's own message on one line.
+export function worktreeRemoveClean(main: string, path: string): string | null {
+  const result = git(main, ["worktree", "remove", path]);
+  return result.code === 0 ? null : result.stderr.trim().split("\n").join(" ") || `git worktree remove exited ${result.code}`;
+}
+
 export function worktreeList(main: string): WorktreeInfo[] {
   const blocks = gitOk(main, ["worktree", "list", "--porcelain"]).split("\n\n");
   const list: WorktreeInfo[] = [];
   for (const block of blocks) {
-    const info: WorktreeInfo = { path: "", head: "", branch: null };
+    const info: WorktreeInfo = { path: "", head: "", branch: null, locked: false };
     for (const line of block.split("\n")) {
       if (line.startsWith("worktree ")) info.path = line.slice("worktree ".length);
       else if (line.startsWith("HEAD ")) info.head = line.slice("HEAD ".length);
       else if (line.startsWith("branch ")) info.branch = line.slice("branch ".length).replace(/^refs\/heads\//, "");
+      else if (line === "locked" || line.startsWith("locked ")) info.locked = true;
     }
     if (info.path !== "") list.push(info);
   }

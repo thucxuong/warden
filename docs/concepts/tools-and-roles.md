@@ -98,7 +98,7 @@ A full example with a probe is in [Write a tool](../guides/write-a-tool.md).
 
 | Role | Used by | What the tool must do |
 |---|---|---|
-| `tickets` | `/warden:orchestrate` and `warden start --ticket` | `dag [<epic>]`, `show <id>` and `set-status <id> <status>`, each printing JSON. See [Write a ticket tool](../guides/write-a-ticket-tool.md). |
+| `tickets` | `/warden:orchestrate`, `warden start --ticket` and `warden orchestrate create` | `dag [<epic>]`, `show <id>` and `set-status <id> <status>`, each printing JSON; optionally `create` and `link`. See [Write a ticket tool](../guides/write-a-ticket-tool.md). |
 | `graph` | the work skill and the ticket agent | `query "<question>"` prints plain text and exits 0. The agent runs it before a broad search of the repo. |
 | `pr` | the push and merge rules of the PreToolUse hook | `create` and `merge` subcommands. Warden treats `warden tools pr create` and `warden tools pr merge` like `gh pr create` and `gh pr merge`: allowed only in the ship step after the gates pass. |
 
@@ -106,7 +106,7 @@ Anything else needs no role. A check in `.warden/steps.json` can simply run `war
 
 ### The tickets role and `--ticket`
 
-With a `tickets` role, `warden start <task> --ticket` reads the task text from `warden tools tickets show <task>` (the ticket's title and body). For a run started with `--ticket`, when the run reaches its ship step, the engine runs `set-status <task> done` in the task's worktree and the ship step commits the changed ticket files with the run record. If the ticket tool fails, the ship goes on and the instructions tell the agent to have you set the status after the merge.
+With a `tickets` role, `warden start <task> --ticket` reads the task text from `warden tools tickets show <task>` (the ticket's title and body). For a run started with `--ticket`, when the run reaches its ship step, the engine runs `set-status <task> done` in the task's worktree and the ship step commits the changed ticket files with the run record. If the ticket tool fails, the ship goes on and the instructions tell the agent to have you set the status after the merge. Once the ship output is handed in with a `pr`, the engine also runs the optional `link <task> <pr>` in the main checkout (0.8).
 
 ## Changing tools during a run
 

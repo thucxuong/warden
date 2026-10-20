@@ -82,7 +82,7 @@ beforeEach(() => {
   sh(main, "config", "user.name", "Test User");
   sh(main, "config", "user.email", "test@example.com");
   commit(main, {
-    ".gitignore": ".warden/state/\n",
+    ".gitignore": ".warden/state/\n.worktrees/\n",
     ".warden/steps.json": JSON.stringify({
       schema: 1, mainBranch: "main", setup: { commands: ["true"] },
       check: { default: { commands: [{ name: "check", run: "true" }] } }, fix: { scope: [".warden/**"] },

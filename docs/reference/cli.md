@@ -37,6 +37,7 @@ Every `warden` command, its flags, what it prints, and who runs it.
 | [`orchestrate`](#warden-orchestrate) | the `/warden:orchestrate` skill | Plan and track the tickets of an epic |
 | [`checks`](#warden-checks) | agent | List, run and record periodic checks |
 | [`docs`](#warden-docs) | anyone, and the built-in `warden-docs` check | Check the `.warden` doc folders |
+| [`clean`](#warden-clean) | agent, after a ship; anyone | Remove the worktrees and branches of shipped, merged tasks |
 | `hook`, `gate` | warden itself | Internal. Do not run them |
 
 The approve, reject and retry actions also work by typing a word in the chat. See [hooks](hooks.md#userpromptsubmit).
@@ -143,7 +144,7 @@ What it does, in order:
 3. Takes the run's `steps.json` **from the main branch** (`origin/<main>` when there is a remote), not from your working tree. If `.warden/warden.json` or `.warden/steps.json` is not committed there, it stops: `commit and push .warden/ to <main> first`.
 4. Lints the flow against the check sets of that `steps.json`. A bad flow stops the start.
 5. Refuses if a run for this task already exists: `a run for <task> exists (status <s>); a person can run warden reset <task>`.
-6. With `--worktree`: uses `<parent>/<repo>.worktrees/<task>` on the branch, creating the branch from the main branch when it does not exist. It also adds the worktrees folder `<parent>/<repo>.worktrees` to `permissions.additionalDirectories` in `.claude/settings.local.json`, so the session may edit files in any task worktree there.
+6. With `--worktree`: uses `<repo>/.worktrees/<task>` on the branch, creating the branch from the main branch when it does not exist. A branch checked out in another worktree is refused. When git does not ignore `.worktrees/`, it stops: `.worktrees/ is not ignored by git: add the line .worktrees/ to .gitignore and commit it, then run start again`.
 7. Saves the flow, the `steps.json` snapshot and the task text in `.warden/state/<task>/`.
 8. Runs `setup.commands` in the worktree. If one fails, the state folder is deleted and the log is kept in the temp folder: `setup failed: <cmd> (exit <n>); log: <path>`.
 9. Enters the first step and starts the engine if that step is engine work.
@@ -210,8 +211,10 @@ It never waits. When the next step is engine work, it starts the engine and retu
 Output (`DoneResponse`):
 
 ```ts
-{ accepted: boolean; errors: string[]; next: NextResponse }
+{ accepted: boolean; errors: string[]; warnings?: string[]; next: NextResponse }
 ```
+
+`warnings` (0.8) appears only after the ship step of a `--ticket` run with a `pr`, when the ticket tool's `link` failed or printed `changed` paths (link must not change repo files; warden ignores them). It never undoes the ship; see [write a ticket tool](../guides/write-a-ticket-tool.md#link-rules-optional).
 
 | Case | Exit |
 |---|---|
@@ -324,7 +327,7 @@ warden reset <task> [--yes]
 
 For a person, in a terminal (exit 6 without a TTY). Deletes the run's live state. Without `--yes` it asks `Delete live state for <task>? [y/N]` on stderr; any answer other than `y` or `yes` cancels (exit 1).
 
-It stops a running engine worker and its checks and reviewer, removes the fix worktrees and triage clean copies of this task, deletes the `warden-fix/<task>-*` branches, then deletes `.warden/state/<task>/`. The task worktree and its branch stay, so a later `warden start` can reuse them.
+It stops a running engine worker and its checks and reviewer, removes the fix worktrees and triage clean copies of this task (also fix worktrees left next to the repo before 0.8), deletes the `warden-fix/<task>-*` branches, then deletes `.warden/state/<task>/`. The task worktree and its branch stay, so a later `warden start` can reuse them; once the task has shipped, [`warden clean`](#warden-clean) removes them.
 
 Output: `{"reset":"PG-012"}`. Exit 3 when there is no such run.
 
@@ -483,6 +486,7 @@ Exit 2 for any other argument, exit 5 when the port is in use. The site serves t
 warden orchestrate plan <epic>
 warden orchestrate status <epic>
 warden orchestrate set-status <id> <status>
+warden orchestrate create --title <t> --type <type> --body-file <path> [--epic <id>] [--blocked-by <id,id>]
 ```
 
 Used by the `/warden:orchestrate` skill. Works on the main checkout. Needs a `tickets` role in `.warden/tools/roles.json` (exit 3: `no tickets tool: set "tickets" in .warden/tools/roles.json`). See [orchestration](../concepts/orchestration.md).
@@ -492,6 +496,7 @@ Used by the `/warden:orchestrate` skill. Works on the main checkout. Needs a `ti
 | `plan <epic>` | Runs the tickets tool (`dag <epic>`), builds waves, adds each ticket's run state, saves the plan in `.warden/state/_orchestrate/<epic>.json` and prints it | 1 when `errors` is not empty |
 | `status <epic>` | Prints the saved plan with run state read again. Does not ask the tickets tool | 3 when there is no saved plan |
 | `set-status <id> <status>` | Runs the tickets tool (`set-status`). Status is `backlog`, `todo`, `doing`, `review`, `done` or `archived`. Prints `{"id","status","changed":[paths]}` | 2 for a bad status |
+| `create ...` | 0.8. Runs the tickets tool's optional `create` in the main checkout; the tool picks the id. Passes the body file as an absolute path. Checks the new id (`^[A-Za-z0-9][A-Za-z0-9._-]*$`, and `taskIdPattern` unless `--type epic`). Prints `{"ticket":{...,"body"},"changed":[paths]}`; the caller adds and commits `changed` on the main branch. Used by `/warden:compose` for a request without an id and to plan an epic | 2 for bad usage or a missing body file; 3 with `the ticket tool has no create` when the tool answers exit 2; 1 for a bad id or result |
 
 Plan output:
 
@@ -574,6 +579,30 @@ Read-only. In `.warden/context`, `rules`, `decisions`, `knowledge`, `checks` and
 Output: `{"ok":true,"files":<n>}`, or `{"ok":false,"files":<n>,"problems":[...]}` with exit 1. Exit 3 when `.warden/warden.json` is missing. A missing folder is skipped.
 
 An `INDEX.md` line is a list item: either a Markdown link `- [Title](file.md)`, or `- file.md: description`.
+
+---
+
+## warden clean
+
+```
+warden clean [--dry-run]
+```
+
+Run from the main checkout or any worktree. The ship step says to run it after `warden done`, and `/warden:orchestrate` runs it at the end of an epic.
+
+It looks at each shipped run whose worktree is still there, in `<repo>/.worktrees/<task>` or, before 0.8, `<repo>.worktrees/<task>`. When the worktree has no uncommitted or untracked files and its branch is merged into the main branch (`origin/<main>` after a fetch when there is a remote), it removes the worktree and deletes the branch. Otherwise, or when the worktree is locked, it keeps both. It never touches a live run's worktree, a run in the main checkout, any other worktree, or the folder it runs in.
+
+One line per task:
+
+```
+PG-332: removed /work/app/.worktrees/PG-332 and branch pg-332
+PG-333: kept /work/app/.worktrees/PG-333: pg-333 is not merged into origin/main (a pull request still open?)
+PG-334: kept /work/app/.worktrees/PG-334: uncommitted changes (2 files, first notes.txt)
+```
+
+With nothing to do it prints `warden: no shipped task has a worktree left`. `--dry-run` prints `<task>: would remove <path> and branch <b>` and changes nothing. Exit 0. A squash-merged branch is not on the main branch, so it is kept; remove it by hand.
+
+Session start says `warden: <n> shipped tasks still have worktrees; run warden clean` when there is something to remove.
 
 ---
 

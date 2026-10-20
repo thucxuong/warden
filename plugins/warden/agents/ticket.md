@@ -27,7 +27,7 @@ Loop: run `warden next <Task>`, then go by the status.
 - `running_gate`: run `warden wait <Task>` with a Bash timeout of 600000. Repeat until the status changes.
 - `waiting`: stop. Reply `WAITING <Task>: <message>`.
 - `blocked`: stop. Reply `BLOCKED <Task>: <message>`.
-- `shipped`: stop. Reply `SHIPPED <Task>`.
+- `shipped`: stop. Reply `SHIPPED <Task>`. If the ship hand-in (`warden done`) printed `warnings`, reply `SHIPPED <Task>: <warnings>` and do nothing else about them.
 - `done`: stop. Reply `DONE <Task>`.
 
 Never ask the user and never run `warden ask`. When a person must decide, stop and reply `ASK <Task>: <question>`.
@@ -40,4 +40,4 @@ Rules
 - When something surprises you, add a line to `.warden/knowledge/<area>.md`. When you make a choice, write `.warden/decisions/NNNN-<slug>.md`.
 - Run `warden tools` to see this project's tools and roles. Run one with `warden tools <name> <args>` (`-h` for usage). If a `graph` role is listed, run `warden tools graph query "<question>"` before a broad search of the repo.
 
-Reply with one line only. The orchestrator trusts `warden orchestrate status`, not your reply, except for `ASK`.
+Reply with one line only. The orchestrator trusts `warden orchestrate status`, not your reply, except for `ASK` and the warnings after `SHIPPED`.

@@ -49,6 +49,7 @@ The lines it can add:
 | A newer warden is available in the marketplace copy on disk | `warden: version <v> is available; this session runs <installed>. To update, run "claude plugin update warden@<marketplace>" in a terminal (or use /plugin), then /reload-plugins.` |
 | Checks are due (agent checks, and command checks that are not `auto`) | `warden: checks due: <name> (last <date>), .... When the user's current request is done, offer them in one short line. Do not start one unless the user says yes. To run one: warden checks run <name>.` |
 | An `auto` command check failed last time | `warden: auto checks failed on their last run: <name> (<date>). Tell the user in one short line; details: warden checks.` |
+| Shipped tasks still have worktrees that `warden clean` would remove (merged, no changes) | `warden: <n> shipped tasks still have worktrees; run warden clean` (`1 shipped task still has a worktree` for one) |
 | An orchestration stopped with tickets left | `warden: orchestration of <epic> stopped with <n> tickets left. When the user's current request is done, offer to go on; with their OK, run /warden:orchestrate <epic>.` |
 | A report's status changed | `warden: report <id> "<title>" is now <status>[ in <version>].[ Note: <note>]` |
 | A report needs info | The line above, plus ` Answer it from this project when the user's request is done: warden report reply <id> --body "<answer>"` |
@@ -107,6 +108,8 @@ The rules are checked in this order. The first match decides.
 | 5 | In the task worktree while the run is at a fix step | Deny: `the fixer works in <fix worktree>, not the ticket worktree` |
 | 6 | At the ship step while a git merge is in progress (conflicts), and not a gate file | Allow |
 | 7 | Anything else | Allowed only when the current step may change that file (see [flow files](flow-files.md#step-types)). Else deny: `<type> step does not change code (<task> at <step>)` |
+
+A file in `<dir>/.worktrees/<task>/` belongs to that nested worktree, never to a run whose worktree is `<dir>` (such as a run in the main checkout started without `--worktree`).
 
 So at a check, review or approve step, no file in the task worktree can be edited. An approve step that waits, or a blocked run, still has a current step, and the same rule applies.
 

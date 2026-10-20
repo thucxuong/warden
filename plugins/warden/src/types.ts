@@ -226,7 +226,7 @@ export type EventType =
   | "run.blocked" | "run.retry" | "history.written" | "run.shipped" | "run.done"
   | "session.linked" | "stop.blocked" | "hook.denied"
   | "gate.discarded" | "fix.landed" | "git.fetch-failed" | "proof.stale"
-  | "ticket.status" | "question.asked" | "question.answered" | "retry.merged-main";
+  | "ticket.status" | "ticket.linked" | "question.asked" | "question.answered" | "retry.merged-main";
 
 export interface EventLine {
   seq: number;                     // 1.. per task, strictly increasing
@@ -289,7 +289,7 @@ export interface NextResponse {
   };
 }
 
-export interface DoneResponse { accepted: boolean; errors: string[]; next: NextResponse }
+export interface DoneResponse { accepted: boolean; errors: string[]; warnings?: string[]; next: NextResponse }  // warnings: 0.8, the ticket link at ship
 export interface StatusLine { task: string; flow: string; status: RunStatus; step: string; stepIndex: number; total: number; worktree: string | null; updatedAt: string }  // worktree: null once the folder is gone
 
 // ---------------------------------------------------------------------------

@@ -26,7 +26,7 @@ Every command exits with one of these codes. When a command fails, stderr has a 
 | Command | Typical cause |
 |---|---|
 | `done` | The output was not accepted (see `errors`); or the step is a check or review (`check steps are run by the engine`); or there is no agent step to hand in |
-| `start` | Task id does not match `taskIdPattern`; `.warden/` is not committed on the main branch; the flow is invalid; a run for the task exists; setup failed; the worktree path or branch is taken |
+| `start` | Task id does not match `taskIdPattern`; `.warden/` is not committed on the main branch; the flow is invalid; a run for the task exists; setup failed; the worktree path or branch is taken; `.worktrees/` is not gitignored |
 | `flow check` | At least one flow has lint errors |
 | `flow save` | Lint errors, or the saved flow exists and `--force` was not given |
 | `approve` | The run is not waiting at an approve step |

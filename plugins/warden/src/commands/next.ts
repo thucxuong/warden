@@ -19,6 +19,7 @@ export function parseArgs(args: string[], valueFlags: string[], switchFlags: str
     if (valueFlags.includes(arg)) {
       const value = args[i + 1];
       if (value === undefined) throw new WardenError(`${arg} needs a value`, EXIT.USAGE);
+      if (arg in parsed.values) throw new WardenError(`${arg} given twice`, EXIT.USAGE);
       parsed.values[arg] = value;
       i++;
     } else if (switchFlags.includes(arg)) {

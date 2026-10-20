@@ -43,7 +43,7 @@ let wt: string;
 let template: Template;
 
 beforeAll(() => {
-  template = makeTemplate("warden-outputs", { ".gitignore": ".warden/state/\n", "src/old.ts": "old\n", ".warden/steps.json": "{}\n" }, "c");
+  template = makeTemplate("warden-outputs", { ".gitignore": ".warden/state/\n.worktrees/\n", "src/old.ts": "old\n", ".warden/steps.json": "{}\n" }, "c");
 });
 
 beforeEach(() => {

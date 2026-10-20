@@ -77,5 +77,16 @@ describe("orchestrate", () => {
     expect(set.json).toEqual({ id: "T-001", status: "doing", changed: ["backlog/T-001.md"] });
     expect(readFileSync(join(cp.main, "backlog", "T-001.md"), "utf8")).toContain("status: doing");
     expect(warden(cp, ["orchestrate", "set-status", "T-001", "doing"]).json.changed).toEqual([]);
+
+    // 0.8 create: the tool picks the next id; the new ticket joins the epic's plan.
+    writeFileSync(join(cp.base, "body.md"), "Add a seventh step.\n");
+    const made = warden(cp, ["orchestrate", "create", "--title", "Seventh: last", "--type", "chore", "--body-file", join(cp.base, "body.md"), "--epic", "T-100", "--blocked-by", "T-006"]);
+    expect(made.code, made.err).toBe(0);
+    expect(made.json).toEqual({
+      ticket: { id: "T-101", title: "Seventh: last", status: "todo", blocked_by: ["T-006"], type: "chore", epic: "T-100", body: "Add a seventh step." },
+      changed: ["backlog/T-101.md"],
+    });
+    expect(warden(cp, ["tools", "tickets", "show", "T-101"]).json).toEqual(made.json.ticket);
+    expect(warden(cp, ["orchestrate", "plan", "T-100"]).json.waves.at(-1)).toEqual(["T-101"]);
   });
 });

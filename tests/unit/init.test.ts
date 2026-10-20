@@ -161,16 +161,21 @@ describe("init --write", () => {
     expect(readFileSync(join(repo, ".warden/tools/index.ts"), "utf8")).toContain("export default tools;");
     expect(readFileSync(join(repo, ".warden/context/INDEX.md"), "utf8")).toContain("- overview.md: Overview");
     expect(readFileSync(join(repo, "scripts/warden-setup.sh"), "utf8")).toBe("set -e\npnpm install --frozen-lockfile\n");
-    expect(readFileSync(join(repo, ".gitignore"), "utf8")).toBe(".warden/state/\n");
+    expect(readFileSync(join(repo, ".gitignore"), "utf8")).toBe(".warden/state/\n.worktrees/\n");
     expect(existsSync(join(repo, ".claude/settings.json"))).toBe(false);
   });
 
   test("the gitignore line is not added twice and keeps existing lines", async () => {
     put(".gitignore", "node_modules");
     await call(["--write", "--file", payloadFile()]);
-    expect(readFileSync(join(repo, ".gitignore"), "utf8")).toBe("node_modules\n.warden/state/\n");
+    expect(readFileSync(join(repo, ".gitignore"), "utf8")).toBe("node_modules\n.warden/state/\n.worktrees/\n");
 
     put(".gitignore", ".warden/state/\n");
+    const added = (await call(["--write", "--force", "--file", payloadFile()])).out;
+    expect(readFileSync(join(repo, ".gitignore"), "utf8")).toBe(".warden/state/\n.worktrees/\n");
+    expect(added.written.filter((f: string) => f === ".gitignore")).toEqual([".gitignore"]);
+
+    put(".gitignore", ".warden/state/\n.worktrees\n");
     const { out } = await call(["--write", "--force", "--file", payloadFile()]);
     expect(out.written).not.toContain(".gitignore");
   });

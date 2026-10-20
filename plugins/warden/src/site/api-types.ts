@@ -137,7 +137,10 @@ export interface HealthResponse {
   };
   config: ConfigProblem[];
   ticketTool: string | null;  // tool named by the tickets role
+  leftoverWorktrees: LeftoverWorktree[];  // 0.8: shipped tasks whose worktree `warden clean` would remove now
 }
+
+export interface LeftoverWorktree { task: string; worktree: string; branch: string }
 
 export interface ToolCheckRow { tool: string; status: "OK" | "FAIL" | "WARN" | "SKIP"; label: string; detail: string }
 export interface ConfigProblem {

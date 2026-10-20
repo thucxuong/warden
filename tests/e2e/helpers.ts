@@ -40,7 +40,7 @@ export interface Cp {
   data: string;        // WARDEN_DATA
   home: string;        // HOME for every subprocess
   fake: string;        // FAKE_CLAUDE_DIR
-  worktrees: string;   // <main>.worktrees
+  worktrees: string;   // <main>/.worktrees
   env: Env;            // base env of every subprocess
 }
 
@@ -108,7 +108,7 @@ export function createCp(opts: { checkSh?: string } = {}): Cp {
   const main = join(base, "cp");
   const cp: Cp = {
     base, main, data: join(base, "data"), home: join(base, "home"), fake: join(base, "fake"),
-    worktrees: join(base, "cp.worktrees"), env: {},
+    worktrees: join(base, "cp", ".worktrees"), env: {},
   };
   for (const dir of [main, cp.data, cp.home, cp.fake]) mkdirSync(dir, { recursive: true });
   cp.env = baseEnv(cp.home, cp.data, cp.fake);

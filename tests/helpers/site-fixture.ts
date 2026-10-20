@@ -185,7 +185,7 @@ export function makeSiteFixture(): SiteFixture {
   const base = tmpBase("warden-site-fx");
   const main = join(base, "fx");
   const data = join(base, "data");
-  const worktrees = join(base, "fx.worktrees"); // never created: every worktree is gone
+  const worktrees = join(base, "fx.worktrees"); // the pre-0.8 place; only FX-101's worktree is left (warden clean would remove it)
   const bare = join(base, "origin.git");
   mkdirSync(main);
   mkdirSync(data);
@@ -297,6 +297,7 @@ export default tools;
   const fx101Start = now - 26 * 60 * MIN;
   const fx101 = shipped("FX-101", "Invoice totals", 101, fx101Start, "Merge pull request #7 from acme/fx-101", FEATURE);
   git(main, ["push", "-q", "origin", "main"]);
+  git(main, ["worktree", "add", "-q", join(worktrees, "FX-101"), "fx-101"]);
 
   // ---- live state (not committed) ----
   const state = join(w, "state");

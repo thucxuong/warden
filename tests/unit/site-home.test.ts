@@ -119,7 +119,7 @@ describe("runs", () => {
 
   test("run detail of a live run: plan waves, changes, review and tokens", async () => {
     const d = (await getJson<RunDetailResponse>(opts, "/api/runs/FX-101")).body;
-    expect(d.run).toMatchObject({ task: "FX-101", title: "Invoice totals", status: "shipped", ticket: true, worktree: null, pr: { label: "#7" } });
+    expect(d.run).toMatchObject({ task: "FX-101", title: "Invoice totals", status: "shipped", ticket: true, worktree: expect.stringMatching(/fx\.worktrees\/FX-101$/), pr: { label: "#7" } });
     expect(d.plan.waves!.map((w) => w.tasks.map((t) => t.id))).toEqual([["T1"], ["T2"]]);
     expect(d.plan.approval.state).toBe("no-approve-step");
     expect(d.changes.files.map((f) => [f.path, f.source])).toEqual([["src/fx-101.test.ts", "git"], ["src/fx-101.ts", "git"]]);

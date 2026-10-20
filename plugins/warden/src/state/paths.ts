@@ -23,9 +23,21 @@ export function worktreeRoot(cwd: string): string {
   return revParse(cwd, "--show-toplevel");
 }
 
-// Outside the repo, so test runners and linters in the main checkout never see ticket worktrees.
+export const WORKTREES_DIR_NAME = ".worktrees";
+
+// Task, fix and triage worktrees live inside the main checkout (0.8), in a folder .gitignore must list.
 export function worktreesDir(main: string): string {
+  return join(main, WORKTREES_DIR_NAME);
+}
+
+// Before 0.8 they sat next to the repo. Runs from then keep their absolute paths; clean and reset still look here.
+export function legacyWorktreesDir(main: string): string {
   return join(dirname(main), `${basename(main)}.worktrees`);
+}
+
+// A path relative to a checkout that lies in its nested worktrees folder: it belongs to that other worktree.
+export function inWorktreesDir(rel: string): boolean {
+  return rel === WORKTREES_DIR_NAME || rel.startsWith(`${WORKTREES_DIR_NAME}/`);
 }
 
 export function stateRoot(main: string): string {

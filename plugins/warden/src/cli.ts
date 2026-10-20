@@ -7,7 +7,7 @@ import { EXIT, WardenError } from "./lib/exit.ts";
 // Only these names are ever imported (spec 3.1). `gate` is internal.
 export const COMMANDS = [
   "version", "init", "start", "next", "done", "wait", "ask", "status", "approve", "retry", "reset",
-  "flow", "report", "retro", "upgrade", "tools", "site", "hook", "gate", "checks", "orchestrate", "docs",
+  "flow", "report", "retro", "upgrade", "tools", "site", "hook", "gate", "checks", "orchestrate", "docs", "clean",
 ] as const;
 
 // One line per command for --help. hook and gate are internal and not listed.
@@ -29,9 +29,10 @@ export const HELP: Record<string, string> = {
   upgrade: "warden upgrade --notes | --done",
   tools: "warden tools [--check [<name>] | --init] | warden tools <name|role> [args...]",
   site: "warden site [--port <n>] [--no-open]",
-  orchestrate: "warden orchestrate plan <epic> | status <epic> | set-status <id> <status>",
+  orchestrate: "warden orchestrate plan <epic> | status <epic> | set-status <id> <status> | create --title <t> --type <type> --body-file <path> [--epic <id>] [--blocked-by <id,id>]",
   checks: "warden checks | warden checks run <name> [--background] | warden checks done <name> [--date YYYY-MM-DD] [--note <t>]",
   docs: "warden docs check",
+  clean: "warden clean [--dry-run]   (removes the worktrees and branches of shipped, merged tasks)",
 };
 
 const USAGE = `usage: warden <command> [args]   (warden <command> --help for details)\n${Object.values(HELP).map((l) => `  ${l}`).join("\n")}`;

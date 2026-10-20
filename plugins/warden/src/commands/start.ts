@@ -7,9 +7,8 @@ import { lintFlow } from "../engine/flow-lint.ts";
 import { start } from "../engine/machine.ts";
 import { showTicket } from "../engine/tickets.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
-import { branchExists, currentBranch, fetchMain, showFile, worktreeAdd, worktreeList } from "../lib/git.ts";
-import { readJson, writeJsonAtomic } from "../lib/json.ts";
-import { mainRoot, SESSIONS_DIR_NAME, taskDir, worktreeRoot, worktreesDir } from "../state/paths.ts";
+import { branchExists, currentBranch, fetchMain, isIgnored, showFile, worktreeAdd, worktreeList } from "../lib/git.ts";
+import { mainRoot, SESSIONS_DIR_NAME, taskDir, worktreeRoot, WORKTREES_DIR_NAME, worktreesDir } from "../state/paths.ts";
 import { readRun, runExists } from "../state/store.ts";
 import type { Ctx, FlowJson } from "../types.ts";
 import { readFlowFile, resolveFlowPath, TEMPLATES } from "./flow.ts";
@@ -118,8 +117,12 @@ function addWorktree(main: string, path: string, ref: string, branch: string, ne
   }
 }
 
+// The nested worktrees folder must be gitignored, or the main checkout would see each worktree as untracked files (0.8).
+export const NOT_IGNORED = `${WORKTREES_DIR_NAME}/ is not ignored by git: add the line ${WORKTREES_DIR_NAME}/ to .gitignore and commit it, then run start again`;
+
 // Step 5: reuse <worktreesDir>/<task> on the branch, or create it. Returns the worktree toplevel.
 function ensureWorktree(main: string, task: string, branch: string, ref: string): string {
+  if (!isIgnored(main, `${WORKTREES_DIR_NAME}/`)) throw new WardenError(NOT_IGNORED);
   const path = join(worktreesDir(main), task);
   const worktrees = worktreeList(main);
   const here = worktrees.find((w) => samePath(w.path, path));
@@ -134,29 +137,6 @@ function ensureWorktree(main: string, task: string, branch: string, ref: string)
   if (holder) throw new WardenError(`branch ${branch} is checked out in the worktree ${holder.path}`);
   addWorktree(main, path, ref, branch, !branchExists(main, branch));
   return worktreeRoot(path);
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-// Lets the session edit files in worktreesDir [U-12]. Merges; other keys are kept.
-function allowWorktreesDir(main: string): void {
-  const file = join(main, ".claude", "settings.local.json");
-  const dir = worktreesDir(main);
-  let settings: Record<string, unknown> = {};
-  if (existsSync(file)) {
-    try {
-      settings = readJson<Record<string, unknown>>(file);
-    } catch {
-      throw new WardenError(`${file} is not valid JSON; fix it, then run start again`);
-    }
-    if (!isObject(settings)) throw new WardenError(`${file} must hold a JSON object`);
-  }
-  const permissions = isObject(settings.permissions) ? settings.permissions : {};
-  const dirs = Array.isArray(permissions.additionalDirectories) ? permissions.additionalDirectories : [];
-  if (dirs.includes(dir)) return;
-  writeJsonAtomic(file, { ...settings, permissions: { ...permissions, additionalDirectories: [...dirs, dir] } });
 }
 
 export async function run(args: string[], ctx: Ctx): Promise<number | void> {
@@ -186,7 +166,6 @@ export async function run(args: string[], ctx: Ctx): Promise<number | void> {
     branch = parsed.values["--branch"] ?? task.toLowerCase();
     precheck(main, task, flow, ref, mainBranch);
     worktree = ensureWorktree(main, task, branch, ref);
-    allowWorktreesDir(main);
   } else {
     branch = currentBranch(ctx.cwd);
     if (branch === mainBranch || branch === "") throw new WardenError("start on a ticket branch, or pass --worktree");

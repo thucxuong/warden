@@ -73,7 +73,7 @@ export const e2e: Tool = {
 
 | Role | Used by | What the tool must do |
 |---|---|---|
-| `tickets` | `/warden:orchestrate` and `warden start --ticket` | `dag [<epic>]`, `show <id>` and `set-status <id> <status>`, below |
+| `tickets` | `/warden:orchestrate`, `warden start --ticket` and `warden orchestrate create` | `dag [<epic>]`, `show <id>` and `set-status <id> <status>`; optionally `create` and `link`, below |
 | `graph` | the work skill and the ticket agent | `query "<question>"` prints plain text and exits 0 |
 | `pr` | the push and merge rules | `create` and `merge` subcommands. Warden treats them as the pull request and merge commands |
 
@@ -81,8 +81,11 @@ The `tickets` tool prints one JSON value on stdout. Exit 0 is ok, 1 an error, 2 
 - `dag [<epic>]` prints `DagTicket[]`: `{ id, title, status, blocked_by, epic?, type? }`. With an epic, its direct children; without, every ticket that is not an epic. It has 300 s.
 - `show <id>` prints one `DagTicket` with a `body` (the ticket text). It has 60 s.
 - `set-status <id> <status>` prints `{ id, status, changed }`, where `changed` lists the repo paths the caller must commit. Running it twice changes nothing more. It has 60 s.
+- Optional: `create --title <t> --type <type> --body-file <path> [--epic <id>] [--blocked-by <id,id>]` makes a ticket and prints `{ ticket, changed }`: `ticket` is the new `DagTicket` with its `body` (the text of the body file), `changed` as for set-status. The tool picks the id (its own numbering, or the id the tracker gives). The id must match `^[A-Za-z0-9][A-Za-z0-9._-]*$`, and `taskIdPattern` unless `--type epic`. A new ticket is `todo`. It runs in the main checkout and has 60 s.
+- Optional, for a tracker outside the repo: `link <id> <url>` records the pull request url on the ticket and prints `{ id }`. Warden calls it once, in the main checkout, after the ship step of a `--ticket` run is handed in with a `pr`. It has 60 s. It must not change repo files: warden ignores any `changed` it prints and warns. A tool that keeps tickets as repo files leaves it out: the pull request already carries the ticket change.
+- A tool without `create` or `link` exits 2 for it. Warden reads that as "not supported", so report any other problem with these two as exit 1.
 
-The types are in `tool.ts` (`DagTicket`, `TicketDetail`, `SetStatusResult`).
+The types are in `tool.ts` (`DagTicket`, `TicketDetail`, `SetStatusResult`, `CreateResult`, `LinkResult`).
 
 Anything else, such as end-to-end tests or CI status, needs no role. A check in `.warden/steps.json` simply runs `warden tools e2e run ...`.
 

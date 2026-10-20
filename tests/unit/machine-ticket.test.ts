@@ -131,8 +131,8 @@ describe("ticket status at ship", () => {
     expect(r.ticketFiles).toEqual({ [TICKET]: blob(wt, TICKET) });
   });
 
-  test("only paths the call changed in the worktree count; outside paths and gate files are refused and told", async () => {
-    setUpTickets(toolsWith([], ["../elsewhere.md", ".warden/steps.json", "README.md"]));
+  test("only paths the call changed in the worktree count; outside paths, nested worktrees and gate files are refused and told", async () => {
+    setUpTickets(toolsWith([], ["../elsewhere.md", ".worktrees/T-9/backlog/T-9.md", ".warden/steps.json", "README.md"]));
     await startTicketRun();
     await implement();
     await drive();
@@ -140,7 +140,7 @@ describe("ticket status at ship", () => {
     const r = run();
     expect(r.current.id).toBe("ship");
     expect(r.ticketFiles).toEqual({ [TICKET]: blob(wt, TICKET) });
-    expect(r.ticketError).toBe("set-status changed files outside the ticket worktree or gate files: ../elsewhere.md, .warden/steps.json");
+    expect(r.ticketError).toBe("set-status changed files outside the ticket worktree or gate files: ../elsewhere.md, .worktrees/T-9/backlog/T-9.md, .warden/steps.json");
   });
 
   test("a ticket file changed again after set-status is not covered by the proofs", async () => {
@@ -166,5 +166,84 @@ describe("ticket status at ship", () => {
     expect(ticketEvents()).toEqual([]);
     expect(readFileSync(join(wt, TICKET), "utf8")).toBe("status: doing\n");
     expect(existsSync(join(wt, ".warden/history", T, "summary.json"))).toBe(true);
+  });
+});
+
+// 0.8: `link <id> <url>` once the ship output is accepted. This tool stands in for a tracker: it appends
+// "<id> <url>" to links.txt in the checkout it runs in; it fails while <main>/LINK_FAIL exists.
+const LINK_TOOLS = TOOLS.replace(
+  'if (cmd !== "set-status") return 2;',
+  `if (cmd === "link") {
+        if (existsSync(join(process.env.WARDEN_MAIN_ROOT ?? "", "LINK_FAIL"))) {
+          console.error("tracker is down");
+          return 1;
+        }
+        writeFileSync(join(process.cwd(), "links.txt"), id + " " + status + "\\n", { flag: "a" });
+        console.log(JSON.stringify({ id }));
+        return 0;
+      }
+      if (cmd !== "set-status") return 2;`,
+);
+const linkEvents = () => readEvents(main, T).filter((e) => e.type === "ticket.linked");
+
+async function shipWith(tools: string, output = SHIP_OUTPUT, ticket = true) {
+  setUpTickets(tools);
+  await startTicketRun(ticket);
+  await implement();
+  await drive();
+  sh(wt, "add", `.warden/history/${T}`, ...(ticket ? [TICKET] : []));
+  sh(wt, "commit", "-q", "-m", "chore: run record");
+  return done(ctx, T, output, spawn);
+}
+
+describe("ticket link at ship", () => {
+  test("link runs once in the main checkout with the PR url", async () => {
+    const res = await shipWith(LINK_TOOLS);
+    expect(res.accepted).toBe(true);
+    expect(run().status).toBe("shipped");
+    expect(readFileSync(join(main, "links.txt"), "utf8")).toBe(`${T} https://example.com/pr/1\n`);
+    expect(existsSync(join(wt, "links.txt"))).toBe(false);
+    expect(linkEvents().map((e) => e.data)).toEqual([{ url: "https://example.com/pr/1" }]);
+    expect(res.warnings).toBeUndefined();
+  });
+
+  test("a tool without link (exit 2) is silent", async () => {
+    const res = await shipWith(TOOLS);
+    expect(run().status).toBe("shipped");
+    expect(res.warnings).toBeUndefined();
+    expect(linkEvents()).toEqual([]);
+  });
+
+  test("a failing link is a warning and an event; the run is still shipped", async () => {
+    writeFileSync(join(main, "LINK_FAIL"), "");
+    const res = await shipWith(LINK_TOOLS);
+    expect(res.accepted).toBe(true);
+    expect(run().status).toBe("shipped");
+    expect(linkEvents().map((e) => e.data)).toEqual([{ url: "https://example.com/pr/1", error: "ticket tool failed (exit 1): tracker is down" }]);
+    expect(res.warnings![0]).toContain("The ship is done; tell the user to link");
+  });
+
+  test("a local merge without a PR url never calls link", async () => {
+    const local = JSON.stringify({ pr: null, merged: true, mergeCommit: sh(main, "rev-parse", "HEAD"), description: "d" });
+    const res = await shipWith(LINK_TOOLS, local);
+    expect(res.errors).toEqual([]);
+    expect(run().status).toBe("shipped");
+    expect(linkEvents()).toEqual([]);
+    expect(existsSync(join(main, "links.txt"))).toBe(false);
+  });
+
+  test("changed paths from link are a warning and never committed", async () => {
+    const res = await shipWith(LINK_TOOLS.replace("JSON.stringify({ id })", 'JSON.stringify({ id, changed: ["links.txt"] })'));
+    expect(run().status).toBe("shipped");
+    expect(linkEvents().map((e) => e.data)).toEqual([{ url: "https://example.com/pr/1" }]);
+    expect(res.warnings![0]).toContain("link reported changed repo files (links.txt); link must not change repo files, so warden ignored them");
+    expect(sh(main, "status", "--porcelain")).toContain("links.txt");
+  });
+
+  test("a run without --ticket never calls link", async () => {
+    const res = await shipWith(LINK_TOOLS, SHIP_OUTPUT, false);
+    expect(res.errors).toEqual([]);
+    expect(linkEvents()).toEqual([]);
+    expect(existsSync(join(main, "links.txt"))).toBe(false);
   });
 });

@@ -48,11 +48,11 @@ When something is off and no message explains it:
 | `a run for <task> exists (status <s>); a person can run warden reset <task>` | Each task has one run. | Go on with it (`warden next <task>`), or reset it in a terminal: `warden reset <task>`. |
 | `flow is invalid: <code> <message>; ...` | The flow breaks a lint rule. | Run `warden flow check <file>` and fix each error. See [Flow files](reference/flow-files.md). |
 | `flow not found: <path>` (exit 3) | No template, saved flow or file by that name. | Check the name in `.warden/flows/` or the path. |
+| `.worktrees/ is not ignored by git: add the line .worktrees/ to .gitignore and commit it, then run start again` | Task worktrees live in `.worktrees/` inside the main checkout. Unignored, git would see them as untracked files. | Add the line, commit it, and start again. |
 | `branch <b> is checked out in the worktree <path>` | Git allows a branch in one worktree only. | Remove that worktree, or pass another `--branch`. |
-| `<path> exists but is not a worktree of this repo on <branch>` | A folder is in the way at `<repo>.worktrees/<task>`. | Move or delete that folder. |
+| `<path> exists but is not a worktree of this repo on <branch>` | A folder is in the way at `.worktrees/<task>`. | Move or delete that folder. |
 | `<path> is a worktree on <other>, not on <branch>` | The task's worktree is on another branch. | Switch that worktree back, or remove it. |
 | `setup failed: <cmd> (exit <n>); log: <path>` | A setup command failed. No run was created. | Read the log at that path (it is kept in the temp dir), fix `scripts/warden-setup.sh` or the cause, commit, and start again. |
-| `<path>/.claude/settings.local.json is not valid JSON; fix it, then run start again` | Warden adds the worktrees folder to that file and cannot read it. | Fix the JSON. |
 | `ticket tool failed (exit <n>): ...` / `ticket tool printed no JSON` | The project's `tickets` tool broke. | Run `warden tools tickets show <id>` and fix the tool, or start with `--text` instead of `--ticket`. See [Write a ticket tool](guides/write-a-ticket-tool.md). |
 | `no tickets tool: set "tickets" in .warden/tools/roles.json` (exit 3) | `--ticket` or orchestrate needs a `tickets` role. | Add the role, or use `--text`. |
 
@@ -121,6 +121,7 @@ See [Gates and self-healing](concepts/gates-and-self-healing.md).
 | `mergeCommit: <sha> not found` | The merge commit is not in the repo yet. | Give the right SHA, or fetch first. |
 | `The ticket status was not set: <error>. ...` (in the instructions) | The `tickets` tool failed when warden set the ticket to done. The ship goes on. | After the merge, set the ticket to done by hand. |
 | The worktree was removed before the ship hand-in | The ship instructions say to hand in first. | Run `warden done <task> --json '...'` from the main checkout. With the worktree gone, warden checks only the merge evidence. |
+| `<task>: kept <path>: <branch> is not merged into <ref> (a pull request still open?)` from `warden clean` | The branch is not on the main branch yet, or it was squash-merged. | Merge the pull request and run `warden clean` again. After a squash merge, remove it by hand: `git worktree remove <path>` and `git branch -D <branch>`. |
 
 ## Approve, retry, reset in a terminal
 
@@ -149,6 +150,26 @@ See [Blocked and waiting runs](guides/blocked-and-waiting-runs.md).
 | `write .warden/retros/<date>.md first` | The retro check is done only once its note exists. | Write the retro note, then `warden checks done retro`. |
 | `warden docs check` prints `"ok": false` | A `.warden` doc file has no `INDEX.md` line, an `INDEX.md` line names a missing file, or a file is over 200 lines. | Fix each line of `problems`. |
 | `warden site: port <n> is in use; pass --port` (exit 5) | Something else uses the port (4400 by default). | `warden site --port <other>`. |
+
+## Tools in the main checkout see worktrees
+
+Since 0.8 task worktrees live in `<repo>/.worktrees/`. A tool run in the main checkout may walk into that folder and find another copy of the code: tests run twice, or lint errors show for files you did not change. Add `.worktrees/` to the tool's ignore list:
+
+| Tool | Where |
+|---|---|
+| Vitest | `test.exclude` in `vitest.config.*` (keep the defaults: `[...configDefaults.exclude, ".worktrees/**"]`). Not needed when `include` names only your own folders, such as `src/**`. |
+| Jest | `testPathIgnorePatterns` and `modulePathIgnorePatterns`: `"<rootDir>/.worktrees/"`. |
+| ESLint | flat config: add `".worktrees/**"` to an `ignores` entry; older configs: `.eslintignore`. |
+| Prettier | reads `.gitignore` (Prettier 3), so nothing to do; with an older Prettier, add `.worktrees` to `.prettierignore`. |
+| Playwright | keep `testDir` on your own test folder, or add `"**/.worktrees/**"` to `testIgnore`. |
+
+Tools that follow `.gitignore` need nothing. Nor does TypeScript: `tsc` skips dot folders. Do not add an `exclude` to `tsconfig.json`: it drops the default that leaves out `outDir`.
+
+## Worktrees find the main checkout's packages
+
+Node, Bun, Vite and TypeScript look for a package in `node_modules` of every parent folder, so a worktree in `<repo>/.worktrees/<task>` also finds `<repo>/node_modules`. When a branch removes a dependency from `package.json` but still imports it, checks can pass in the worktree and fail on a fresh clone.
+
+Add a dependency check to the project's checks, for example ESLint's `import/no-extraneous-dependencies` or `knip`, so an import of a package that is not in `package.json` fails the gate.
 
 ## Reports
 

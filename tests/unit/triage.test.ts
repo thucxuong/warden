@@ -103,7 +103,7 @@ function makeFixture(scenario: Scenario): Fixture {
   git(main, "init", "-q", "-b", "main");
   git(main, "config", "user.name", "Test User");
   git(main, "config", "user.email", "test@example.com");
-  write(main, ".gitignore", ".warden/state/\n");
+  write(main, ".gitignore", ".warden/state/\n.worktrees/\n");
   write(main, ".warden/warden.json", JSON.stringify({ schema: 1, wardenVersion: "0.1.0", projectId, taskIdPattern: "^T-\\d{3}$", sitePort: 4400, lastRetro: null }));
   write(main, "check.sh", CHECK_SH);
   write(main, "first.sh", FIRST_SH);
@@ -140,8 +140,9 @@ async function failAndTriage(fixture: Fixture): Promise<TriageReport> {
   return triage(STEP, { failedIndex: result.failedIndex, log: result.log }, fixture.ctx);
 }
 
+// Inside the main checkout next to the ticket worktree (0.8), not in the temp dir.
 function cleanPath(fixture: Fixture, n: number): string {
-  return join(realpathSync(tmpdir()), `warden-clean-${fixture.projectId}-${TASK}-${n}`);
+  return join(worktreesDir(fixture.main), `${TASK}-clean-${n}`);
 }
 
 function expectCleanCopyRemoved(fixture: Fixture, n = 1): void {

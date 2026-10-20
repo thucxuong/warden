@@ -48,9 +48,9 @@ Each doc folder (`context`, `rules`, `decisions`, `knowledge`, `checks`, `retros
 | `.warden/history/<task>/` | the engine, at the ship step | site, retro | yes | Never. The hooks refuse it |
 | `.warden/state/` | the engine and hooks | every command | no (gitignored) | Never. The hooks refuse it |
 | `scripts/warden-setup.sh` | `warden init --write`, then you, the fixer | `setup.commands` | yes | Yes |
-| `.gitignore` | `warden init --write` adds `.warden/state/` | git | yes | Yes |
+| `.gitignore` | `warden init --write` adds `.warden/state/` and `.worktrees/` | git, `warden start --worktree` (checks `.worktrees/` is ignored) | yes | Yes |
 | `.claude/settings.json` | `warden init --write` with `teamInstall` | Claude Code | yes | Yes |
-| `.claude/settings.local.json` | `warden start --worktree` | Claude Code | no (personal) | Yes |
+| `.worktrees/` | `warden start --worktree`, the engine (fix worktrees, triage clean copies) | git, `warden clean` | no (gitignored) | Only through a run's own rules |
 
 "Locked while a run is live" means the hooks refuse edits to the file while any run is `active`, `waiting` or `blocked`. See [hooks](hooks.md).
 
@@ -135,7 +135,7 @@ The project's own tools. See [tools and roles](../concepts/tools-and-roles.md) a
 | File | Purpose |
 |---|---|
 | `index.ts` | `export default [ ...tools ]`. Only tools listed here exist; warden never scans the folder |
-| `tool.ts` | The contract types (`Tool`, `Check`, `DagTicket`, `TicketDetail`, `SetStatusResult`) and the `command()` helper. Written once; the project owns it |
+| `tool.ts` | The contract types (`Tool`, `Check`, `DagTicket`, `TicketDetail`, `SetStatusResult`, and from 0.8 `CreateResult` and `LinkResult`) and the `command()` helper. Written once; the project owns it |
 | `roles.json` | Role name to tool name, for example `{"tickets": "backlog", "graph": "graph", "pr": "git-pr"}`. Starts as `{}` |
 | `<name>.ts` or `<name>/` | One tool per file or folder |
 
@@ -308,12 +308,13 @@ Events in `events.jsonl` have `{seq, ts, task, type, step?, data?}`. Types:
 | Path | Purpose |
 |---|---|
 | `scripts/warden-setup.sh` | The setup script. `setup.commands` runs it with `sh`. It should start with `set -e` and do what a fresh checkout needs (install packages, copy `.env.example`) |
-| `<parent>/<repo>.worktrees/<task>` | The task worktree made by `warden start --worktree`. It sits next to the repo, outside it, so test runners and linters in the main checkout never see it |
-| `<parent>/<repo>.worktrees/<task>-fix-<n>` | The fixer's worktree, on branch `warden-fix/<task>-<n>`. Removed when the fix step ends |
-| `$TMPDIR/warden-clean-<projectId>-<task>-<n>` | Triage's clean copy of the main branch. Always removed afterwards |
+| `.worktrees/<task>` | The task worktree made by `warden start --worktree`. `.gitignore` must list `.worktrees/`. `warden clean` removes it once the task shipped and its branch is merged |
+| `.worktrees/<task>-fix-<n>` | The fixer's worktree, on branch `warden-fix/<task>-<n>`. Removed when the fix step ends |
+| `.worktrees/<task>-clean-<n>` | Triage's clean copy of the main branch. Always removed afterwards |
+| `<parent>/<repo>.worktrees/<task>` | Where warden before 0.8 put task and fix worktrees. Runs started then keep using them |
 | `$TMPDIR/warden-setup-<task>-<ms>.log` | The setup log kept when setup fails at `warden start` |
 | `.claude/settings.json` | With `teamInstall`, gets `extraKnownMarketplaces["warden-marketplace"]` (source copied from your install, `autoUpdate: true`) and `enabledPlugins["warden@warden-marketplace"]: true` |
-| `.claude/settings.local.json` | `warden start --worktree` adds the worktrees folder to `permissions.additionalDirectories` |
+| `.claude/settings.local.json` | Before 0.8, `warden start --worktree` added `<repo>.worktrees` to `permissions.additionalDirectories`. Keep it while runs from then are left |
 
 Task branches default to the task id in lower case. Fix branches are `warden-fix/<task>-<n>`.
 

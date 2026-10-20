@@ -1,7 +1,9 @@
-// /api/health (design 2.9): versions, `warden tools --check` and config problems. No network; never writes.
+// /api/health (design 2.9): versions, `warden tools --check`, config problems and leftover worktrees. No network;
+// never writes.
 import { spawn } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { removable } from "../commands/clean.ts";
 import { availableVersion } from "../commands/upgrade.ts";
 import { readRoles } from "../commands/tools.ts";
 import { ConfigError, loadStepsJson, loadTriageRules, loadWardenJson } from "../config/config.ts";
@@ -161,11 +163,18 @@ export async function buildHealth(ctx: SiteCtx, check: typeof runToolsCheck = sh
   if (updatePlugin) commands.push(`claude plugin update warden@${available!.marketplace}`);
   const { problems, ticketTool } = configProblems(ctx);
   const tools = await check(ctx.main, ctx.root, ctx.data);
+  let leftoverWorktrees: HealthResponse["leftoverWorktrees"] = [];
+  try {
+    leftoverWorktrees = removable(ctx.main); // what session start counts: no fetch
+  } catch {
+    // health never fails on it
+  }
   return {
     generatedAt: ctx.generatedAt,
     versions: { plugin, project, latest: available?.version ?? null, upgradeProject, updatePlugin, commands },
     tools,
     config: problems,
     ticketTool,
+    leftoverWorktrees,
   };
 }

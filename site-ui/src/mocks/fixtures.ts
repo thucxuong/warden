@@ -304,6 +304,7 @@ export const health: HealthResponse = {
     { file: ".warden/warden.json", severity: "warn", message: "warden.json: $.site.thresholds.slowFactor: must be a number from 1 to 10, got 0", fix: null },
   ],
   ticketTool: "backlog",
+  leftoverWorktrees: [{ task: "FX-101", worktree: "/home/dev/fx/.worktrees/FX-101", branch: "fx-101" }],
 };
 
 // ---- /api/signals ----

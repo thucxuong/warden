@@ -4,7 +4,7 @@ import { appendFileSync, existsSync, mkdirSync, realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { loadStepsJson, loadWardenJson } from "../config/config.ts";
 import { readJson } from "../lib/json.ts";
-import { taskDir, worktreeRoot } from "../state/paths.ts";
+import { inWorktreesDir, taskDir, worktreeRoot } from "../state/paths.ts";
 import {
   appendEvent, appendSessionLink, listTasks, readRun, readSessionLinks, readSessionRecord, runExists, upsertSessionRecord, withLock,
 } from "../state/store.ts";
@@ -158,7 +158,8 @@ export interface PathMatch {
   inFix: boolean;   // matched the run's fix worktree, not its ticket worktree
 }
 
-// Edit tools: the live run whose worktree or fix worktree holds the target, longest match first.
+// Edit tools: the live run whose worktree or fix worktree holds the target, longest match first. A file under
+// <dir>/.worktrees/ is in a nested worktree, never in <dir> itself (a run in the main checkout, 0.8).
 export function runForPath(main: string, target: string): PathMatch | null {
   let best: (PathMatch & { length: number }) | null = null;
   for (const run of liveRuns(main)) {
@@ -166,7 +167,8 @@ export function runForPath(main: string, target: string): PathMatch | null {
     if (run.fix) dirs.push({ dir: run.fix.worktree, inFix: true });
     for (const { dir, inFix } of dirs) {
       const rel = relInside(dir, target);
-      if (rel !== null && (!best || dir.length > best.length)) best = { run, rel, inFix, length: dir.length };
+      if (rel === null || inWorktreesDir(rel)) continue;
+      if (!best || dir.length > best.length) best = { run, rel, inFix, length: dir.length };
     }
   }
   return best && { run: best.run, rel: best.rel, inFix: best.inFix };

@@ -82,21 +82,38 @@ describe("start", () => {
     expect(cli(["start", "T-1", "--template", "do", "--bogus"]).code).toBe(2);
   });
 
-  test("--worktree creates the worktree, stores task.md and allows the worktrees dir", () => {
-    write(main, ".claude/settings.local.json", JSON.stringify({ foo: 1, permissions: { allow: ["Bash(ls)"] } }));
+  test("--worktree creates the worktree in <main>/.worktrees and stores task.md; settings.local.json is left alone (0.8)", () => {
+    const settingsText = JSON.stringify({ foo: 1, permissions: { allow: ["Bash(ls)"] } });
+    write(main, ".claude/settings.local.json", settingsText);
     writeFileSync(join(base, "task.txt"), "Add a greeting.\n");
     const r = cli(["start", "T-1", "--template", "do", "--worktree", "--text-file", join(base, "task.txt")]);
     expect(r.code).toBe(0);
+    expect(r.json.worktree).toBe(join(main, ".worktrees", "T-1"));
     expect(r.json.worktree).toBe(wt());
     expect(r.json.status).toBe("agent");
     expect(r.json.step.id).toBe("implement");
     expect(git(wt(), "branch", "--show-current")).toBe("t-1");
     expect(readFileSync(join(taskDir(main, "T-1"), "task.md"), "utf8")).toBe("Add a greeting.\n");
+    expect(readFileSync(join(main, ".claude/settings.local.json"), "utf8")).toBe(settingsText);
+    expect(git(main, "status", "--porcelain", "--untracked-files=all", "--", ".worktrees")).toBe("");
+  });
 
-    const settings = JSON.parse(readFileSync(join(main, ".claude/settings.local.json"), "utf8"));
-    expect(settings.foo).toBe(1);
-    expect(settings.permissions.allow).toEqual(["Bash(ls)"]);
-    expect(settings.permissions.additionalDirectories).toEqual([worktreesDir(main)]);
+  test("--worktree does not create .claude/settings.local.json", () => {
+    expect(cli(["start", "T-1", "--template", "do", "--worktree"]).code).toBe(0);
+    expect(existsSync(join(main, ".claude/settings.local.json"))).toBe(false);
+  });
+
+  test("--worktree refuses when .worktrees/ is not gitignored, and creates nothing", () => {
+    commit(main, { ".gitignore": ".warden/state/\n" }, "no worktrees line");
+    const r = cli(["start", "T-1", "--template", "do", "--worktree"]);
+    expect(r.code).toBe(1);
+    expect(r.err).toBe("warden: .worktrees/ is not ignored by git: add the line .worktrees/ to .gitignore and commit it, then run start again\n");
+    expect(existsSync(wt())).toBe(false);
+    expect(runExists(main, "T-1")).toBe(false);
+    expect(git(main, "branch", "--list", "t-1")).toBe("");
+
+    commit(main, { ".gitignore": ".warden/state/\n/.worktrees\n" }, "ignore worktrees");
+    expect(cli(["start", "T-1", "--template", "do", "--worktree"]).code).toBe(0);
   });
 
   test("a later start reuses the worktree and branch left by reset", async () => {
@@ -112,12 +129,23 @@ describe("start", () => {
     expect(existsSync(join(wt(), "src/a.ts"))).toBe(true);
   });
 
-  test("refuses when the branch is checked out elsewhere or the path is not a worktree", () => {
-    git(main, "worktree", "add", "-q", "-b", "t-1", join(base, "elsewhere"), "main");
-    const held = cli(["start", "T-1", "--template", "do", "--worktree"]);
-    expect(held.code).toBe(1);
-    expect(held.err).toContain("checked out");
+  test("refuses a branch checked out in any other worktree: a live run's, or the user's own", () => {
+    expect(cli(["start", "T-2", "--template", "do", "--worktree"]).code).toBe(0);
+    const taken = cli(["start", "T-3", "--template", "do", "--worktree", "--branch", "t-2"]);
+    expect(taken.code).toBe(1);
+    expect(taken.err).toBe(`warden: branch t-2 is checked out in the worktree ${wt("T-2")}\n`);
+    expect(runExists(main, "T-3")).toBe(false);
 
+    const mine = join(base, "mywork");
+    git(main, "worktree", "add", "-q", "-b", "t-9", mine, "main");
+    write(mine, "wip.txt", "mine\n");
+    const own = cli(["start", "T-9", "--template", "do", "--worktree"]);
+    expect(own.code).toBe(1);
+    expect(own.err).toBe(`warden: branch t-9 is checked out in the worktree ${mine}\n`);
+    expect(runExists(main, "T-9")).toBe(false);
+  });
+
+  test("refuses when the path is not a worktree", () => {
     mkdirSync(wt("T-2"), { recursive: true });
     const blocked = cli(["start", "T-2", "--template", "do", "--worktree"]);
     expect(blocked.code).toBe(1);

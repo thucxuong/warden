@@ -18,12 +18,16 @@ The "main checkout" is the folder where you cloned the repo. Warden finds it wit
 
 A worktree is a second working folder for the same git repo, on its own branch. Warden uses one per task, so several tasks can run at once without touching your main checkout.
 
-- `warden start <task> --worktree` creates `<parent>/<repo>.worktrees/<task>`, next to your repo, not inside it, so test runners and linters in the main checkout never see it.
+- `warden start <task> --worktree` creates `<repo>/.worktrees/<task>`, inside the main checkout. Git must ignore that folder: `/warden:init` adds `.worktrees/` to `.gitignore`, and `warden start --worktree` refuses while git does not ignore the folder (add the line and commit it).
 - The branch is the task id in lowercase (`PG-012` becomes `pg-012`), or the name given with `--branch`.
 - An existing worktree for the task on the same branch is reused.
-- `warden start` adds the worktrees folder to `permissions.additionalDirectories` in `.claude/settings.local.json`, so the session may edit files there.
 - Without `--worktree`, the run uses the folder and branch you are on. That branch must not be the main branch.
-- Fix branches get their own worktree, `<task>-fix-<n>`, in the same folder. Triage's clean copies go to the system temp folder and are removed after each use.
+- Fix branches get their own worktree, `<task>-fix-<n>`, in the same folder. Triage's clean copies, `<task>-clean-<n>`, go there too and are removed after each use.
+- After a task ships, `warden clean` removes its worktree and branch (see [below](#removing-shipped-worktrees)).
+
+Run records keep the absolute worktree path, so a run started before 0.8 goes on in its old folder next to the repo.
+
+Tools in the main checkout that do not follow `.gitignore` need `.worktrees/` in their ignore list, and a worktree also finds the main checkout's `node_modules`. See [Troubleshooting](../troubleshooting.md#tools-in-the-main-checkout-see-worktrees).
 
 Warden chooses the worktree and branch. The agent uses them even when a project doc describes another layout.
 
@@ -112,6 +116,10 @@ Sessions are linked to a task by the hooks, for example when a session runs `war
 - deletes `.warden/state/<task>/`.
 
 The task's own worktree and branch stay, so a later `warden start` reuses them. See [Blocked and waiting runs](../guides/blocked-and-waiting-runs.md).
+
+## Removing shipped worktrees
+
+`warden clean` looks at each shipped task that still has its worktree, in `.worktrees/` or next to the repo from before 0.8. It removes the worktree and deletes the branch when the worktree has no uncommitted changes and the branch is merged into the main branch. Otherwise it keeps them and prints why. It never touches a live run, a run in the main checkout, or a worktree warden did not make. `--dry-run` only lists. See [CLI](../reference/cli.md#warden-clean).
 
 ## See also
 

@@ -82,7 +82,7 @@ Design notes and build specs from earlier versions are kept in [internal/](inter
 | Your project | The repository where you installed warden. | [Quick start](getting-started/quickstart.md) |
 | The project's agent | The Claude Code session that works in your project. | [For agents](for-agents.md) |
 | Main checkout | The folder where you cloned the repo. Live state always lives here, even when a task runs in a worktree. | [State and history](concepts/state-and-history.md) |
-| Worktree | A second checkout of the repo, with its own branch. Each task gets one, in `<repo>.worktrees/<task>`. | [State and history](concepts/state-and-history.md#worktrees) |
+| Worktree | A second checkout of the repo, with its own branch. Each task gets one, in `<repo>/.worktrees/<task>` (gitignored). | [State and history](concepts/state-and-history.md#worktrees) |
 | Task id | The id of a task, for example `APP-12`. It must match `taskIdPattern` in `.warden/warden.json`. | [Project files](reference/project-files.md) |
 | Run | One task going through its steps, from `warden start` to shipped or done. | [How warden works](concepts/how-warden-works.md) |
 | Step | One part of a run, such as plan, implement, check or ship. Its type decides who does it and which files it may change. | [Workflows](concepts/workflows.md#step-types) |

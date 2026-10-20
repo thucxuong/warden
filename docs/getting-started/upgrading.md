@@ -88,6 +88,10 @@ Each version that ships has a note in the plugin's `upgrades/` folder, named `v<
 
 Skipping versions is fine: `warden upgrade --notes` joins the notes of every version in between, in order.
 
+## Worktrees move into the repo in 0.8.0
+
+From 0.8.0 task worktrees live in `<repo>/.worktrees/<task>`, not next to the repo. `/warden:upgrade` adds `.worktrees/` to `.gitignore` and to your tools' ignore lists where needed. Runs started before the upgrade keep their old worktrees, so keep the old `<repo>.worktrees` entry in `.claude/settings.local.json` until `warden clean` has removed them.
+
 ## Removed in 0.6.0
 
 0.6.0 made tools part of your project. If your project, your team notes or your habits come from before 0.6, these are gone:

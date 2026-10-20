@@ -55,7 +55,7 @@ An **epic** is a ticket that groups other tickets. Its children can block each o
 
    It picks up where it left off. The plan is read again each time.
 
-5. **At the end**, when every ticket is done, the agent sets the epic to `done`, removes each shipped ticket's worktree and branch (only merged ones), and shows a final table with the result and the pull request or merge commit of each ticket.
+5. **At the end**, when every ticket is done, the agent sets the epic to `done`, runs `warden clean` to remove each shipped ticket's worktree and branch (only merged ones), and shows a final table with the result and the pull request or merge commit of each ticket.
 
 ```mermaid
 flowchart LR
@@ -106,9 +106,9 @@ Then run `/warden:orchestrate PG-100` again. See [Blocked and waiting runs](bloc
 
 - Run it only when you ask for it. A new session reminds you when an orchestration stopped with tickets left: `warden: orchestration of PG-100 stopped with 2 tickets left. ...`
 - If the project has a remote, the agent runs `git pull --ff-only` on the main checkout before each wave and after merges. If that fails, it stops and tells you.
-- It never pushes your main branch, never edits files in a ticket worktree and never does a ticket's steps itself.
+- It never pushes your main branch (except the new tickets, when you give it a request instead of an epic id and it plans the epic first), never edits files in a ticket worktree and never does a ticket's steps itself.
 - A ticket held by an open ticket outside the epic stays in `held` until that ticket is done.
-- Each ticket's worktree is `<your repo>.worktrees/<id>` and its branch is the id in lower case, for example `pg-102`.
+- Each ticket's worktree is `<your repo>/.worktrees/<id>` and its branch is the id in lower case, for example `pg-102`.
 
 ## See also
 

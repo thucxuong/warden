@@ -8,8 +8,10 @@ argument-hint: "<epic>"
 
 Run this only when the user asked for it. You are the orchestrator. Each ticket has its own run and worktree. Runs are started one at a time. Work runs in parallel. Ship runs one at a time, in wave order, so every ticket is gated on the code it lands on.
 
+`<epic>` is `$ARGUMENTS` when it is an epic id. If it is a request instead, plan it with the warden:compose "Plan an epic" section, steps 1 to 5, and stop there if planning stops. Then `<epic>` is the new epic id in every step below, never the request text.
+
 1. Work from the main checkout. If the project has a remote, run `git -C <main> pull --ff-only`. If it fails, tell the user and stop.
-2. Run `warden orchestrate plan $ARGUMENTS`. If `errors` is not empty, show them and stop. If `complete` is true, go to step 9. Mention the `held` tickets and the parked ones in `backlog`.
+2. Run `warden orchestrate plan <epic>`. If `errors` is not empty, show them and stop. If `complete` is true, go to step 9. Mention the `held` tickets and the parked ones in `backlog`.
 3. On the first plan of this conversation, show a table (wave, id, title, template, phase) and ask the user to go ahead. Ask one question and wait.
 4. For each ticket in `next`, go by its phase:
    - `todo`: start it, one at a time, with Bash timeout 600000: `warden start <id> --template <template> --ticket --worktree`. For `compose`, write a flow first (compose skill, steps 3 and 4) that ends with a ship step. Then run `warden start <id> --flow <file> --ticket --worktree`. Note the `worktree` it prints.
@@ -28,7 +30,7 @@ Run this only when the user asked for it. You are the orchestrator. Each ticket 
       Mode: work
       Note: <only when the user answered a question for this ticket>
       ```
-   b. When they return, run `warden orchestrate status $ARGUMENTS`. For each ticket in `fix`: run `warden next <id>`, give its `instructions` and `context` to a `warden:fixer` agent in the foreground and wait for it, then pass the fixer's JSON on with `warden done <id> --json '<json>'`. The ticket is `running` again.
+   b. When they return, run `warden orchestrate status <epic>`. For each ticket in `fix`: run `warden next <id>`, give its `instructions` and `context` to a `warden:fixer` agent in the foreground and wait for it, then pass the fixer's JSON on with `warden done <id> --json '<json>'`. The ticket is `running` again.
    c. Repeat 5a and 5b until no ticket of the wave is `running` or `fix`. If an agent replied `ASK`, keep its question for the report. If a ticket is still `running` after 3 agent runs in this call, report it.
 6. Ship, one ticket at a time, in `next` order. For each `ready` ticket, start one `warden:ticket` agent with this prompt:
    ```
@@ -38,10 +40,10 @@ Run this only when the user asked for it. You are the orchestrator. Each ticket 
    Main: <mainRef>
    Note: <only when the user answered a question for this ticket>
    ```
-   Start it in the foreground and wait for it. Then run `warden orchestrate status $ARGUMENTS`. If the ticket did not end `merged`, ship no more tickets: go to step 7.
-7. If the project has a remote, run `git -C <main> pull --ff-only` first, so the merged PRs are in the main checkout. If it fails, tell the user and stop. For each `merged` ticket, run `warden orchestrate set-status <id> done`. If `changed` is not empty and the main checkout is on `<mainBranch>`, run `git -C <main> commit -m "chore(<id>): done" -- <changed paths>`. Otherwise tell the user which files to commit. Never push main.
-8. If any ticket of the wave is `blocked`, `waiting`, `pr-open`, `no-ship`, still `running`, or asked a question: stop. Show a table with the id, the phase, the reason or question, and what the user does (type `retry <id>`, type `approve <id>`, merge the PR, or answer). Then say `Run /warden:orchestrate <epic> again to go on.` and end your turn. Otherwise go back to step 1 for the next wave. When no wave is left but `backlog` is not empty, say which tickets are parked and that the user moves them to `todo` (in the ticket system) to have them worked; the epic is not complete until they are `done` or `archived`.
-9. When complete, run `warden orchestrate set-status <epic> done` and commit `changed` as in step 7. Then remove each shipped ticket's worktree and branch: `git -C <main> worktree remove <worktree>` and `git -C <main> branch -d <branch>` (skip any that are not merged). Show a final table: id, title, template, result, and the PR or merge commit.
+   Start it in the foreground and wait for it. If it replied `SHIPPED <id>: <warnings>`, keep the warnings for the report. Then run `warden orchestrate status <epic>`. If the ticket did not end `merged`, ship no more tickets: go to step 7.
+7. If the project has a remote, run `git -C <main> pull --ff-only` first, so the merged PRs are in the main checkout. If it fails, tell the user and stop. For each `merged` ticket, run `warden orchestrate set-status <id> done`. If `changed` is not empty and the main checkout is on `<mainBranch>`, run `git -C <main> commit -m "chore(<id>): done" -- <changed paths>`. Otherwise tell the user which files to commit. Never push main in this step.
+8. Show the user any warnings kept in step 6. If any ticket of the wave is `blocked`, `waiting`, `pr-open`, `no-ship`, still `running`, or asked a question: stop. Show a table with the id, the phase, the reason or question, and what the user does (type `retry <id>`, type `approve <id>`, merge the PR, or answer). Then say `Run /warden:orchestrate <epic> again to go on.` and end your turn. Otherwise go back to step 1 for the next wave. When no wave is left but `backlog` is not empty, say which tickets are parked and that the user moves them to `todo` (in the ticket system) to have them worked; the epic is not complete until they are `done` or `archived`.
+9. When complete, run `warden orchestrate set-status <epic> done` and commit `changed` as in step 7. Then run `warden clean` from the main checkout: it removes each shipped ticket's worktree and branch once merged, and prints why it kept any other. Show a final table: id, title, template, result, and the PR or merge commit.
 
 Rules
 - Git and paths: run `git -C <dir> ...` and use absolute paths, one simple command per call. A plain `cd <dir>` on its own is fine; never chain it as `cd <dir> && ...`, because a permission rule such as `Bash(git *)` does not match that.

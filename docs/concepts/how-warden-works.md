@@ -68,7 +68,7 @@ The `/warden:work` skill runs this loop for the agent. `/warden:compose` picks a
 2. Fetches the main branch and reads `.warden/steps.json` from it. Your `.warden/` folder must be committed and pushed to the main branch first.
 3. Checks the flow with the flow linter. A bad flow never creates a worktree.
 4. Refuses when a run for this task already exists.
-5. With `--worktree`, creates or reuses a worktree for the task's branch. Without it, uses the current branch, which must not be the main branch.
+5. With `--worktree`, creates or reuses a worktree for the task's branch, in `.worktrees/<task>` inside the repo (git must ignore that folder). Without it, uses the current branch, which must not be the main branch.
 6. Copies the flow and `steps.json` into the run's state folder. The run uses these copies until it ends, so editing the files later does not change a live run.
 7. Runs the setup commands from `steps.json` in the worktree. If one fails, the run is not created and the log is kept in the temp folder.
 8. Enters the first step.
