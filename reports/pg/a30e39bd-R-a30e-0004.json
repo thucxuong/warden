@@ -6,8 +6,8 @@
   "title": "compose skill step 1 still reads the task from an empty placeholder",
   "body": "What happened: in 0.8.1 the compose skill step 1 says: Read the task from an empty pair of backticks, or from the user request when that is empty. The loaded text has nothing between the backticks, so the first clause points at nothing. Expected: either the real task argument is shown there, or the sentence only says to read the task from the user request. Steps: run /warden:compose with no id and read step 1. Evidence: the loaded text reads 'Read the task from ``, or from the user'\\''s request when that is empty.' This is what R-a30e-0002 reported; it is closed as fixed but the empty placeholder is still there. It does still work, because the fallback clause applies.",
   "createdAt": "2026-10-20T02:50:09.777Z",
-  "status": "accepted",
-  "fixedIn": null,
+  "status": "fixed",
+  "fixedIn": "0.9.0",
   "note": "Accepted. The empty placeholder is still there and will be fixed in a coming release.",
   "projectDir": "/Users/cluu/Documents/Work/warden-playground",
   "machineId": "a30e39bd"
