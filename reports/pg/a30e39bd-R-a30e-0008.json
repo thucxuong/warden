@@ -8,7 +8,7 @@
   "createdAt": "2026-10-20T03:54:10.660Z",
   "status": "wontfix",
   "fixedIn": null,
-  "note": "The move to a worktrees folder inside the project came in 0.8.0 and the 0.8.0 upgrade notes describe it. Worktrees of runs started earlier stay where they were. Update the project docs to the new folder.",
+  "note": "This move came in 0.8.0 and the first line of that upgrade note says so. Runs started before it keep their old folder. Please update the project's own git workflow doc, which still names the old folder and the removed text flag.",
   "projectDir": "/Users/cluu/Documents/Work/warden-playground",
   "machineId": "a30e39bd"
 }
