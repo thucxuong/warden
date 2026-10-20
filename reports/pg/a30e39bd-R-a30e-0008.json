@@ -6,9 +6,9 @@
   "title": "New worktrees go to a repo-local folder, not the project's sibling worktrees folder",
   "body": "What happened: after the 0.9.0 upgrade, warden start --worktree made the worktree inside the repo at .worktrees/PG-340 and also .worktrees/PG-340-fix-1. The project docs and the still-live older run use the sibling folder warden-playground.worktrees/. The upgrade notes did not mention this change. Expected: the same folder as the existing worktrees, or a note in the upgrade text. Steps: upgrade 0.8.1 to 0.9.0, then warden start <id> --template feature --worktree. Evidence: git worktree list showed warden-playground.worktrees/PG-333 for the old run, and start printed worktree .../warden-playground/.worktrees/PG-340 for the new one.",
   "createdAt": "2026-10-20T03:54:10.660Z",
-  "status": "sent",
+  "status": "wontfix",
   "fixedIn": null,
-  "note": null,
+  "note": "The move to a worktrees folder inside the project came in 0.8.0 and the 0.8.0 upgrade notes describe it. Worktrees of runs started earlier stay where they were. Update the project docs to the new folder.",
   "projectDir": "/Users/cluu/Documents/Work/warden-playground",
   "machineId": "a30e39bd"
 }
