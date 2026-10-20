@@ -6,9 +6,9 @@
   "title": "Commit command blocked with an engine-files message though no engine file was touched",
   "body": "What happened: during warden:upgrade step 4, this command was refused by the pre-tool hook with 'warden: state, history and gate files are written by the engine only': cd <project> && git commit -m \"chore: warden upgrade to 0.8.1<blank line>Co-Authored-By: ...\" -- .warden/reports.md .warden/tools/backlog/README.md .warden/tools/backlog/bin/tickets.ts .warden/warden.json. None of the paths is under .warden/state or .warden/history. Expected: the commit runs, or the message says which path it objects to. Workaround that worked: git add of the same four paths, then git commit -m with a one-line subject and a second -m for the trailer, without cd. I could not repeat the block afterwards with git -C <project> commit -m x -- .warden/reports.md .warden/warden.json (it passed). Likely causes, not confirmed: the cd-and-chain form, the multi-line message, or the pathspec after --. Evidence: the exact hook message above.",
   "createdAt": "2026-10-20T02:50:12.640Z",
-  "status": "sent",
+  "status": "accepted",
   "fixedIn": null,
-  "note": null,
+  "note": "Accepted. A commit message with an email in angle brackets plus a config file path is wrongly blocked. Planned for a coming release.",
   "projectDir": "/Users/cluu/Documents/Work/warden-playground",
   "machineId": "a30e39bd"
 }
