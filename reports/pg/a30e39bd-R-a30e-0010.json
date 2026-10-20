@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "id": "R-a30e-0010",
+  "projectId": "pg",
+  "kind": "bug",
+  "title": "Ship marks ticket done before the final gate check passes",
+  "body": "What happened: in the ship prep step (shipPrepJob, machine.ts around line 575), warden checked gatesProven, then ran markTicketDone (set-status done in the ticket worktree), then re-checked the gates after that write. The re-check failed on format; warden reran the gates. The done change to the ticket file stayed uncommitted in the worktree and blocked the next step.\n\nExpected: the ticket is marked done only after the final gate check passes, or the done change is reverted when that check fails.\n\nRepro: a feature run whose ship prep re-check fails (formatting in a generated file). Then warden done for the implement step is refused.\n\nEvidence: warden done refused with exact message: uncommitted changes: backlog/PG-012.md. git status in the worktree showed the backlog file as modified: status todo changed to done.",
+  "createdAt": "2026-10-20T10:36:16.879Z",
+  "status": "sent",
+  "fixedIn": null,
+  "note": null,
+  "projectDir": "/Users/cluu/Documents/Work/warden-playground",
+  "machineId": "a30e39bd"
+}
