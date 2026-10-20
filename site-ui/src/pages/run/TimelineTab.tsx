@@ -1,6 +1,6 @@
 import type { MarkerKind, RunDetailResponse, TimelineLoop, TimelineMarker } from "@api";
 import {
-  CircleCheck, CircleHelp, CornerUpLeft, GitMerge, Hourglass, MessageCircle, OctagonX, Rocket, RotateCw, ShieldCheck,
+  Archive, CircleCheck, CircleHelp, CornerUpLeft, GitMerge, Hourglass, MessageCircle, OctagonX, Rocket, RotateCw, ShieldCheck,
   ShieldX, TriangleAlert, Wrench, type LucideIcon,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -20,7 +20,7 @@ const MARKER_ICON: Record<MarkerKind, LucideIcon> = {
   "fix-landed": GitMerge, "merged-main": GitMerge, "merge-fix-wait": Hourglass, "proof-stale": TriangleAlert,
   "gate-discarded": TriangleAlert, "gate-restarted": RotateCw, question: CircleHelp, answered: MessageCircle,
   "approve-waiting": ShieldCheck, approved: ShieldCheck, rejected: ShieldX, "output-rejected": TriangleAlert,
-  shipped: Rocket, done: CircleCheck,
+  shipped: Rocket, done: CircleCheck, archived: Archive,
 };
 
 const MARKER_TONE: Partial<Record<MarkerKind, string>> = {

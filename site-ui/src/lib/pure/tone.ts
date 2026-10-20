@@ -13,6 +13,7 @@ export function runStatusTone(s: RunStatus): Tone {
     case "waiting": return "warning";
     case "blocked": return "destructive";
     case "shipped": case "done": return "success";
+    case "archived": return "muted";
   }
 }
 
@@ -22,7 +23,7 @@ export function outcomeTone(o: StepOutcome): Tone {
     case "waiting": case "bounced": return "warning";
     case "blocked": case "failed": case "rejected": return "destructive";
     case "passed": case "accepted": case "approved": case "shipped": case "done": return "success";
-    case "skipped": case "ended": return "muted";
+    case "skipped": case "archived": case "ended": return "muted";
   }
 }
 
