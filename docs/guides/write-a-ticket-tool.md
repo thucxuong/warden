@@ -220,57 +220,18 @@ For Jira, Linear or Azure DevOps, the shape is the same; only the data source ch
 - `create` lets the tracker pick the id, prints it in the form your `taskIdPattern` expects, and prints `changed: []`. `link` adds the url to the remote ticket and prints `{ id }`.
 - Keep each call well inside the time limits (300 s for `dag`, 60 s for the others).
 
-### create and link: examples for three trackers
+### Per tracker
 
-These are **examples only**. Warden ships no GitHub, Jira or Azure DevOps code: your project writes and owns this code in its tool, and should check each command against its own tracker. `f` is the parsed flags of `create`, `sh` runs a program and returns its stdout, and `ticket` builds the `TicketDetail` to print.
+Warden ships no tracker code: the agent writes it for your tracker, following the plugin's `ticket-tool-recipe.md`, and proves it with `warden tools --verify tickets --write` on a test project.
 
-GitHub Issues, with the `gh` CLI. Ids look like `GH-123` (`taskIdPattern` `^GH-\d+$`):
+| Tracker | Program | Id the tracker gives | Parent and "blocked by" | `link` |
+|---|---|---|---|---|
+| GitHub Issues | `gh` | the issue number, as `GH-123` (`taskIdPattern` `^GH-\d+$`) | lines in the body, or labels, that `dag` reads back | a comment with the PR url |
+| Jira | the REST API, token from the environment | the issue key (`PG-123`) | the parent field and "Blocks" links | a remote link on the issue |
+| Azure DevOps Boards | `az boards` (`az extension add --name azure-devops`) | the work item id, as `AB-1234` | parent and predecessor relations | a discussion comment |
 
-```ts
-// create: GitHub picks the number; gh prints the issue url.
-// The type label must exist first, or gh fails: gh label create feature (and chore, bug, epic).
-const url = sh("gh", ["issue", "create", "--title", f.title, "--body-file", f["body-file"], "--label", f.type]);
-const id = `GH-${url.trim().split("/").pop()}`;
-// keep the epic and blocked_by as lines in the body, or as labels, so that dag can read them back
-// link: a comment on the issue
-sh("gh", ["issue", "comment", id.slice(3), "--body", `Pull request: ${prUrl}`]);
-```
-
-Jira, with its REST API and a token from the environment. The issue key is the id (`taskIdPattern` `^PG-\d+$`):
-
-```ts
-const jira = (path: string, body: unknown) => fetch(`${process.env.JIRA_URL}/rest/api/2/${path}`, {
-  method: "POST", body: JSON.stringify(body),
-  headers: { Authorization: `Bearer ${process.env.JIRA_TOKEN}`, "Content-Type": "application/json" },
-});
-// create: Jira picks the key
-const issueType = f.type === "epic" ? "Epic" : f.type === "bug" ? "Bug" : "Story";
-const res = await jira("issue", { fields: {
-  project: { key: "PG" }, summary: f.title, issuetype: { name: issueType },
-  description: readFileSync(f["body-file"], "utf8"), ...(f.epic && { parent: { key: f.epic } }),
-} });
-const { key } = await res.json() as { key: string };
-// one "Blocks" link per id in --blocked-by
-for (const b of f["blocked-by"]?.split(",") ?? []) await jira("issueLink", { type: { name: "Blocks" }, inwardIssue: { key: b }, outwardIssue: { key } });
-// link: a remote link on the issue
-await jira(`issue/${id}/remotelink`, { object: { url: prUrl, title: "Pull request" } });
-```
-
-Azure DevOps Boards, with the `az` CLI (`az extension add --name azure-devops`). Ids look like `AB-1234` (`taskIdPattern` `^AB-\d+$`):
-
-```ts
-// create: Azure DevOps picks the number
-const wiType = f.type === "epic" ? "Epic" : f.type === "bug" ? "Bug" : "User Story";
-const item = JSON.parse(sh("az", ["boards", "work-item", "create", "--type", wiType, "--title", f.title,
-  "--description", readFileSync(f["body-file"], "utf8"), "--output", "json"]));
-const id = `AB-${item.id}`;
-if (f.epic) sh("az", ["boards", "work-item", "relation", "add", "--id", String(item.id), "--relation-type", "parent", "--target-id", f.epic.slice(3)]);
-for (const b of f["blocked-by"]?.split(",") ?? []) {
-  sh("az", ["boards", "work-item", "relation", "add", "--id", String(item.id), "--relation-type", "predecessor", "--target-id", b.slice(3)]);
-}
-// link: a comment on the work item
-sh("az", ["boards", "work-item", "update", "--id", id.slice(3), "--discussion", `Pull request: ${prUrl}`]);
-```
+- Labels or types the tool sets must exist in the tracker first (for GitHub: `gh label create feature`, and the others).
+- Check the sign-in in the probe and name the command that fixes it (`gh auth login`, `az login`); never start a sign-in from the tool.
 
 ## What warden does with it
 

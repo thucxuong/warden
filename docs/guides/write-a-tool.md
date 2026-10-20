@@ -57,7 +57,7 @@ export interface Tool {
 
 ## Steps
 
-1. **Write the tool.** This example wraps Playwright end-to-end tests and has a probe that checks what the tool needs. Save it as `.warden/tools/e2e.ts`:
+1. **Write the tool.** This small example shows the shape: it wraps Playwright end-to-end tests and has a probe that checks what the tool needs. Save it as `.warden/tools/e2e.ts`. For a full tool for a common job (`verify`, `dev`, `db`, `e2e`, `pr`, `ci`, `tickets`), have the agent follow its recipe instead: `/warden:tools <name>`.
 
    ```ts
    // End-to-end tests with Playwright.
@@ -191,32 +191,7 @@ export const stats: Tool = {
 | `graph` | the work skill and the ticket agent | `query "<question>"` prints plain text and exits 0. The agent asks it before a broad search of the repo. |
 | `pr` | the push and merge rules | `create` and `merge` subcommands. The hooks treat `warden tools pr create` and `warden tools pr merge` like `gh pr create` and `gh pr merge`: allowed only in the ship step. |
 
-A `pr` tool for GitHub, as `.warden/tools/pr.ts`:
-
-```ts
-// The `pr` role: pull requests through the GitHub CLI.
-import { spawnSync } from "node:child_process";
-import { command, type Tool } from "./tool";
-
-export const pr: Tool = {
-  name: "pr",
-  summary: "Open and merge pull requests with gh",
-  usage: "pr create [gh pr create flags] | pr merge [gh pr merge flags]",
-  probe: () => {
-    const gh = spawnSync("gh", ["auth", "status"], { encoding: "utf8" });
-    if (gh.error) return [{ status: "FAIL", label: "gh", detail: "gh is not installed" }];
-    return [{ status: gh.status === 0 ? "OK" : "FAIL", label: "gh auth", detail: gh.status === 0 ? "logged in" : "run: gh auth login" }];
-  },
-  run: (argv) => {
-    const [sub, ...rest] = argv;
-    if (sub !== "create" && sub !== "merge") {
-      console.error(`usage: ${pr.usage}`);
-      return 2;
-    }
-    return command(`gh pr ${sub}`)(rest);
-  },
-};
-```
+Write a `pr` tool from the `pr` recipe: run `/warden:tools pr`, and the agent builds it for your repo host (GitHub, Azure DevOps, GitLab) with `create`, `show`, `merge` and `abandon`, a sign-in check in its probe, and `gh pr` (or the like) in `replaces.json`. Set `"pr": "<name>"` in `roles.json` when the tool has another name.
 
 Then set the role:
 
