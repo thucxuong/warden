@@ -52,6 +52,7 @@ One folder per task, plus a few shared folders that start with `_`.
 | `_sessions/` | One record per Claude Code session (and subagent), written by the hooks. |
 | `_checks/` | Results, logs and locks of periodic checks. See [Checks and retro](checks-and-retro.md). |
 | `_orchestrate/<epic>.json` | The cached plan of an epic. See [Orchestration](orchestration.md). |
+| `_tools/calls.jsonl`, `_tools/commands.jsonl` | The agent's `warden tools` calls and its other commands, secrets hidden, for the retro (0.10). See [The logs](tools-and-roles.md#the-logs). |
 | `_reports.json` | Which report statuses session start has already told you about. |
 
 See [Project files](../reference/project-files.md) for every file warden reads or writes.

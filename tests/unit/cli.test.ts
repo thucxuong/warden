@@ -86,7 +86,7 @@ describe("help", () => {
     expect(HELP.docs).toBe("warden docs check");
     expect(HELP.site).toBe("warden site [--port <n>] [--no-open]");
     expect(HELP.ask).toBe("warden ask [<task>] \"<question>\"   (at an agent step: wait for the user's answer)");
-    expect(HELP.tools).toBe("warden tools [--check [<name>] | --init] | warden tools <name|role> [args...]");
+    expect(HELP.tools).toBe("warden tools [--check [<name>] | --init | --log [--since YYYY-MM-DD]] | warden tools <name|role> [args...]");
   });
 });
 

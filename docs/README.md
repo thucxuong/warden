@@ -106,7 +106,7 @@ Design notes and build specs from earlier versions are kept in [internal/](inter
 | Blocked | A run that hit something a person must fix, then `retry`. | [Blocked and waiting runs](guides/blocked-and-waiting-runs.md#blocked-runs) |
 | Run record | The snapshot of a run in `.warden/history/<task>/`, committed at the ship step. | [State and history](concepts/state-and-history.md) |
 | Gate files | Files no step may change: `steps.json`, `flows/`, `warden.json`, `triage-rules.json`, `state/`, `history/` under `.warden/`. | [Workflows](concepts/workflows.md#gate-files-and-locked-config) |
-| Locked config | Config files nobody may edit while any run is live: `steps.json`, `flows/`, `warden.json`, `triage-rules.json`, `tools/roles.json` under `.warden/`. | [Workflows](concepts/workflows.md#gate-files-and-locked-config) |
+| Locked config | Config files nobody may edit while any run is live: `steps.json`, `flows/`, `warden.json`, `triage-rules.json`, `tools/roles.json`, `tools/replaces.json` under `.warden/`. | [Workflows](concepts/workflows.md#gate-files-and-locked-config) |
 | Tool, role | A tool is a command your project keeps in `.warden/tools/`. A role (`tickets`, `graph`, `pr`) tells warden which tool to use for a job. | [Tools and roles](concepts/tools-and-roles.md) |
 | Check (periodic) | A recurring job in `.warden/checks/`, such as the retro. Not the same as a `check` step. | [Checks and retro](concepts/checks-and-retro.md) |
 | Retro | A look back at recent work, offered every 2 days. | [Checks and retro](concepts/checks-and-retro.md#the-retro) |

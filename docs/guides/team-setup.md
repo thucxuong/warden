@@ -88,6 +88,7 @@ These files, the locked config, decide how a run is checked, so they cannot chan
 - `.warden/warden.json`
 - `.warden/triage-rules.json`
 - `.warden/tools/roles.json`
+- `.warden/tools/replaces.json`
 
 Change them on a branch when no run is live, merge to the main branch, and new runs pick them up. A running task keeps the snapshot it took at start.
 

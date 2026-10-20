@@ -82,6 +82,7 @@ export const FIX_FORBIDDEN_GLOBS = [
   ".warden/flows/**",
   ".warden/warden.json",
   ".warden/tools/roles.json",
+  ".warden/tools/replaces.json",
   ".warden/state/**",
   ".warden/history/**",
 ];

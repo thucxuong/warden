@@ -13,7 +13,7 @@ A **tool** is a small TypeScript command your project owns. Warden runs it with 
   warden tools --init
   ```
 
-  It writes `index.ts`, `tool.ts` and `roles.json`, and never overwrites a file that exists. It prints the files it wrote, for example `{"written":[".warden/tools/index.ts",".warden/tools/tool.ts",".warden/tools/roles.json"]}`.
+  It writes `index.ts`, `tool.ts`, `roles.json` and `replaces.json`, and never overwrites a file that exists. It prints the files it wrote, for example `{"written":[".warden/tools/index.ts",".warden/tools/tool.ts",".warden/tools/roles.json",".warden/tools/replaces.json"]}`.
 
 ## The layout
 
@@ -22,6 +22,7 @@ A **tool** is a small TypeScript command your project owns. Warden runs it with 
   index.ts      the list of tools: export default [ ...tools ]
   tool.ts       the contract types and the command() helper
   roles.json    role -> tool name, for example {"tickets": "backlog", "pr": "pr"}
+  replaces.json tool -> the raw commands it owns, for example {"e2e": ["npx playwright"]}
   <name>.ts     one tool per file, or a folder <name>/ for a bigger tool
 ```
 
@@ -32,6 +33,8 @@ Rules:
 - Stdout is for data (JSON or plain text). Messages go to stderr.
 - A tool can use anything your project has: Bun, `node:*` modules and your `node_modules`.
 - Write imports without an extension (`./tool`), so your project's tsconfig needs no extra flags.
+
+Every tool also follows the [principles](../concepts/tools-and-roles.md#principles): it never asks, keeps its output short, uses exit codes 0/1/2/3, checks its login in its probe, and leaves logging to warden.
 
 ## The Tool shape
 
@@ -125,7 +128,15 @@ export interface Tool {
 
    A tool with no probe gets a `SKIP` row. A probe that throws, or returns the wrong shape, gets a `FAIL` row.
 
-5. **Commit it** on your branch, like any other code. A tool change in a task worktree is used by `warden tools` in that worktree, so you can test it before it merges.
+5. **Make it the only way, if it should be.** When the tool covers every use of a raw command, list that command in `.warden/tools/replaces.json`, so the agent is sent to the tool instead:
+
+   ```json
+   { "e2e": ["npx playwright", "bunx playwright"] }
+   ```
+
+   Run `warden tools --check` again: it shows a `replaces e2e` row. See [Replaced commands](../concepts/tools-and-roles.md#replaced-commands).
+
+6. **Commit it** on your branch, like any other code. A tool change in a task worktree is used by `warden tools` in that worktree, so you can test it before it merges.
 
 ## Use a tool from a check
 
@@ -219,7 +230,7 @@ Role rules:
 - When a role and a tool have the same name, the tool wins. `warden tools --check` warns about this.
 - `warden tools <role> <args>` runs the tool the role names.
 - You may add roles of your own.
-- `roles.json` is a config file like `.warden/steps.json`: it cannot change while a run is live. Change it when no run is live, then commit it.
+- `roles.json` and `replaces.json` are config files like `.warden/steps.json`: they cannot change while a run is live. Change them when no run is live, then commit them.
 
 ## What a tool can rely on
 
@@ -238,7 +249,11 @@ When warden calls the `tickets` tool itself, it always loads the tool code and `
 /warden:tools e2e
 ```
 
-The project's agent writes or changes the tool, adds it to `index.ts`, tries it, runs `warden tools --check` and shows you the result. Without a name, it lists the tools and asks what the new one should do.
+The project's agent writes or changes the tool, adds it to `index.ts`, tries it, runs `warden tools --check` and shows you the result. Without a name, it lists the tools, looks at `warden tools --log` for commands that keep coming back, and asks what the new one should do.
+
+## Find the next tool
+
+The retro runs `warden tools --log --since <last retro>`. Its `commands` list shows the commands the agent typed again and again with no tool, costliest first. Each one is a candidate for a new tool or a new subcommand. See [The logs](../concepts/tools-and-roles.md#the-logs).
 
 ## See also
 

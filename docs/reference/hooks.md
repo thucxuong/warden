@@ -32,7 +32,7 @@ What it does:
 
 1. Writes two pointer files so Bash calls can find the plugin and its data folder (see [environment](environment.md#data-folder)).
 2. For each live run, adds a line and restarts its engine worker if it died.
-3. Adds the upgrade and new-version notices, the checks lines, the orchestration lines and the report lines below.
+3. Adds the upgrade and new-version notices, the checks lines, the orchestration lines, the tools line and the report lines below.
 4. Starts due `auto` command checks in the background (not while a live run uses the main checkout as its worktree).
 5. Starts a background report sync when the last one is more than an hour old, or a report is still unsent and the last try is more than a minute old.
 
@@ -51,6 +51,7 @@ The lines it can add:
 | An `auto` command check failed last time | `warden: auto checks failed on their last run: <name> (<date>). Tell the user in one short line; details: warden checks.` |
 | Shipped or archived tasks still have worktrees that `warden clean` would remove (shipped ones merged, no changes) | `warden: <n> finished tasks still have worktrees; run warden clean` (`1 finished task still has a worktree` for one) |
 | An orchestration stopped with tickets left | `warden: orchestration of <epic> stopped with <n> tickets left. When the user's current request is done, offer to go on; with their OK, run /warden:orchestrate <epic>.` |
+| The project has tools in `.warden/tools/index.ts` (0.10) | `warden: this project's tools: <name> (<summary>); .... Use them before writing your own command for the same job: warden tools <name> <args> (-h for usage).` With a `replaces.json`, it ends with ` These raw commands are refused, use the tool: <command> -> <tool>, ....` |
 | A report's status changed | `warden: report <id> "<title>" is now <status>[ in <version>].[ Note: <note>]` |
 | A report needs info | The line above, plus ` Answer it from this project when the user's request is done: warden report reply <id> --body "<answer>"` |
 | Any report status changed | `warden: when the user's current request is done, run warden report --status --write. ...` (with the commit command for `.warden/reports.md`) |
@@ -103,7 +104,7 @@ The rules are checked in this order. The first match decides.
 |---|---|---|
 | 1 | Under `.warden/state/` or any `.warden/history/` | Deny: `state and history are written by the engine only` |
 | 2 | Inside a live run's fix worktree | Only the `warden:fixer` agent may edit, and only files inside `fix.scope` that are not forbidden. Else deny: `only the warden:fixer subagent edits the fix worktree` or `outside the fixer scope` |
-| 3 | While any run is live: `.warden/steps.json`, `.warden/flows/**`, `.warden/warden.json`, `.warden/triage-rules.json` or `.warden/tools/roles.json`, in the main checkout or any live run's worktree | Deny: `gate files cannot change while a run is live (<task>); finish or reset it first` |
+| 3 | While any run is live: `.warden/steps.json`, `.warden/flows/**`, `.warden/warden.json`, `.warden/triage-rules.json`, `.warden/tools/roles.json` or `.warden/tools/replaces.json`, in the main checkout or any live run's worktree | Deny: `gate files cannot change while a run is live (<task>); finish or reset it first` |
 | 4 | Not inside a live run's worktree | Allow |
 | 5 | In the task worktree while the run is at a fix step | Deny: `the fixer works in <fix worktree>, not the ticket worktree` |
 | 6 | At the ship step while a git merge is in progress (conflicts), and not a gate file | Allow |
@@ -119,12 +120,15 @@ Rules, in order. The first match decides. warden reads the command text; a hered
 
 | # | The command | Decision and message |
 |---|---|---|
+| B0 | Runs a command that `.warden/tools/replaces.json` of the main checkout gives to a tool (0.10): the command's leading words match an entry, after any `VAR=value`, `env`, `command`, `exec`, `sudo`, `nohup` or `time` and without the program's path. Words inside quotes do not count | Deny: `<command> is done by this project's <tool> tool: run warden tools <tool> <args> instead (warden tools <tool> -h for usage). If the tool cannot do what you need, tell the user.` |
 | B1 | Runs `warden approve`, `warden retry` or `warden reset` | Deny: `approve, retry and reset are for a person. Ask the user to type "approve" / "retry".` |
-| B2 | Mentions `PROJECT_AGENT`, `WARDEN_ROLE`, `WARDEN_CLAUDE_BIN`, `WARDEN_DATA`, `WARDEN_ROOT`, `WARDEN_TEST_MODE`, `CLAUDE_PLUGIN_ROOT` or `CLAUDE_PLUGIN_DATA`; or runs `claude -p` / `claude --print`; or runs `script` together with `warden` | Deny: `this command changes how warden itself runs; ask the user to do it` |
-| B3 | Writes (with `>`, `tee`, `rm`, `mv`, `cp`, `sed -i`, `git rm`, `git checkout`, `git restore` and similar) and names `.warden/state` or `.warden/history`; or, while a run is live, names a gate config file (`steps.json`, `warden.json`, `triage-rules.json`, `flows`, `tools/roles.json` under `.warden/`). The fixer may write config files inside its own fix worktree | Deny: `state, history and gate files are written by the engine only` |
+| B2 | Mentions `PROJECT_AGENT`, `WARDEN_ROLE`, `WARDEN_CLAUDE_BIN`, `WARDEN_DATA`, `WARDEN_ROOT`, `WARDEN_TEST_MODE`, `WARDEN_TOOLS_NO_LOG`, `CLAUDE_PLUGIN_ROOT` or `CLAUDE_PLUGIN_DATA`; or runs `claude -p` / `claude --print`; or runs `script` together with `warden` | Deny: `this command changes how warden itself runs; ask the user to do it` |
+| B3 | Writes (with `>`, `tee`, `rm`, `mv`, `cp`, `sed -i`, `git rm`, `git checkout`, `git restore` and similar) and names `.warden/state` or `.warden/history`; or, while a run is live, names a gate config file (`steps.json`, `warden.json`, `triage-rules.json`, `flows`, `tools/roles.json`, `tools/replaces.json` under `.warden/`). The fixer may write config files inside its own fix worktree | Deny: `state, history and gate files are written by the engine only` |
 | B4 | A subagent runs `warden ask` | Deny: `a subagent cannot ask the user; stop and give the question back to the caller (a ticket agent replies ASK <Task>: <question>)` |
 | B5 | Push, PR or merge (list below) while the run is at a fix step | Allowed only for the `warden:fixer` agent, and only when the command names the fix branch. A merge (or a push to the main branch) also needs `PROJECT_AGENT=1` in Claude Code's environment. Else deny: `only the warden:fixer subagent pushes the fix branch` |
 | B6 | Push, PR or merge at any other step | Allowed only at the ship step (or after the run shipped or is done) when all gates are proven for HEAD. Else deny: `push/PR/merge is allowed only in the ship step after all gates pass for HEAD (<task> at <step>)` |
+
+B0 applies in a run or not. Every Bash call that does more than look around is also logged to `.warden/state/_tools/commands.jsonl`, with secrets hidden; see [the logs](../concepts/tools-and-roles.md#the-logs).
 
 B5 and B6 apply only when the call is about a run (the session's run, or the run of a folder the command `cd`s into or names with `git -C`). Outside any run, push and merge are not checked.
 

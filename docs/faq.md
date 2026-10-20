@@ -83,7 +83,7 @@ No. After the last round (3 by default) the run goes on. The blocking findings t
 
 ### Can I change `.warden/steps.json` while a task runs?
 
-No. While any run is live, the locked config files (`.warden/steps.json`, `.warden/flows/`, `.warden/warden.json`, `.warden/triage-rules.json`, `.warden/tools/roles.json`) cannot change; the hook message calls them gate files. A run also keeps its own copy of the config from the moment it started. Change them between runs, commit them on the main branch, and push.
+No. While any run is live, the locked config files (`.warden/steps.json`, `.warden/flows/`, `.warden/warden.json`, `.warden/triage-rules.json`, `.warden/tools/roles.json`, `.warden/tools/replaces.json`) cannot change; the hook message calls them gate files. A run also keeps its own copy of the config from the moment it started. Change them between runs, commit them on the main branch, and push.
 
 ## People and settings
 

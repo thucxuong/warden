@@ -6,9 +6,9 @@ argument-hint: "[<name>]"
 
 # Write or change a project tool
 
-This project owns its tools. They live in `.warden/tools/`, and warden sends no fixes for them: change them like any other code in the repo.
+This project owns its tools. They live in `.warden/tools/`, and warden ships none and sends no fixes for them: change them like any other code in the repo. A tool gives the agent one short, safe command for a job it would otherwise do with long raw commands.
 
-The ARGUMENTS given with this skill, if any, name the tool to write or change. Without a name, run `warden tools` to see what exists and ask the user what the tool should do.
+The ARGUMENTS given with this skill, if any, name the tool to write or change. Without a name, run `warden tools` to see what exists and `warden tools --log` to see which commands keep coming back (see "The logs"), then ask the user what the tool should do.
 
 ## Layout
 
@@ -17,10 +17,11 @@ The ARGUMENTS given with this skill, if any, name the tool to write or change. W
   index.ts      the list of tools: `export default [ ...tools ]`
   tool.ts       the contract types and the `command()` helper
   roles.json    role -> tool name, e.g. {"tickets": "backlog", "graph": "graph", "pr": "git-pr"}
+  replaces.json tool -> the raw commands it owns, e.g. {"pr": ["gh pr"]}
   <name>.ts     one tool per file, or a folder <name>/ for a bigger one
 ```
 
-If `index.ts` is missing, run `warden tools --init`. It writes the three files and never overwrites one.
+If `index.ts` is missing, run `warden tools --init`. It writes the four files and never overwrites one.
 
 Rules:
 - A tool is an entry in the `index.ts` array. A file the array does not list is not a tool. Warden never scans folders.
@@ -28,6 +29,22 @@ Rules:
 - Stdout is for data (JSON or plain text). Messages go to stderr.
 - A tool can use anything this project has: Bun, `node:*` and its `node_modules`.
 - Write imports with no extension (`./tool`), so the project's tsconfig needs no extra flags.
+
+## Principles
+
+Every tool follows these, so warden and the agent can use any tool the same way.
+
+- **One job, with subcommands.** `pr create`, `pr merge`, `pr status`. `usage` lists every subcommand and flag.
+- **Never asks.** All input comes from args and the environment: no prompt, no editor, no pager (pass `--no-pager`, set `GH_PAGER=cat`). A tool that waits for a person hangs the run.
+- **Stdout is data, stderr is messages.** Data that warden or the agent reads is one JSON value.
+- **Exit codes:** 0 ok, 1 error, 2 bad usage, 3 not found. The message on stderr says what to do next.
+- **Short output.** Print what the agent needs: the count and the failing lines, not the whole log. Every line the agent reads costs tokens.
+- **Safe to run twice.** `dev start` when it already runs says so and exits 0.
+- **Logins.** A tool that needs a login or a token checks it in `probe`: a `FAIL` row whose detail is the command that fixes it, such as `gh auth login`. In `run`, a missing login exits 1 with the same message. A tool never starts a login itself: that needs a person, so the agent asks the user to type `! gh auth login`. Tokens come from the environment or the program's own login, never from args, and are never printed.
+- **Time limits.** Anything that can hang (the network, waiting for a port) has one, and says what timed out.
+- **Same in every checkout.** Paths are relative to the checkout the tool runs in; the main checkout is `$WARDEN_MAIN_ROOT`.
+- **No logging of its own.** Warden logs every call (see "The logs").
+- **Tested.** Logic worth testing sits in plain functions with a `<name>.test.ts` next to the tool.
 
 ## The Tool shape
 
@@ -64,8 +81,9 @@ export const e2e: Tool = {
 2. Import it in `.warden/tools/index.ts` and add it to the array.
 3. Try it: `warden tools <name> -h`, then one real call.
 4. If warden should use it for a role, set the role in `.warden/tools/roles.json` (below).
-5. Run `warden tools --check` before you commit. It must exit 0. Show the user the output.
-6. Commit on the current branch. `roles.json` is a config file like `.warden/steps.json`: it cannot change while a run is live.
+5. If the tool now does a job the agent did with raw commands, list those commands in `.warden/tools/replaces.json` (see "Replaced commands").
+6. Run `warden tools --check` before you commit. It must exit 0. Show the user the output.
+7. Commit on the current branch. `roles.json` and `replaces.json` are config files like `.warden/steps.json`: they cannot change while a run is live.
 
 ## Roles
 
@@ -88,5 +106,40 @@ The `tickets` tool prints one JSON value on stdout. Exit 0 is ok, 1 an error, 2 
 The types are in `tool.ts` (`DagTicket`, `TicketDetail`, `SetStatusResult`, `CreateResult`, `LinkResult`). `ticket-tool-example.md` in this skill's base directory is a complete tool that keeps tickets as Markdown files in `backlog/<ID>.md`: copy it, with its steps, for a project without a tracker.
 
 Anything else, such as end-to-end tests or CI status, needs no role. A check in `.warden/steps.json` simply runs `warden tools e2e run ...`.
+
+## Common tools
+
+Warden reads only the roles above. When a project needs one of these jobs, give the tool these names and subcommands, so every project's tools look alike. Write one only when a real task needs it.
+
+| Tool | Subcommands | Raw commands it can own |
+|---|---|---|
+| `pr` | `create`, `merge`, `status <branch>` | `gh pr`, `az repos pr`, `glab mr` |
+| `dev` | `start`, `stop`, `status`, `url` | `bun run dev`, `npm run dev`, `docker compose up` |
+| `ci` | `status <branch>`, `logs <run>` | `gh run`, `az pipelines` |
+| `db` | `reset`, `seed`, `query "<sql>"` | `psql`, `sqlite3` |
+| `e2e` | `run [<filter>]` | `npx playwright`, `bunx playwright` |
+
+## Replaced commands
+
+`.warden/tools/replaces.json` maps a tool to the raw commands it owns: `{"pr": ["gh pr", "az repos pr"], "db": ["psql"]}`. The hook then refuses those commands to the agent, in a run or not, and names the tool to run instead. The tool itself still runs them: a hook sees only the agent's own commands.
+
+- An entry is the leading words of a command. `gh pr` refuses `gh pr create` and `gh pr list`, not `gh run list`. A path, `VAR=value` or `env` in front does not hide it.
+- List a command only when the tool covers every use of it. Pick words that narrow: `gh pr`, not `gh`. If the agent needs something the tool cannot do, add it to the tool first.
+- No file, or `{}`, refuses nothing. `warden tools --check` fails an entry whose tool is not in `index.ts`.
+- It catches the common shortcut, not a script written to get around it. The reviewer flags a change that adds such a script.
+
+## The logs
+
+Warden keeps two logs in `.warden/state/_tools/` of the main checkout. They are not committed and never leave the machine. Secrets in them (`TOKEN=...`, `--token ...`, auth headers) are replaced by `***`.
+
+- `calls.jsonl`: every `warden tools` call the agent makes, with its args, exit code and time. Warden's own calls are not logged.
+- `commands.jsonl`: every other command the agent runs that does more than look around (`ls`, `cat`, `grep` and the like are left out), and the replaced commands it tried.
+
+`warden tools --log [--since YYYY-MM-DD]` sums them as JSON:
+- `tools`: calls and failures per tool. Many failures mean the tool or its usage text needs work.
+- `blocked`: replaced commands the agent still tried. Check that the tool does that job and that its usage says how.
+- `commands`: commands typed at least twice, costliest (count times length) first, each with an example. A command that keeps coming back is the next tool, or a new subcommand of one.
+
+The retro reads this to suggest new tools.
 
 Git and paths: run `git -C <dir> ...` and use absolute paths, one simple command per call. A plain `cd <dir>` on its own is fine; never chain it as `cd <dir> && ...`.

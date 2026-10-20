@@ -21,7 +21,7 @@ An AI agent that writes code will sometimes say "tests pass" when they do not, p
 - **Human sign-off when you want it.** An `approve` step waits until a person types `approve` or `reject: <why>`.
 - **Worktrees per task.** Each task gets its own git worktree and branch, so several tasks can run side by side.
 - **Epics.** `/warden:orchestrate` works through a set of tickets in dependency order.
-- **Project-owned tools.** Your project keeps its own tools (ticket tracker, code graph, pull requests) in `.warden/tools/`.
+- **Project-owned tools.** Your project keeps its own tools (ticket tracker, code graph, pull requests) in `.warden/tools/`. A tool can own raw commands, so the agent must use the tool, and warden logs what the agent runs so the retro can suggest the next tool.
 - **A record of every task.** Steps, time and tokens are kept per task and shown on a local dashboard (`warden site`).
 - **Periodic checks and retros.** Session start runs or offers the checks that are due.
 - **Questions mid-step.** The agent can pause a step with `warden ask`; your next message is the answer. See [Blocked and waiting runs](docs/guides/blocked-and-waiting-runs.md).

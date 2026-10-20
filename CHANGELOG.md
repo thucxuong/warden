@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.10.0 — 2026-10-20
+
+- Project tools can own raw commands. `.warden/tools/replaces.json` maps a tool to the commands it replaces, for example `{"pr": ["gh pr"]}`. The PreToolUse hook then refuses those commands to the agent, in a run or not, and names the tool to run instead (rule B0). A path, `VAR=value` or `env` in front does not hide a command; words in quotes do not count. The tool itself still runs them. The file is locked config like `roles.json`, the fixer may not change it, and `warden tools --check` fails an entry whose tool is missing. `warden tools --init` writes it as `{}`.
+- The reviewer is told which commands the tools own: a change that adds a script so the agent can run one without the tool is a blocking finding.
+- Warden logs what the agent runs, in `.warden/state/_tools/` of the main checkout (gitignored, never sent): every `warden tools` call with its args, exit code and time, and every other Bash command that does more than look around. Secrets (`TOKEN=...`, `--token ...`, auth headers, passwords in URLs) are replaced by `***`. Each log keeps at most two files of 2 MB.
+- `warden tools --log [--since YYYY-MM-DD]` sums the logs: calls and failures per tool, refused raw commands, and the commands typed at least twice with no tool, costliest first. The retro reads it to suggest new tools or fixes to tools that fail often.
+- Session start lists the project's tools, and the raw commands they own, so the agent reaches for a tool before writing its own command.
+- The tools skill has the rules every tool follows (never asks, short output, exit codes 0/1/2/3, logins checked in the probe and never started by the tool, no logging of its own) and common names for `pr`, `dev`, `ci`, `db` and `e2e` tools. Warden still ships no tools.
+
 ## 0.9.4 — 2026-10-20
 
 - `warden archive <task> --reason "<why>"` closes a live run without doing it, when the user decides its ticket is stale, a duplicate or no longer wanted. It stops the engine work as `warden reset` does, but keeps the run's record: the run ends with the new status `archived` and a `run.archived` event with the reason, and the site shows it as archived instead of running. For a run started from a ticket, it sets the ticket to `archived` in the main checkout; `changed` paths or a failure come back as `warnings`.

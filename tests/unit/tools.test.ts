@@ -137,7 +137,7 @@ describe("list and run", () => {
     expect(tools(["echo", "-h"])).toMatchObject({ code: 0, out: "echo [args...]\n" });
     expect(tools(["show", "--help"])).toMatchObject({ code: 0, out: "echo [args...]\n" });
     expect(tools(["later", "-h"])).toMatchObject({ code: 0, out: "async run\n" });
-    expect(tools(["-h"]).out).toContain("usage: warden tools [--check [<name>] | --init]");
+    expect(tools(["-h"]).out).toContain("usage: warden tools [--check [<name>] | --init | --log [--since YYYY-MM-DD]]");
   });
 
   test("a throw is exit 1 with the message on stderr; a non-number result is exit 1", () => {
@@ -241,11 +241,11 @@ describe("--check", () => {
 });
 
 describe("--init", () => {
-  test("writes the three files once and never overwrites", () => {
+  test("writes the four files once and never overwrites", () => {
     const first = tools(["--init"]);
     expect(first.code).toBe(0);
-    expect(first.json).toEqual({ written: [".warden/tools/index.ts", ".warden/tools/tool.ts", ".warden/tools/roles.json"] });
-    for (const name of ["index.ts", "tool.ts", "roles.json"]) {
+    expect(first.json).toEqual({ written: [".warden/tools/index.ts", ".warden/tools/tool.ts", ".warden/tools/roles.json", ".warden/tools/replaces.json"] });
+    for (const name of ["index.ts", "tool.ts", "roles.json", "replaces.json"]) {
       expect(readFileSync(join(repo, ".warden/tools", name), "utf8")).toBe(readFileSync(join(TEMPLATES, name), "utf8"));
     }
     writeFileSync(join(repo, ".warden/tools/roles.json"), '{"tickets":"mine"}');
@@ -269,5 +269,67 @@ describe("worktrees", () => {
     expect(tools([]).json.tools).toEqual([{ name: "v", summary: "main" }]);
     expect(tools([], wt).json.tools).toEqual([{ name: "v", summary: "worktree" }]);
     expect(tools(["v"], wt).json).toEqual([realpathSync(wt), repo]);
+  });
+});
+
+describe("replaces.json (0.10)", () => {
+  const two = `  { name: "pr", summary: "s", run: () => 0 },\n  { name: "db", summary: "s", run: () => 0 },`;
+  const replaces = (value: unknown) => writeFileSync(join(repo, ".warden/tools/replaces.json"), JSON.stringify(value));
+
+  test("a broken file never stops a tool; --check fails with one row per problem", () => {
+    writeTools(repo, barrel(two, ""), { tickets: "db" });
+    replaces({ pr: ["gh pr", "--fill", "warden next", "gh pr && rm", ""], "Bad Name": ["x"], db: [] });
+    expect(tools([]).code).toBe(0);
+    expect(tools(["pr"]).code).toBe(0);
+    const r = tools(["--check"]);
+    expect(r.code).toBe(1);
+    const rows = r.json.checks.filter((c: any) => c.label === "replaces.json");
+    expect(rows).toHaveLength(6);
+    expect(rows.every((c: any) => c.status === "FAIL" && c.detail.startsWith(".warden/tools/replaces.json: "))).toBe(true);
+    writeFileSync(join(repo, ".warden/tools/replaces.json"), "{nope");
+    expect(tools(["--check"]).json.checks).toContainEqual(expect.objectContaining({ label: "replaces.json", detail: expect.stringContaining("not valid JSON") }));
+  });
+
+  test("--check lists what each tool owns, and fails a tool that is not in index.ts", () => {
+    writeTools(repo, barrel(two, ""), { tickets: "db" });
+    replaces({ pr: ["gh pr", "az repos pr"], gone: ["psql"] });
+    const r = tools(["--check"]);
+    expect(r.code).toBe(1);
+    expect(r.json.checks).toContainEqual({ tool: "warden", status: "OK", label: "replaces pr", detail: "gh pr, az repos pr" });
+    expect(r.json.checks).toContainEqual({ tool: "warden", status: "FAIL", label: "replaces gone", detail: "gone is not in .warden/tools/index.ts, so nothing can run psql" });
+  });
+});
+
+describe("the call log (0.10)", () => {
+  const logged = () => {
+    const file = join(repo, ".warden/state/_tools/calls.jsonl");
+    return existsSync(file) ? readFileSync(file, "utf8").trim().split("\n").map((l) => JSON.parse(l)) : [];
+  };
+
+  test("each call is logged with its args (secrets hidden), exit and time, -h too; the engine's and --check's probe are not", () => {
+    writeTools(repo, barrel(ECHO, ""), { tickets: "echo" });
+    tools(["echo", "list", "--token", "abc123"]);
+    tools(["boom"]);
+    tools(["echo", "-h"]);
+    tools(["--check"]);
+    const engine = Bun.spawnSync([process.execPath, CLI, "tools", "echo", "dag"], { cwd: repo, env: { ...process.env, WARDEN_ROOT: PLUGIN, WARDEN_TOOLS_MAIN: "1" } });
+    expect(engine.exitCode).toBe(4);
+    const calls = logged();
+    expect(calls.map((c) => [c.tool, c.args, c.exit])).toEqual([["echo", ["list", "--token", "***"], 4], ["boom", [], 1], ["echo", ["-h"], 0]]);
+    expect(typeof calls[0].ms).toBe("number");
+  });
+
+  test("--log sums the calls; --since filters by date; bad flags are exit 2", () => {
+    writeTools(repo, barrel(ECHO, ""));
+    tools(["echo", "a"]);
+    tools(["echo", "b"]);
+    tools(["boom"]);
+    const today = new Date().toISOString().slice(0, 10);
+    expect(tools(["--log"]).json).toEqual({
+      since: null, tools: [{ tool: "echo", calls: 2, failed: 2 }, { tool: "boom", calls: 1, failed: 1 }], blocked: [], commands: [],
+    });
+    expect(tools(["--log", "--since", today]).json.tools).toHaveLength(2);
+    expect(tools(["--log", "--since", "2999-01-01"]).json.tools).toEqual([]);
+    for (const args of [["--log", "x"], ["--log", "--since"], ["--log", "--since", "yesterday"]]) expect(tools(args).code).toBe(2);
   });
 });

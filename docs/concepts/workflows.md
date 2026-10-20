@@ -36,7 +36,7 @@ Two lists of files come up on many pages. They overlap, but they are not the sam
 | Term | Files | Rule |
 |---|---|---|
 | **Gate files** | `.warden/steps.json`, `.warden/flows/**`, `.warden/warden.json`, `.warden/triage-rules.json`, `.warden/state/**`, `.warden/history/**` | No step may change them in the task's worktree. (The ship step only commits the run record the engine wrote.) |
-| **Locked config** | `.warden/steps.json`, `.warden/flows/`, `.warden/warden.json`, `.warden/triage-rules.json`, `.warden/tools/roles.json` | Nobody may edit them, in the main checkout or any run's worktree, while any run is live. The hook message calls them gate files: `gate files cannot change while a run is live (<task>); finish or reset it first`. |
+| **Locked config** | `.warden/steps.json`, `.warden/flows/`, `.warden/warden.json`, `.warden/triage-rules.json`, `.warden/tools/roles.json`, `.warden/tools/replaces.json` | Nobody may edit them, in the main checkout or any run's worktree, while any run is live. The hook message calls them gate files: `gate files cannot change while a run is live (<task>); finish or reset it first`. |
 
 `.warden/state/` and `.warden/history/` are written only by the engine, at any time. See [Hooks](../reference/hooks.md).
 

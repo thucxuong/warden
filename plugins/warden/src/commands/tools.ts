@@ -1,24 +1,29 @@
-// warden tools [--check [<name>] | --init] | warden tools <name|role> [args...] (0.6): the project's own tools.
-// They live in <checkout>/.warden/tools/: index.ts lists them, roles.json maps role names to tool names.
+// warden tools [--check [<name>] | --init | --log [--since <date>]] | warden tools <name|role> [args...] (0.6): the
+// project's own tools. They live in <checkout>/.warden/tools/: index.ts lists them, roles.json maps role names to tool
+// names, replaces.json (0.10) names the raw commands each tool owns.
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { EXIT, WardenError } from "../lib/exit.ts";
 import { pathWithBin } from "../lib/proc.ts";
+import { appendLog, redactArgs, summarize } from "../lib/tool-log.ts";
 import { mainRoot, worktreeRoot } from "../state/paths.ts";
 import type { Ctx, ProjectTool, ToolCheck } from "../types.ts";
 
 export const TOOL_NAME = /^[a-z][a-z0-9-]{0,40}$/;
-const TOOL_FILES = ["index.ts", "tool.ts", "roles.json"];
+const TOOL_FILES = ["index.ts", "tool.ts", "roles.json", "replaces.json"];
 const STATUSES = ["OK", "FAIL", "WARN", "SKIP"];
-const USAGE = "warden tools [--check [<name>] | --init] | warden tools <name|role> [args...]";
+const USAGE = "warden tools [--check [<name>] | --init | --log [--since YYYY-MM-DD]] | warden tools <name|role> [args...]";
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export type Roles = Record<string, string>;
+// Tool name -> the raw commands it owns, as leading words ("gh pr"). The hook refuses them to the agent (0.10).
+export type Replaces = Record<string, string[]>;
 export interface LoadedTools { root: string; tools: ProjectTool[]; roles: Roles }
 interface CheckRow extends ToolCheck { tool: string }
 
-// Thrown when index.ts or roles.json is broken; one problem per line.
+// Thrown when index.ts, roles.json or replaces.json is broken; one problem per line.
 class ToolsError extends WardenError {
   constructor(readonly problems: string[]) {
     super(problems.join("\n"), EXIT.REJECTED);
@@ -62,6 +67,41 @@ export function readRoles(root: string): Roles {
   return value as Roles;
 }
 
+// Problems of one replaces.json value; [] when it is valid. An entry is plain words: no flags first, no shell syntax.
+function replacesProblems(value: unknown): string[] {
+  const file = ".warden/tools/replaces.json";
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return [`${file}: must be an object, got ${describe(value)}`];
+  const problems: string[] = [];
+  for (const [tool, entries] of Object.entries(value)) {
+    if (!TOOL_NAME.test(tool)) problems.push(`${file}: tool ${JSON.stringify(tool)} must match ${TOOL_NAME}`);
+    if (!Array.isArray(entries) || entries.length === 0) {
+      problems.push(`${file}: ${tool}: must be a non-empty array of commands, e.g. ["gh pr"]`);
+      continue;
+    }
+    for (const entry of entries as unknown[]) {
+      const words = typeof entry === "string" ? entry.trim().split(/\s+/) : [];
+      const bad = words.length === 0 || words[0] === "" || words[0]!.startsWith("-") || words[0] === "warden" || /[;&|<>()`$"'\\]/.test(String(entry));
+      if (bad) problems.push(`${file}: ${tool}: ${JSON.stringify(entry)} must be the leading words of a command, e.g. "gh pr" (not warden, no flags first, no shell syntax)`);
+    }
+  }
+  return problems;
+}
+
+// The replaced commands of a checkout; {} when replaces.json is missing. Throws ToolsError when it is broken.
+function readReplaces(root: string): Replaces {
+  const path = join(toolsDir(root), "replaces.json");
+  if (!existsSync(path)) return {};
+  let value: unknown;
+  try {
+    value = JSON.parse(readFileSync(path, "utf8"));
+  } catch (err) {
+    throw new ToolsError([`.warden/tools/replaces.json: not valid JSON: ${(err as Error).message}`]);
+  }
+  const problems = replacesProblems(value);
+  if (problems.length > 0) throw new ToolsError(problems);
+  return value as Replaces;
+}
+
 // Problems of the barrel's default export (section 2). Warden checks the shape itself, so a changed tool.ts cannot break it.
 function barrelProblems(value: unknown): string[] {
   const file = ".warden/tools/index.ts";
@@ -86,6 +126,8 @@ function barrelProblems(value: unknown): string[] {
 // Loads <root>/.warden/tools/index.ts and roles.json. Exit 3 when index.ts is missing, ToolsError when either is broken.
 // Set by the engine when it runs a tool in a ticket worktree (runTicketTool).
 export const TOOLS_MAIN_ENV = "WARDEN_TOOLS_MAIN";
+// Set by --check for its own probe call: the call log keeps the agent's calls only (the engine's are never logged).
+const NO_LOG_ENV = "WARDEN_TOOLS_NO_LOG";
 
 export async function loadTools(root: string): Promise<LoadedTools> {
   const index = join(toolsDir(root), "index.ts");
@@ -106,6 +148,29 @@ export async function loadTools(root: string): Promise<LoadedTools> {
   }
   if (problems.length > 0) throw new ToolsError(problems);
   return { root, tools: mod.default as ProjectTool[], roles };
+}
+
+// replaces.json only refuses commands, so a broken one never stops a tool (or the engine's tickets tool) from running:
+// it counts as {} here and in the hook, and --check reports it.
+export function replacesOrNone(root: string): { replaces: Replaces; problems: string[] } {
+  try {
+    return { replaces: readReplaces(root), problems: [] };
+  } catch (err) {
+    if (!(err instanceof ToolsError)) throw err;
+    return { replaces: {}, problems: err.problems };
+  }
+}
+
+// Session start (0.10): the project's tools and the raw commands they own, so the agent reaches for a tool first.
+// null when there is no tool. Throws when the barrel is broken (the hook logs it).
+export async function toolsLine(main: string): Promise<string | null> {
+  if (!existsSync(join(toolsDir(main), "index.ts"))) return null;
+  const loaded = await loadTools(main);
+  if (loaded.tools.length === 0) return null;
+  const list = loaded.tools.map((t) => `${t.name} (${t.summary})`).join("; ");
+  const owned = Object.entries(replacesOrNone(main).replaces).flatMap(([tool, entries]) => entries.map((entry) => `${entry} -> ${tool}`));
+  const refused = owned.length > 0 ? ` These raw commands are refused, use the tool: ${owned.join(", ")}.` : "";
+  return `warden: this project's tools: ${list}. Use them before writing your own command for the same job: warden tools <name> <args> (-h for usage).${refused}`;
 }
 
 // A word is a tool name first, then a role. null when it is neither, or the role names a missing tool.
@@ -166,6 +231,12 @@ function wardenRows(loaded: LoadedTools): CheckRow[] {
     else if (names.has(role) && role !== tool) row("WARN", `role ${role}`, `${role} is also a tool name; warden tools ${role} runs the tool ${role}, not ${tool}`);
     else row("OK", `role ${role}`, tool);
   }
+  const { replaces, problems } = replacesOrNone(loaded.root);
+  for (const problem of problems) row("FAIL", "replaces.json", problem);
+  for (const [tool, entries] of Object.entries(replaces)) {
+    if (!names.has(tool)) row("FAIL", `replaces ${tool}`, `${tool} is not in .warden/tools/index.ts, so nothing can run ${entries.join(", ")}`);
+    else row("OK", `replaces ${tool}`, entries.join(", "));
+  }
   if (existsSync(join(loaded.root, ".warden", "tools.md"))) {
     row("WARN", "tools.md", ".warden/tools.md is left over from 0.5; run /warden:upgrade");
   }
@@ -189,7 +260,8 @@ function createRow(loaded: LoadedTools, pluginRoot: string): CheckRow | null {
   const tool = loaded.roles.tickets;
   if (tool === undefined) return { tool: "warden", status: "FAIL", label: "role tickets", detail: NO_TICKETS };
   if (!loaded.tools.some((t) => t.name === tool)) return null;
-  const res = spawnSync(process.execPath, [join(pluginRoot, "src", "cli.ts"), "tools", tool, "create"], { stdio: "ignore", timeout: 60_000 });
+  const env = { ...process.env, [NO_LOG_ENV]: "1" };
+  const res = spawnSync(process.execPath, [join(pluginRoot, "src", "cli.ts"), "tools", tool, "create"], { env, stdio: "ignore", timeout: 60_000 });
   return res.status === EXIT.USAGE
     ? { tool: "warden", status: "FAIL", label: "role tickets create", detail: `${tool} has no create (it exits 2 for create); add it with /warden:tools` }
     : { tool: "warden", status: "OK", label: "role tickets create", detail: tool };
@@ -234,6 +306,23 @@ async function runTool(tool: ProjectTool, argv: string[]): Promise<number> {
   }
 }
 
+// One line in the call log of the main checkout, for the retro (0.10).
+async function runLogged(tool: ProjectTool, argv: string[], main: string, log: boolean): Promise<number> {
+  const started = Date.now();
+  const code = await runTool(tool, argv);
+  if (log) appendLog(main, "calls", { at: new Date().toISOString(), tool: tool.name, args: redactArgs(argv), exit: code, ms: Date.now() - started });
+  return code;
+}
+
+// `warden tools --log [--since YYYY-MM-DD]`: reads the logs only, so a broken barrel never hides them.
+function log(root: string, rest: string[]): number {
+  const since = rest[0] === "--since" ? rest[1] : undefined;
+  const ok = rest.length === 0 || (rest.length === 2 && since !== undefined && DATE.test(since));
+  if (!ok) throw new WardenError(`usage: ${USAGE}`, EXIT.USAGE);
+  console.log(JSON.stringify(summarize(mainRoot(root), since)));
+  return EXIT.OK;
+}
+
 export async function run(args: string[], ctx: Ctx): Promise<number> {
   const [first, ...rest] = args;
   const root = worktreeRoot(ctx.cwd);
@@ -243,13 +332,16 @@ export async function run(args: string[], ctx: Ctx): Promise<number> {
     console.log(JSON.stringify({ written: writeToolFiles(root, ctx.root) }));
     return EXIT.OK;
   }
+  if (first === "--log") return log(root, rest);
   if (first?.startsWith("-") && first !== "--check") throw new WardenError(`usage: ${USAGE}`, EXIT.USAGE);
   if (first === "--check" && (rest.length > 1 || rest[0]?.startsWith("-"))) throw new WardenError(`usage: ${USAGE}`, EXIT.USAGE);
 
   // Tools and probes run in the checkout root, with the main checkout known and warden on PATH.
   // The engine (WARDEN_TOOLS_MAIN) loads the tool code from the main checkout, never from a ticket branch.
   const fromMain = process.env[TOOLS_MAIN_ENV] === "1";
+  const logged = !fromMain && process.env[NO_LOG_ENV] !== "1";
   delete process.env[TOOLS_MAIN_ENV];
+  delete process.env[NO_LOG_ENV];
   process.env.WARDEN_MAIN_ROOT = mainRoot(root);
   process.env.PATH = pathWithBin(ctx.root, process.env.PATH);
   process.chdir(root);
@@ -269,5 +361,5 @@ export async function run(args: string[], ctx: Ctx): Promise<number> {
   }
   if (first === "--check") return check(loaded, rest[0], ctx.root);
   const tool = resolveTool(loaded, first);
-  return tool ? runTool(tool, rest) : notFound(first);
+  return tool ? runLogged(tool, rest, mainRoot(root), logged) : notFound(first);
 }

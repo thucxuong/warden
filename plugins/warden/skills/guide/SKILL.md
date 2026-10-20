@@ -35,7 +35,8 @@ No run yet: if `warden next` lists your task among the live runs, run `cd <its w
 - Never push, open a pull request or merge outside the ship step.
 - Never run `warden approve`, `warden retry` or `warden reset`. They are for a person. Ask the user to type `approve` or `retry` in the chat.
 - Never set `PROJECT_AGENT`, any `WARDEN_*` or any `CLAUDE_PLUGIN_*` variable on a command. Never start a nested `claude -p`.
-- Do not change the locked config files while a run is live: `.warden/steps.json`, `.warden/flows/`, `.warden/warden.json`, `.warden/triage-rules.json`, `.warden/tools/roles.json`. The hook message calls them gate files.
+- Do not change the locked config files while a run is live: `.warden/steps.json`, `.warden/flows/`, `.warden/warden.json`, `.warden/triage-rules.json`, `.warden/tools/roles.json`, `.warden/tools/replaces.json`. The hook message calls them gate files.
+- When the hook refuses a raw command because a project tool does that job, run the tool it names. Do not get around it with a script; if the tool cannot do what you need, tell the user.
 - Use the worktree and branch that `warden start` printed, even if a project doc says otherwise.
 - One simple command per Bash call. Use `git -C <dir> ...` and absolute paths. A plain `cd <dir>` on its own is fine; never chain it as `cd <dir> && ...`.
 - Start the fixer and ticket agents in the foreground. Never use `run_in_background`.
