@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "id": "R-a30e-0003",
+  "projectId": "pg",
+  "kind": "enhancement",
+  "title": "compose ticket steps chain git commands with &&, which the work skill forbids and permissions block",
+  "body": "What happened: compose 'No task id' step 4 tells the agent to run 'git -C <main> add -- <paths> && git -C <main> commit ...' as one command. The work skill says never chain commands, and in this session such chained commands needed manual approval and were blocked in a non-interactive run. Expected: the compose steps give two separate commands (add, then commit). Steps: follow compose 'No task id' or 'Plan an epic' step 5 literally. Evidence: the instruction text above; my chained rm/git add/git commit call was refused with 'multiple operations ... requires approval' and I had to split it.",
+  "createdAt": "2026-10-20T02:40:10.130Z",
+  "status": "sent",
+  "fixedIn": null,
+  "note": null,
+  "projectDir": "/Users/cluu/Documents/Work/warden-playground",
+  "machineId": "a30e39bd"
+}
