@@ -342,13 +342,14 @@ export async function run(args: string[], ctx: Ctx): Promise<number> {
   const logged = !fromMain && process.env[NO_LOG_ENV] !== "1";
   delete process.env[TOOLS_MAIN_ENV];
   delete process.env[NO_LOG_ENV];
-  process.env.WARDEN_MAIN_ROOT = mainRoot(root);
+  const main = mainRoot(root);
+  process.env.WARDEN_MAIN_ROOT = main;
   process.env.PATH = pathWithBin(ctx.root, process.env.PATH);
   process.chdir(root);
 
   let loaded: LoadedTools;
   try {
-    loaded = await loadTools(fromMain ? mainRoot(root) : root);
+    loaded = await loadTools(fromMain ? main : root);
   } catch (err) {
     if (!(err instanceof ToolsError)) throw err;
     for (const problem of err.problems) console.error(problem);
@@ -361,5 +362,5 @@ export async function run(args: string[], ctx: Ctx): Promise<number> {
   }
   if (first === "--check") return check(loaded, rest[0], ctx.root);
   const tool = resolveTool(loaded, first);
-  return tool ? runLogged(tool, rest, mainRoot(root), logged) : notFound(first);
+  return tool ? runLogged(tool, rest, main, logged) : notFound(first);
 }
