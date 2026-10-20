@@ -6,8 +6,8 @@
   "title": "compose skill step 1 reads the task from an empty placeholder",
   "body": "What happened: the warden:compose skill text starts with 'Read the task from ``' with nothing between the backticks, so the task source is unclear. Expected: the skill names where the task text comes from (the user request or the skill args). Steps: invoke the compose skill from a chat request. Evidence: step 1 of the loaded skill text reads 'Read the task from ``. Keep the task id and the full what to do text'.",
   "createdAt": "2026-10-20T02:40:08.173Z",
-  "status": "accepted",
-  "fixedIn": null,
+  "status": "fixed",
+  "fixedIn": "0.8.1",
   "note": "Accepted. Planned for a coming release.",
   "projectDir": "/Users/cluu/Documents/Work/warden-playground",
   "machineId": "a30e39bd"
