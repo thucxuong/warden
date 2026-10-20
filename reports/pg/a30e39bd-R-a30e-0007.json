@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "id": "R-a30e-0007",
+  "projectId": "pg",
+  "kind": "bug",
+  "title": "Fix step output check requires branch although the schema marks it optional",
+  "body": "What happened: in a fix step I handed back FIXED with mergeCommit set (the fix was already on the main branch) and no branch. warden done answered errors: branch must be a string. After I sent branch 'main' it answered: branch must be warden-fix/PG-340-1, the unused fix branch. Expected: the schema says branch is optional and the step text allows mergeCommit with no note or rule, so a fix already on main should be accepted without a fix branch. Steps: have a check fail on a file already fixed on main, then run warden done with result FIXED, reason, rootCauseChain and mergeCommit only. Evidence: 'accepted: false, errors: [branch: must be a string]' then 'branch: must be warden-fix/PG-340-1'.",
+  "createdAt": "2026-10-20T03:54:08.773Z",
+  "status": "sent",
+  "fixedIn": null,
+  "note": null,
+  "projectDir": "/Users/cluu/Documents/Work/warden-playground",
+  "machineId": "a30e39bd"
+}

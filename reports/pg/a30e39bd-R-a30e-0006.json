@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "id": "R-a30e-0006",
+  "projectId": "pg",
+  "kind": "bug",
+  "title": "Compose skill step 1 still reads the task from an empty Arguments line",
+  "body": "What happened: in 0.9.0 the compose skill step 1 still says to read the task from the arguments (the last line of the skill). That last line is the empty text 'Arguments:'. Report R-a30e-0004 was marked fixed in 0.9.0, but the empty placeholder is still there. Expected: step 1 should not point to an empty line; with no id it should go straight to the No task id section. Steps: run /warden:compose with no argument and read the end of the loaded text. Evidence: loaded text ends with 'Arguments:' and nothing after it; step 1 starts 'Read the task from the arguments (the last line of this skill) and the user request'.",
+  "createdAt": "2026-10-20T03:54:06.779Z",
+  "status": "sent",
+  "fixedIn": null,
+  "note": null,
+  "projectDir": "/Users/cluu/Documents/Work/warden-playground",
+  "machineId": "a30e39bd"
+}
