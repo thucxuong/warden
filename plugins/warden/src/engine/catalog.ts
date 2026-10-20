@@ -46,20 +46,15 @@ function shellWord(path: string): string {
   return /^[A-Za-z0-9._\/@%+=:,-]+$/.test(path) ? path : `'${path.replaceAll("'", "'\\''")}'`;
 }
 
-// Ship step 1. With ticket files (0.6.1: the status the engine set at ship), they go into the run record commit.
-// With the worktree known, two `git -C` commands that work from any directory.
+// Ship step 1. With the worktree known, two `git -C` commands that work from any directory.
 function commitRecordText(ship: ShipText): string {
-  const files = ship.ticketFiles ?? [];
-  const paths = [".warden/history/<task>", ...files.map(shellWord)].join(" ");
-  const what = files.length > 0 ? "Commit the run record together with the ticket files" : "Commit the run record";
-  if (ship.worktree === undefined) return `${what}: \`git add ${paths} && git commit -m 'chore(<task>): run record'\``;
+  if (ship.worktree === undefined) return "Commit the run record: `git add .warden/history/<task> && git commit -m 'chore(<task>): run record'`";
   const git = `git -C ${shellWord(ship.worktree)}`;
-  return `${what}: run \`${git} add ${paths}\`, then \`${git} commit -m 'chore(<task>): run record'\``;
+  return `Commit the run record: run \`${git} add .warden/history/<task>\`, then \`${git} commit -m 'chore(<task>): run record'\``;
 }
 
 export interface ShipText {
   worktree?: string;
-  ticketFiles?: readonly string[];
 }
 
 // Empty for engine and human steps (check, review, approve).
@@ -113,12 +108,8 @@ export function isIgnoredPath(path: string, task: string): boolean {
   return path.startsWith(".warden/state/") || path.startsWith(`.warden/history/${task}/`);
 }
 
-// Whether a step of this type may change `path` in the ticket worktree. `ticketFiles` (the paths of RunJson.ticketFiles)
-// are the ticket files the engine changed at ship; the ship step commits them with the run record, and the proofs check
-// their content. The edit hook passes none: the ship agent never edits them.
-export function editAllowed(
-  type: CatalogType, variant: AnalyzeVariant | undefined, path: string, task: string, ticketFiles: readonly string[] = [],
-): boolean {
+// Whether a step of this type may change `path` in the ticket worktree.
+export function editAllowed(type: CatalogType, variant: AnalyzeVariant | undefined, path: string, task: string): boolean {
   switch (type) {
     case "analyze":
       if (variant === "reproduce") return !isGateFile(path);
@@ -129,7 +120,7 @@ export function editAllowed(
     case "implement":
       return !isGateFile(path);
     case "ship":
-      return path.startsWith(`.warden/history/${task}/`) || ticketFiles.includes(path);
+      return path.startsWith(`.warden/history/${task}/`);
     default:
       return false; // check, review, approve and fix change nothing in the ticket worktree
   }

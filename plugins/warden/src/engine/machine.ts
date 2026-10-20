@@ -3,31 +3,31 @@
 import { spawn, spawnSync } from "node:child_process";
 import { closeSync, copyFileSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { isAbsolute, join, relative } from "node:path";
+import { join } from "node:path";
 import { loadStepsJson, loadWardenJson, parseStepsJson, parseTriageRules } from "../config/config.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
 import {
   branchExists, deleteBranch, diffNames, fetchMain, head, isAncestor, mergeBase, mergeNoEdit, porcelain, revParse, showFile,
-  workingBlob, worktreeAdd, worktreeList, worktreeRemove,
+  worktreeAdd, worktreeList, worktreeRemove,
 } from "../lib/git.ts";
 import { ring } from "../lib/doorbell.ts";
 import { newReportId, startReportSync } from "../lib/reports-git.ts";
 import { readJson, writeJsonAtomic } from "../lib/json.ts";
 import * as proc from "../lib/proc.ts";
-import { inWorktreesDir, legacyWorktreesDir, mainRef, mainRoot, sessionsDir, taskDir, worktreesDir } from "../state/paths.ts";
+import { legacyWorktreesDir, mainRef, mainRoot, sessionsDir, taskDir, worktreesDir } from "../state/paths.ts";
 import { appendEvent, listTasks, readEvents, readRun, runExists, withLock, writeRun } from "../state/store.ts";
 import {
   DEFAULT_LIMITS,
   type CheckStep, type Ctx, type DoneResponse, type EventType, type FixOutput, type FlowJson, type Gates, type Limits,
   type NextResponse, type ReportRecord, type ReviewRound, type RouteBack, type RunJson, type SessionRecord,
-  type StatusLine, type StepsJson, type TicketFiles, type TriageReport,
+  type StatusLine, type StepsJson, type TriageReport,
 } from "../types.ts";
 import { lintFlow } from "./flow-lint.ts";
-import { isAgentStep, isGateFile, isGateStep, isIgnoredPath, outputSpec, stepTitle } from "./catalog.ts";
+import { isAgentStep, isGateStep, isIgnoredPath, outputSpec, stepTitle } from "./catalog.ts";
 import { writeHistory, historyDirFor } from "./history.ts";
 import { buildInstructions } from "./instructions.ts";
 import { fixOnRef, readTriageReport, statePath, validateOutput } from "./outputs.ts";
-import { gatesProven, ticketFileAsSet } from "./proof.ts";
+import { gatesProven } from "./proof.ts";
 import { linkTicket, setTicketStatus } from "./tickets.ts";
 
 export type SpawnWorker = (task: string) => { pid: number; pidStart: string };
@@ -38,7 +38,7 @@ export interface StartOptions {
   branch: string;
   mainRef: string;           // already fetched by the caller (3.2 start step 2)
   taskText: string;          // the ticket text
-  ticket?: boolean;          // started from a ticket (always since 0.9; older runs may lack it): the engine marks it done at ship (0.6.1)
+  ticket?: boolean;          // started from a ticket (always since 0.9; older runs may lack it): the engine marks it done once merged (0.9.3)
   spawnWorker?: SpawnWorker;
 }
 
@@ -73,10 +73,8 @@ function event(s: S, type: EventType, step?: string, data?: Record<string, unkno
   appendEvent(s.main, s.run.task, type, { ...(step !== undefined && { step }), ...(data !== undefined && { data }) });
 }
 
-// The ticket files the engine changed at ship are its own change, like the run record, while they hold what it wrote.
 function dirty(run: RunJson): string[] {
-  const ticketFiles = run.ticketFiles ?? {};
-  return porcelain(run.worktree).filter((path) => !isIgnoredPath(path, run.task) && !ticketFileAsSet(run.worktree, path, ticketFiles));
+  return porcelain(run.worktree).filter((path) => !isIgnoredPath(path, run.task));
 }
 
 export function effectiveLimits(flow: FlowJson): Limits {
@@ -569,12 +567,8 @@ async function reviewJob(ctx: Ctx, main: string, task: string, gates: Gates): Pr
 }
 
 // Ship prep (5.6): re-run the gates when they no longer prove HEAD, else write the run record.
-// A run started from a ticket first gets its ticket set to done in the worktree (0.6.1), outside the lock.
 async function shipPrepJob(ctx: Ctx, main: string, task: string): Promise<void> {
-  const before = load(ctx, main, task);
-  const ticket = before.run.ticket === true && gatesProven(before.run, before.flow).proven ? markTicketDone(ctx, main, before.run) : null;
   await apply(ctx, main, task, (s) => {
-    if (ticket) recordTicket(s, ticket);
     const proven = gatesProven(s.run, s.flow);
     if (!proven.proven) {
       rerunGates(s, proven.reason, true);
@@ -583,53 +577,6 @@ async function shipPrepJob(ctx: Ctx, main: string, task: string): Promise<void> 
     const dir = writeHistory(main, s.run, s.flow);
     event(s, "history.written", s.run.current.id, { dir });
   });
-}
-
-interface TicketResult {
-  files: TicketFiles;    // the paths this call changed in the worktree, with their new blobs
-  error: string | null;
-}
-
-// `set-status <task> done` in the ticket worktree. A failure never blocks the ship; it is told in the instructions.
-// Only paths that this call made dirty count (or that an earlier ship entry recorded and are still dirty); a path
-// outside the worktree or a gate file is never taken and makes an error.
-function markTicketDone(ctx: Ctx, main: string, run: RunJson): TicketResult {
-  const prior = run.ticketFiles ?? {};
-  try {
-    const before = new Set(porcelain(run.worktree));
-    const out = setTicketStatus(main, ctx.root, run.task, "done", run.worktree);
-    const after = new Set(porcelain(run.worktree));
-    const files: TicketFiles = {};
-    const refused: string[] = [];
-    for (const reported of out.changed) {
-      const path = (isAbsolute(reported) ? relative(run.worktree, reported) : reported).replace(/^\.\//, "");
-      if (path === "" || path === ".." || path.startsWith("../") || isAbsolute(path) || inWorktreesDir(path) || isGateFile(path)) {
-        refused.push(reported);
-      } else if (after.has(path) && (!before.has(path) || Object.hasOwn(prior, path))) {
-        files[path] = workingBlob(run.worktree, path);
-      }
-    }
-    const error = refused.length > 0 ? `set-status changed files outside the ticket worktree or gate files: ${refused.join(", ")}` : null;
-    return { files, error };
-  } catch (err) {
-    return { files: {}, error: (err instanceof Error ? err.message : String(err)).split("\n")[0]! };
-  }
-}
-
-// Files are added to the ones of an earlier ship entry: a second set-status changes nothing more.
-function recordTicket(s: S, result: TicketResult): void {
-  const { run } = s;
-  const changed = Object.keys(result.files).sort();
-  if (result.error !== null) {
-    run.ticketError = result.error;
-    event(s, "ticket.status", run.current.id, { status: "done", error: result.error, ...(changed.length > 0 && { changed }) });
-    if (changed.length === 0) return;
-  } else {
-    delete run.ticketError;
-    event(s, "ticket.status", run.current.id, { status: "done", changed });
-  }
-  const merged = { ...(run.ticketFiles ?? {}), ...result.files };
-  run.ticketFiles = Object.fromEntries(Object.keys(merged).sort().map((path) => [path, merged[path] ?? null]));
 }
 
 function readFixOutput(main: string, run: RunJson): FixOutput {
@@ -808,7 +755,7 @@ export async function done(
     if (type === "check" || type === "review") throw new WardenError(`${type} steps are run by the engine`);
     if (run.gate || pendingJob(main, run)) throw new WardenError("engine work is running; run: warden wait", EXIT.BUSY);
     if (run.status !== "active" || !isAgentStep(type)) {
-      return { accepted: false, errors: [`${task} is ${run.status} at ${run.current.id}; there is no agent step to hand in`], link: null };
+      return { accepted: false, errors: [`${task} is ${run.status} at ${run.current.id}; there is no agent step to hand in`], link: null, shipped: null };
     }
 
     const check = validateOutput({ main, run, flow: s.flow, steps: s.steps, text: outputText, fetchMainRef: () => fetchRef(s) });
@@ -817,12 +764,14 @@ export async function done(
     const path = `outputs/${nextSeq(main, task)}-${step}.json`;
     writeJsonAtomic(join(taskDir(main, task), path), check.output ?? { raw: outputText });
     event(s, accepted ? "output.accepted" : "output.rejected", step, accepted ? { path } : { path, errors: check.errors });
-    if (!accepted) return { accepted, errors: check.errors, link: null };
+    if (!accepted) return { accepted, errors: check.errors, link: null, shipped: null };
     acceptOutput(s, check.output as Record<string, unknown>);
     writeRun(main, run);
-    const pr = (check.output as { pr?: unknown } | undefined)?.pr;
-    const link = type === "ship" && run.ticket === true && typeof pr === "string" && pr !== "" ? { step, url: pr } : null;
-    return { accepted, errors: check.errors, link };
+    const { pr, merged } = check.output as { pr?: unknown; merged?: unknown };
+    const ticket = type === "ship" && run.ticket === true;
+    const link = ticket && typeof pr === "string" && pr !== "" ? { step, url: pr } : null;
+    const shipped = ticket ? { step, merged: merged === true, mainBranch: s.steps.mainBranch } : null;
+    return { accepted, errors: check.errors, link, shipped };
   });
   try {
     await ensureGate(ctx, task, spawnWorker);
@@ -831,8 +780,11 @@ export async function done(
     // The next `warden wait` or `warden next` starts the worker again.
     if (!result.accepted) throw err;
   }
-  const warning = result.link ? await linkPr(ctx, main, task, result.link) : null;
-  return { accepted: result.accepted, errors: result.errors, ...(warning !== null && { warnings: [warning] }), next: nextResponse(ctx, main, task) };
+  const warnings = [
+    result.link ? await linkPr(ctx, main, task, result.link) : null,
+    result.shipped ? await markTicketDone(ctx, main, task, result.shipped) : null,
+  ].filter((w) => w !== null);
+  return { accepted: result.accepted, errors: result.errors, ...(warnings.length > 0 && { warnings }), next: nextResponse(ctx, main, task) };
 }
 
 // 0.8: once the ship output of a ticket run is accepted with a PR, `link <task> <pr>` tells the ticket tool, once,
@@ -854,6 +806,33 @@ async function linkPr(ctx: Ctx, main: string, task: string, link: { step: string
     warning = `the ticket was not linked to ${link.url}: ${error}. The ship is done; tell the user to link ${task} to it by hand`;
   }
   await withLock(main, task, () => appendEvent(main, task, "ticket.linked", { step: link.step, data }));
+  return warning;
+}
+
+// 0.9.3: a ticket is done once its task is merged into the main branch, never before. After a ship output with
+// `merged: true`, `set-status <task> done` runs once in the main checkout. A tracker changes no repo file; a tool that
+// keeps tickets as files prints the paths for the agent to commit there. With a PR still open, the agent is told to set
+// it after the merge. A failure is a warning and never undoes the ship.
+async function markTicketDone(
+  ctx: Ctx, main: string, task: string, shipped: { step: string; merged: boolean; mainBranch: string },
+): Promise<string | null> {
+  if (!shipped.merged) {
+    return `${task} is not merged yet, so its ticket is not done: once the pull request is merged, run warden tools tickets set-status ${task} done in ${main} (or tell the user to)`;
+  }
+  let data: Record<string, unknown>;
+  let warning: string | null = null;
+  try {
+    const { changed } = setTicketStatus(main, ctx.root, task, "done");
+    data = { status: "done", changed };
+    if (changed.length > 0) {
+      warning = `the ticket is set to done in ${main}: commit ${changed.join(" ")} there on ${shipped.mainBranch} with the message "chore(${task}): ticket done"`;
+    }
+  } catch (err) {
+    const error = (err instanceof Error ? err.message : String(err)).split("\n")[0]!;
+    data = { status: "done", error };
+    warning = `the ticket was not set to done: ${error}. The ship is done; tell the user to set ${task} to done`;
+  }
+  await withLock(main, task, () => appendEvent(main, task, "ticket.status", { step: shipped.step, data }));
   return warning;
 }
 
@@ -1217,10 +1196,10 @@ function baseMessage(s: S, status: NextResponse["status"], position: string): st
       return `${run.task} is waiting for you: ${run.waiting?.reason ?? ""}`;
     case "blocked":
       return `${run.task} is blocked: ${run.waiting?.reason ?? ""}\n${retryHint(run.task)}`;
-    case "done": // 0.9: a flow without a ship step never sets the ticket to done, so the agent does it on the branch
+    case "done": // a flow without a ship step: warden sees no merge, so the ticket is set to done by hand once merged (0.9.3)
       if (run.ticket !== true) return `${run.task}: done.`;
-      return `${run.task}: done. Set its ticket to done on this branch: in ${run.worktree}, run warden tools tickets set-status ${run.task} done, `
-        + `then commit the paths it prints in changed with the message "chore(${run.task}): ticket done".`;
+      return `${run.task}: done. Its ticket is done once the branch is merged into ${s.steps.mainBranch}: then, in ${s.main}, run warden tools tickets set-status ${run.task} done `
+        + `and commit the paths it prints in changed with the message "chore(${run.task}): ticket done".`;
     default:
       return `${run.task}: ${status}.`;
   }

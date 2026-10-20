@@ -87,7 +87,7 @@ A `tool.ts` written before 0.8 has no `CreateResult` or `LinkResult`; add the tw
 
 - Warden calls `link <id> <url>` once, in the main checkout, after the ship step of a run is handed in with a `pr`. A local merge without a pull request url (`pr: null`) has nothing to link, so warden does not call it.
 - It is for a ticket system outside the repo: record the url as a field, a comment, or a remote link, and print `{ id }`. Running it twice changes nothing more.
-- It must not change repo files. A tool that keeps tickets as repo files leaves it out (exit 2): the pull request already carries the ticket change. If `link` prints `changed` paths anyway, warden ignores them (it never commits them) and `warden done` prints a warning.
+- It must not change repo files. A tool that keeps tickets as repo files leaves it out (exit 2). If `link` prints `changed` paths anyway, warden ignores them (it never commits them) and `warden done` prints a warning.
 - A failure never blocks the ship: warden writes a `ticket.linked` event with the error, and `warden done` prints a warning.
 
 ## Steps
@@ -413,7 +413,7 @@ sh("az", ["boards", "work-item", "update", "--id", id.slice(3), "--discussion", 
 |---|---|---|
 | `warden orchestrate plan <epic>` | `dag <epic>`, and `dag` when a blocker is not a child of the epic | building the plan |
 | `warden start <id>` | `show <id>` | the run's task text becomes `# <id>: <title>` and the body. Every run starts this way (0.9) |
-| the engine, at the ship step of a run | `set-status <id> done`, in the ticket worktree | the change is committed with the run record. A failure never blocks the ship; the agent is told to ask you to set the status after the merge |
+| the engine, once the ship step of a run is handed in with `merged: true` | `set-status <id> done`, in the main checkout | a ticket is done only once its task is merged (0.9.3). A tracker changes no repo file; for `changed` paths, a `warden done` warning tells the agent to commit them on the main branch. A failure is a warning and never undoes the ship. With a PR still open, the warning says to set the status after the merge |
 | `warden orchestrate set-status <id> <status>` | `set-status <id> <status>`, in the main checkout | after merges, and for the epic at the end |
 | `warden orchestrate create ...` | `create ...`, in the main checkout | the agent got a request without a ticket id, or planned an epic (`/warden:compose`). Exit 3 with `the ticket tool has no create` when the tool answers exit 2 |
 | `warden tools --check` | `create` with no flags | checks that `create` is there (exit 2 means it is not) |

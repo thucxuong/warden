@@ -181,8 +181,6 @@ export interface RouteBack {
   findings?: Finding[];            // blocking findings
 }
 
-// Repo path -> the blob sha set-status left there (null: it deleted the file).
-export type TicketFiles = Record<string, string | null>;
 
 export interface RunJson {
   schema: 1;
@@ -209,9 +207,7 @@ export interface RunJson {
   } | null;
   fix: { n: number; worktree: string; branch: string; baseSha: string; verdict: Verdict; report: string; mayMerge: boolean } | null;  // baseSha = mainRef sha the fix branch started from
   leftovers: string | null;        // state-relative path to review/leftover.md
-  ticket?: true;                   // 0.6.1: started from a ticket (every run since 0.9); the engine marks it done at ship
-  ticketFiles?: TicketFiles;       // 0.6.1: what set-status changed at ship; the proofs allow exactly these contents on top of the proven commit
-  ticketError?: string;            // 0.6.1: why the engine could not set the ticket status at ship
+  ticket?: true;                   // 0.6.1: started from a ticket (every run since 0.9); the engine marks it done once merged (0.9.3)
 }
 
 // ---------------------------------------------------------------------------
@@ -289,7 +285,7 @@ export interface NextResponse {
   };
 }
 
-export interface DoneResponse { accepted: boolean; errors: string[]; warnings?: string[]; next: NextResponse }  // warnings: 0.8, the ticket link at ship
+export interface DoneResponse { accepted: boolean; errors: string[]; warnings?: string[]; next: NextResponse }  // warnings: after ship, the ticket link (0.8) and status (0.9.3)
 export interface StatusLine { task: string; flow: string; status: RunStatus; step: string; stepIndex: number; total: number; worktree: string | null; updatedAt: string }  // worktree: null once the folder is gone
 
 // ---------------------------------------------------------------------------

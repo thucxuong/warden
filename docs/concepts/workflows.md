@@ -27,7 +27,7 @@ Every step has an `id` (lowercase, for example `implement`) and a `type`. The ty
 | `check` | engine | Run the commands of one check set from `.warden/steps.json`. Pass only on exit code 0. | Nothing. |
 | `review` | engine | An independent AI review of the branch diff. | Nothing. |
 | `approve` | person | A person types `approve` or `reject: <why>`. Has a `prompt`, shown to the person. | Nothing. |
-| `ship` | agent | Deliver the proven commit unchanged: commit the run record, open the PR or merge, hand in. | Only the run record (`.warden/history/<task>/`) and the ticket files the engine set at ship. |
+| `ship` | agent | Deliver the proven commit unchanged: commit the run record, open the PR or merge, hand in. | Only the run record (`.warden/history/<task>/`). |
 
 ### Gate files and locked config
 

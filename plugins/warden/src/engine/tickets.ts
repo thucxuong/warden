@@ -33,14 +33,13 @@ export function ticketsTool(main: string): string {
   return tool;
 }
 
-// Runs `warden tools <tickets tool> <args>` in `cwd` (default the main checkout), with no shell. `root` is the plugin root.
-// The role and the tool code are always read from the main checkout (WARDEN_TOOLS_MAIN), so a ticket branch cannot
-// change what the engine runs; only the tool's working directory is `cwd`.
+// Runs `warden tools <tickets tool> <args>` in the main checkout, with no shell. `root` is the plugin root.
+// The role and the tool code are read from the main checkout (WARDEN_TOOLS_MAIN).
 // The child leads its own process group, so a timeout also kills what the tool started (a `command()` shell).
-export function runTicketTool(main: string, root: string, args: string[], timeoutSec: number, cwd = main): unknown {
+export function runTicketTool(main: string, root: string, args: string[], timeoutSec: number): unknown {
   const tool = ticketsTool(main);
   // Bun honours `detached` in spawnSync; Node's types leave it out, hence the separate object.
-  const options = { cwd, env: toolEnv(root), encoding: "utf8" as const, timeout: timeoutSec * 1000, maxBuffer: MAX_TOOL_STDOUT, detached: true };
+  const options = { cwd: main, env: toolEnv(root), encoding: "utf8" as const, timeout: timeoutSec * 1000, maxBuffer: MAX_TOOL_STDOUT, detached: true };
   const res = spawnSync(process.execPath, toolArgv(root, tool, args), options);
   if (res.status === null && res.pid) killGroup(res.pid, "SIGKILL"); // timed out or killed: stop the rest of the group
   return toolResult(res.status, res.stdout ?? "", res.stderr ?? "", res.error?.message);
@@ -314,11 +313,8 @@ function phaseFromStatus(status: TicketStatus): TicketPhase {
   return status === "done" || status === "archived" || status === "backlog" ? status : "todo";
 }
 
-// The done status wins, except over a live run at its ship step: the engine sets the ticket done at ship (0.6.1),
-// before the ship step itself ran.
 export function ticketPhase(status: TicketStatus, run: RunJson | null, ship: ShipOutput | null): TicketPhase {
-  const shipping = run !== null && run.current.type === "ship" && run.status !== "shipped" && run.status !== "done";
-  if (status === "done" && !shipping) return "done";
+  if (status === "done") return "done";
   if (!run) return phaseFromStatus(status);
   switch (run.status) {
     case "blocked": return "blocked";
@@ -402,11 +398,9 @@ export function statusPlan(main: string, epic: string): OrchestratePlan {
   return refreshPlan(main, readJson<OrchestratePlan>(file));
 }
 
-// `cwd` is the checkout whose ticket files change: the main checkout, or a ticket worktree at ship (0.6.1).
-export function setTicketStatus(
-  main: string, root: string, id: string, status: TicketStatus, cwd = main,
-): { id: string; status: TicketStatus; changed: string[] } {
-  const out = runTicketTool(main, root, ["set-status", id, status], SHORT_TIMEOUT_SEC, cwd) as Record<string, unknown> | null;
+// Always in the main checkout: a ticket is done once its task is merged there (0.9.3).
+export function setTicketStatus(main: string, root: string, id: string, status: TicketStatus): { id: string; status: TicketStatus; changed: string[] } {
+  const out = runTicketTool(main, root, ["set-status", id, status], SHORT_TIMEOUT_SEC) as Record<string, unknown> | null;
   const ok = typeof out === "object" && out !== null && typeof out.id === "string" && typeof out.status === "string"
     && Array.isArray(out.changed) && out.changed.every((p) => typeof p === "string");
   if (!ok) throw new WardenError("ticket tool: set-status did not print {id, status, changed}", EXIT.REJECTED);

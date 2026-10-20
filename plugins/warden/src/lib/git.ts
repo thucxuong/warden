@@ -1,8 +1,6 @@
 // Thin wrappers around the git CLI. All functions are synchronous: git calls are short
 // and the callers (engine, hooks) run them one at a time.
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
 
 interface GitResult {
   code: number;
@@ -125,19 +123,6 @@ export function isAncestor(cwd: string, a: string, b: string): boolean {
 export function showFile(cwd: string, rev: string, path: string): string | null {
   const result = git(cwd, ["show", `${rev}:${path}`]);
   return result.code === 0 ? result.stdout : null;
-}
-
-// The blob sha of a path at a revision, or null when the revision or path does not exist.
-export function blobAt(cwd: string, rev: string, path: string): string | null {
-  const result = git(cwd, ["rev-parse", "--verify", "--quiet", `${rev}:${path}`]);
-  return result.code === 0 ? result.stdout.trim() : null;
-}
-
-// The blob sha `git add` would store for a working tree file, or null when it does not exist.
-export function workingBlob(cwd: string, path: string): string | null {
-  if (!existsSync(join(cwd, path))) return null;
-  const result = git(cwd, ["hash-object", "--", path]);
-  return result.code === 0 ? result.stdout.trim() : null;
 }
 
 // Files under path at a revision (recursive). Empty when nothing matches.

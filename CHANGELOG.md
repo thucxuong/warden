@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.3 — 2026-10-20
+
+- A ticket is done only once its task is merged into the main branch. Warden no longer sets the ticket to done at ship prep, so nothing is written into the ticket worktree there and the proofs no longer allow ticket files on top of the proven commit. This fixes a ship that left the ticket file uncommitted when the gates re-ran, and then refused `warden done`.
+- After a ship hand-in with `merged: true`, warden runs `set-status <task> done` in the main checkout. A tracker (GitHub issues, Jira) changes no repo file. A tool that keeps tickets as files prints `changed` paths, and a `warden done` warning tells the agent to commit them there; a ticket agent in `/warden:orchestrate` makes that commit itself. With a pull request still open, the warning says to set the ticket to done after the merge. A failure is a warning and never undoes the ship.
+- A run without a ship step (such as `do`) ends with a message to set its ticket to done once the branch is merged, in the main checkout, not on the branch.
+
 ## 0.9.2 — 2026-10-20
 
 - A fixer's triage rule may match any line of the failing log, such as a formatter's `[warn] <file>` line, not only lines that look like errors. It must still match no line of a passing check's log.

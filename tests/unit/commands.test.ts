@@ -178,7 +178,7 @@ describe("start", () => {
     const n = cli(["next"]);
     expect(n.code).toBe(0);
     expect(n.json).toMatchObject({ task: "T-3", status: "done" });
-    expect(n.json.message).toStartWith(`T-3: done. Set its ticket to done on this branch: in ${run.worktree}, run warden tools tickets set-status T-3 done, then commit`);
+    expect(n.json.message).toStartWith(`T-3: done. Its ticket is done once the branch is merged into main: then, in ${main}, run warden tools tickets set-status T-3 done and commit`);
     const w = cli(["wait"]);
     expect(w.code).toBe(0);
     expect(w.json).toMatchObject({ task: "T-3", status: "done" });

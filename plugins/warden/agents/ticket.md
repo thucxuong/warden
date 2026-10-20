@@ -14,7 +14,7 @@ Commands
 Ship mode, first
 - If `Main` starts with `origin/`, run `git -C <Worktree> fetch origin <branch>` (the branch name is `Main` without `origin/`).
 - Run `git -C <Worktree> merge --no-edit <Main>`.
-- If git refuses the merge because local changes would be overwritten (the run record and ticket files warden wrote at ship are not committed yet): run `warden next <Task>`, make only the run record commit of step 1 of its instructions, then run the merge again.
+- If git refuses the merge because local changes would be overwritten (the run record warden wrote at ship is not committed yet): run `warden next <Task>`, make only the run record commit of step 1 of its instructions, then run the merge again.
 - On conflicts: fix the conflicted files (allowed), `git -C <Worktree> add` them and run `git -C <Worktree> commit --no-edit`. Do this before any warden command.
 - Then run the loop. Warden runs the gates again on the merged commit.
 
@@ -27,7 +27,7 @@ Loop: run `warden next <Task>`, then go by the status.
 - `running_gate`: run `warden wait <Task>` with a Bash timeout of 600000. Repeat until the status changes.
 - `waiting`: stop. Reply `WAITING <Task>: <message>`.
 - `blocked`: stop. Reply `BLOCKED <Task>: <message>`.
-- `shipped`: stop. Reply `SHIPPED <Task>`. If the ship hand-in (`warden done`) printed `warnings`, reply `SHIPPED <Task>: <warnings>` and do nothing else about them.
+- `shipped`: stop. Reply `SHIPPED <Task>`. If the ship hand-in (`warden done`) printed `warnings`: when one says to commit files in the main checkout, make that commit as it says; reply `SHIPPED <Task>: <the other warnings>` and do nothing else about them.
 - `done`: stop. Reply `DONE <Task>`.
 
 Never ask the user and never run `warden ask`. When a person must decide, stop and reply `ASK <Task>: <question>`.

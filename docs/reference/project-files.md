@@ -295,7 +295,7 @@ Folder names that start with `_` are not tasks.
 | `gate` | The running engine job (`check`, `review`, `ship-prep`, `fix-landing`), or null |
 | `fix` | The fix in progress: `{n, worktree, branch, baseSha, verdict, report, mayMerge}`, or null |
 | `leftovers` | Path of `review/leftover.md`, or null |
-| `ticket`, `ticketFiles`, `ticketError` | `ticket` is `true` for a run started from a ticket (every run since 0.9; runs started from text before 0.9 have none). The ticket files set to done at ship, or why that failed |
+| `ticket` | `true` for a run started from a ticket (every run since 0.9; runs started from text before 0.9 have none). Warden sets the ticket to done once the ship reports the task merged. Runs from 0.6.1 to 0.9.2 may also hold `ticketFiles` and `ticketError`, which 0.9.3 ignores |
 
 ### Event types
 

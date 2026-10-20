@@ -94,7 +94,7 @@ Usually the user starts with `/warden:compose <what to do>` or `/warden:compose 
 | `analyze` (spike) | Answer the question in one note, pass it as `notePath`. | `.warden/knowledge/`, `.warden/decisions/`, `docs/` |
 | `plan` | Follow the plan skill. Hand in `PlanOutput`. No placeholders such as `TBD` or `TODO`. | `.warden/knowledge/`, `.warden/decisions/` |
 | `implement` | Make the change with tests. Commit all of it. When back from a gate, fix exactly what it reports. | Anything but gate files |
-| `ship` | Commit the run record, open the PR or merge as the project says, hand in `ShipOutput`, then run `warden clean` from the main checkout. Never remove the worktree before the hand-in. | `.warden/history/<task>/` and the ticket files warden changed |
+| `ship` | Commit the run record, open the PR or merge as the project says, hand in `ShipOutput`, then run `warden clean` from the main checkout. Never remove the worktree before the hand-in. | `.warden/history/<task>/` |
 | `fix` | Hand the step to the `warden:fixer` agent in the foreground, wait, and pass its JSON to `warden done`. | Nothing. The fixer works in its own fix worktree. |
 | `check`, `review` | Nothing. The engine runs them. `warden done` refuses. | Nothing |
 | `approve` | Nothing. A person types `approve` or `reject: <why>`. | Nothing |

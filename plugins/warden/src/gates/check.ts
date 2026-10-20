@@ -78,8 +78,8 @@ export async function runCheck(set: { commands: CommandDef[] }, ctx: GateContext
     });
     await recordEvent(ctx, "gate.command", { name: cmd.name, exit, durationMs, log }, run.current.id);
 
-    // Uncommitted history (5.4), live state and the ticket files as the engine set them at ship are not left files.
-    const left = dirtyOutsideHistory(run.worktree, run.ticketFiles ?? {});
+    // Uncommitted history (5.4) and live state are not left files.
+    const left = dirtyOutsideHistory(run.worktree);
     if (left.length > 0) return { passed: false, failedIndex: index, exit, log, leftFiles: left };
     if (exit !== 0) return { passed: false, failedIndex: index, exit, log, leftFiles: [] };
   }

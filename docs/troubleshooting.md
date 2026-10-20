@@ -120,7 +120,8 @@ See [Gates and self-healing](concepts/gates-and-self-healing.md).
 | `the run record has uncommitted changes: <paths>` | Part of the run record is not committed. | Commit it. |
 | `gates are not proven for HEAD: <reason>` | The commit or the tree changed after the gates. | Run `warden next`. The gates run again on the new commit. |
 | `mergeCommit: <sha> not found` | The merge commit is not in the repo yet. | Give the right SHA, or fetch first. |
-| `The ticket status was not set: <error>. ...` (in the instructions) | The `tickets` tool failed when warden set the ticket to done. The ship goes on. | After the merge, set the ticket to done by hand. |
+| `the ticket was not set to done: <error>. ...` (a `warden done` warning after ship) | The `tickets` tool failed when warden set the merged ticket to done. The ship is done. | Fix the tool, then set the ticket to done by hand. |
+| `<task> is not merged yet, so its ticket is not done: ...` (a `warden done` warning after ship) | The ship opened a pull request. A ticket is done only once its task is merged. | After the merge, run `warden tools tickets set-status <task> done` in the main checkout. |
 | The worktree was removed before the ship hand-in | The ship instructions say to hand in first. | Run `warden done <task> --json '...'` from the main checkout. With the worktree gone, warden checks only the merge evidence. |
 | `<task>: kept <path>: <branch> is not merged into <ref> (a pull request still open?)` from `warden clean` | The branch is not on the main branch yet, or it was squash-merged. | Merge the pull request and run `warden clean` again. After a squash merge, remove it by hand: `git worktree remove <path>` and `git branch -D <branch>`. |
 

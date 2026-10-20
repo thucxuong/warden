@@ -118,7 +118,7 @@ warden start <ticket> --template do|feature|bugfix|chore [--worktree] [--branch 
 warden start <ticket> --flow <name|path>             [--worktree] [--branch <b>]
 ```
 
-Starts a run for a ticket. Every run starts from a ticket (0.9): the task text is the ticket, read from the project's `tickets` tool with `show <ticket>`, and at the ship step warden sets the ticket to `done`. `--text`, `--text-file` and `--ticket` are gone; for a request without a ticket, create one first (`warden orchestrate create`, as `/warden:compose` does). Run it with a long Bash timeout (the skills use 600000 ms): it runs the project's setup commands.
+Starts a run for a ticket. Every run starts from a ticket (0.9): the task text is the ticket, read from the project's `tickets` tool with `show <ticket>`, and once the ship step reports the task merged, warden sets the ticket to `done` (0.9.3). `--text`, `--text-file` and `--ticket` are gone; for a request without a ticket, create one first (`warden orchestrate create`, as `/warden:compose` does). Run it with a long Bash timeout (the skills use 600000 ms): it runs the project's setup commands.
 
 | Flag | Meaning |
 |---|---|
@@ -211,7 +211,7 @@ Output (`DoneResponse`):
 { accepted: boolean; errors: string[]; warnings?: string[]; next: NextResponse }
 ```
 
-`warnings` (0.8) appears only after the ship step of a run with a `pr`, when the ticket tool's `link` failed or printed `changed` paths (link must not change repo files; warden ignores them). It never undoes the ship; see [write a ticket tool](../guides/write-a-ticket-tool.md#link-rules-optional).
+`warnings` appears only after the ship step. With a `pr`: when the ticket tool's `link` failed or printed `changed` paths (0.8; link must not change repo files, warden ignores them), and, while the PR is not merged, a note to set the ticket to done after the merge. With `merged: true`: when `set-status <task> done` in the main checkout failed, or printed `changed` paths to commit there (0.9.3). It never undoes the ship; see [write a ticket tool](../guides/write-a-ticket-tool.md#link-rules-optional).
 
 | Case | Exit |
 |---|---|

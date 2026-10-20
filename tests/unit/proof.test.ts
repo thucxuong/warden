@@ -69,37 +69,11 @@ describe("proofValid", () => {
     expect(proofValid(repo, proof())).toBe(true);
   });
 
-  test("0.6.1: the run's ticket files may change on top of the proof, committed or not, only to what set-status left", () => {
+  test("0.9.3: a ticket file changed on top of the proof is a change like any other", () => {
     write("backlog/T-1.md", "status: done\n");
-    const ticket = { "backlog/T-1.md": sh("hash-object", "backlog/T-1.md") };
     expect(proofValid(repo, proof())).toBe(false);
-    expect(proofValid(repo, proof(), ticket)).toBe(true);
     commit({ ".warden/history/T-1/summary.json": "{}\n" }); // commits the ticket file too
-    expect(proofValid(repo, proof(), ticket)).toBe(true);
     expect(proofValid(repo, proof())).toBe(false);
-    write("backlog/T-1.md", "status: done\nsneaked in\n");
-    expect(proofValid(repo, proof(), ticket)).toBe(false); // dirty with other content
-    commit({});
-    expect(proofValid(repo, proof(), ticket)).toBe(false); // committed with other content
-  });
-
-  test("0.6.1: a ticket file set-status deleted counts only while it stays deleted", () => {
-    commit({ "backlog/T-2.md": "status: todo\n" });
-    sha = sh("rev-parse", "HEAD");
-    rmSync(join(repo, "backlog/T-2.md"));
-    const ticket = { "backlog/T-2.md": null };
-    expect(proofValid(repo, proof(), ticket)).toBe(true);
-    commit({});
-    expect(proofValid(repo, proof(), ticket)).toBe(true);
-    commit({ "backlog/T-2.md": "status: other\n" });
-    expect(proofValid(repo, proof(), ticket)).toBe(false);
-  });
-
-  test("0.6.1: a code commit is not covered by the ticket files", () => {
-    write("backlog/T-1.md", "status: done\n");
-    const ticket = { "backlog/T-1.md": sh("hash-object", "backlog/T-1.md") };
-    commit({ "src/b.ts": "b\n" });
-    expect(proofValid(repo, proof(), ticket)).toBe(false);
   });
 
   test("an unknown sha is invalid", () => {

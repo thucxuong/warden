@@ -79,7 +79,7 @@ Extra fields by type. No other keys are allowed on a step.
 | `check` | engine | Run a check set; triage a failure | Nothing |
 | `review` | engine | Run the reviewer on the branch diff | Nothing |
 | `approve` | person | Wait for `approve` or `reject: <why>` | Nothing |
-| `ship` | agent | Commit the run record, open the PR or merge, hand in | None. It only commits what warden wrote (the run record, and the ticket files set at ship). While a merge with conflicts is in progress, the conflicted files may be edited |
+| `ship` | agent | Commit the run record, open the PR or merge, hand in | None. It only commits what warden wrote (the run record). While a merge with conflicts is in progress, the conflicted files may be edited |
 
 Gate files are `.warden/steps.json`, `.warden/flows/**`, `.warden/warden.json`, `.warden/triage-rules.json`, `.warden/state/**` and `.warden/history/**`. The locked config (the same config files plus `.warden/tools/roles.json`) cannot change while any run is live; see [Workflows](../concepts/workflows.md#gate-files-and-locked-config). A fix step (`fix-<n>`) is added by the engine itself when triage asks for it; you cannot put one in a flow.
 

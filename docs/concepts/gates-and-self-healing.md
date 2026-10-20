@@ -153,7 +153,7 @@ The review rounds count over the whole run, not per implement step. Each round's
 A **proof** says that a gate passed on a given commit: `{ stepId, kind, sha }`. Proofs are what make a ship safe.
 
 - Entering an implement step clears all proofs.
-- A proof is valid while HEAD is the proven commit, or only the run record (`.warden/history/**`) and the ticket files the engine set at ship changed on top of it, and the working tree is clean.
+- A proof is valid while HEAD is the proven commit, or only the run record (`.warden/history/**`) changed on top of it, and the working tree is clean.
 - At the ship step, the engine checks that every check and review after the latest implement has a valid proof. If not, it runs those gates again on the new HEAD. After three such "stale proofs" the run blocks: "code keeps changing after the gates".
 - Pushing, opening a pull request and merging are allowed only when the proofs cover HEAD.
 
