@@ -54,7 +54,8 @@ Steps
 
 7. Add a rule to the `rules` array of .warden/triage-rules.json (the file is
    `{"schema": 1, "rules": [...]}`). Next free TR-NNNN id; `pattern` is a narrow regex for the exact
-   error line (it must not match any line of a passing check log; warden rejects broad rules);
+   line that names the failure, an error or warn line (it must not match any line of a passing check
+   log; warden rejects broad rules);
    verdict OPS (or UNCLEAR); fixNote = the note path; task; addedAt:
 
    ```json

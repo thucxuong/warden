@@ -373,7 +373,7 @@ describe("fix", () => {
     expect(errorsFor(fixRun(), fixed())).toEqual(["rule TR-0001 is too broad: matches checks/1/pass.log:1"]);
 
     commit(fixWt, { ".warden/triage-rules.json": rule("^nothing like it$") });
-    expect(errorsFor(fixRun(), fixed())).toEqual(["rule TR-0001 matches no error line of the failing log"]);
+    expect(errorsFor(fixRun(), fixed())).toEqual(["rule TR-0001 matches no line of the failing log"]);
   });
 
   test("a missing note, rule or note path format", () => {

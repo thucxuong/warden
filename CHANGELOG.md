@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.2 — 2026-10-20
+
+- A fixer's triage rule may match any line of the failing log, such as a formatter's `[warn] <file>` line, not only lines that look like errors. It must still match no line of a passing check's log.
+
 ## 0.9.1 — 2026-10-20
 
 - Skills no longer print an empty "Arguments:" line: they read your request, and Claude Code adds the arguments only when you give some.

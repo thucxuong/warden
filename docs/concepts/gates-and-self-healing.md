@@ -87,7 +87,7 @@ Each triage writes a report, `.warden/state/<task>/triage/<n>.json`, with every 
 - When a rule matches a line of the failing log and the verdict is OPS, the reason says "known pattern TR-0001", and the fixer gets the old fix note to start from.
 - A rule's `verdict` is `OPS` or `UNCLEAR`, never `CODE`.
 - Warden reads the rules from the main branch only, so a task branch cannot add a rule that labels its own failure.
-- The fixer adds rules. Each new rule must be narrow: it must match an error line of the failing log and no line of any passing check log in the run, or warden refuses it as "too broad".
+- The fixer adds rules. Each new rule must be narrow: it must match a line of the failing log and no line of any passing check log in the run, or warden refuses it as "too broad".
 
 ## The fixer
 

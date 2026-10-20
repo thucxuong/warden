@@ -81,18 +81,15 @@ describe("checkRuleNarrow", () => {
     );
   });
 
-  test("a rule that matches only non-candidate lines of the failing log is rejected", () => {
-    // "Running" appears in the failing log but that line is not an error line
-    const r = rule("TR-0003", "^Running");
-    expect(checkRuleNarrow(r, fixture("flaky-timeout"), [], roots)).toBe(
-      "rule TR-0003 matches no error line of the failing log",
-    );
+  test("R-a30e-0009: a rule may match any line of the failing log, such as a formatter's warn line", () => {
+    const r = rule("TR-0003", "^\\[warn\\] docs/a\\.md$");
+    expect(checkRuleNarrow(r, "[warn] docs/a.md\n[ELIFECYCLE] Command failed with exit code 1.\n", passing, roots)).toBeNull();
   });
 
   test("a rule that matches nothing in the failing log is rejected", () => {
     const r = rule("TR-0004", "no such text");
     expect(checkRuleNarrow(r, fixture("db-missing"), passing, roots)).toBe(
-      "rule TR-0004 matches no error line of the failing log",
+      "rule TR-0004 matches no line of the failing log",
     );
   });
 

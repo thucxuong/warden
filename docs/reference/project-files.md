@@ -114,7 +114,7 @@ Known failure patterns. A rule only labels a failure; it never decides the verdi
 | `task` | string | The task that added the rule |
 | `addedAt` | string | A date |
 
-A new rule must be narrow: it must match an error line of the failing log and no line of any log from a command that passed in the same run.
+A new rule must be narrow: it must match a line of the failing log and no line of any log from a command that passed in the same run.
 
 ## .warden/reports.md
 
