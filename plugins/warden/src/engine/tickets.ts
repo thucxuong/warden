@@ -3,7 +3,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { loadStepsJson, loadWardenJson } from "../config/config.ts";
-import { NO_LOG_ENV, NO_TICKETS, readRoles, TOOLS_MAIN_ENV } from "../commands/tools.ts";
+import { NO_TICKETS, readRoles, TOOLS_MAIN_ENV } from "../commands/tools.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
 import { readJson, writeJsonAtomic } from "../lib/json.ts";
 import { killGroup, pathWithBin } from "../lib/proc.ts";
@@ -48,9 +48,8 @@ export function runTicketTool(main: string, root: string, args: string[], timeou
 
 const MAX_TOOL_STDOUT = 16 * 1024 * 1024;
 
-// Warden's own ticket tool calls are never in the agent's call log (NO_LOG_ENV).
 function toolEnv(root: string, fromMain = true): Record<string, string | undefined> {
-  const env: Record<string, string | undefined> = { ...process.env, PATH: pathWithBin(root, process.env.PATH), WARDEN_ROOT: root, [NO_LOG_ENV]: "1" };
+  const env: Record<string, string | undefined> = { ...process.env, PATH: pathWithBin(root, process.env.PATH), WARDEN_ROOT: root };
   if (fromMain) env[TOOLS_MAIN_ENV] = "1";
   delete env.PROJECT_AGENT;
   return env;

@@ -138,7 +138,7 @@ export interface Tool {
    warden tools --skill
    ```
 
-   The skill tells the agent which tools exist and what they replace, and the command log marks each time the agent ran the raw command anyway, for the retro. Nothing is refused. Give the tool a `commands` list (`commands: ["run", "install"]`) so the skill can name them. See [Raw commands a tool covers](../concepts/tools-and-roles.md#raw-commands-a-tool-covers).
+   The skill tells the agent which tools exist and what they replace, and `warden tools --usage` counts each time the agent ran the raw command anyway, for the retro. Nothing is refused. Give the tool a `commands` list (`commands: ["run", "install"]`) so the skill can name them. See [Raw commands a tool covers](../concepts/tools-and-roles.md#raw-commands-a-tool-covers).
 
 6. **Commit it** on your branch, like any other code. A tool change in a task worktree is used by `warden tools` in that worktree, so you can test it before it merges.
 
@@ -228,11 +228,11 @@ When warden calls the `tickets` tool itself, it always loads the tool code and `
 /warden:tools e2e
 ```
 
-The project's agent writes or changes the tool, adds it to `index.ts`, tries it, runs `warden tools --check` and shows you the result. Without a name, it lists the tools, looks at `warden tools --log` for commands that keep coming back, and asks what the new one should do.
+The project's agent writes or changes the tool, adds it to `index.ts`, tries it, runs `warden tools --check` and shows you the result. Without a name, it lists the tools, looks at `warden tools --usage` for commands that keep coming back, and asks what the new one should do.
 
 ## Find the next tool
 
-The retro runs `warden tools --log --since <last retro>`. Its `commands` list shows the commands the agent typed again and again with no tool, costliest first. Each one is a candidate for a new tool or a new subcommand. See [The logs](../concepts/tools-and-roles.md#the-logs).
+The retro runs `warden tools --usage --since <last retro>`, which reads what the agent ran from Claude Code's session transcripts. Its `commands` list shows the commands the agent typed again and again with no tool, costliest first. Each one is a candidate for a new tool or a new subcommand. See [Usage statistics](../concepts/tools-and-roles.md#usage-statistics).
 
 ## See also
 

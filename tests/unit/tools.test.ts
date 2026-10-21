@@ -4,7 +4,6 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync,
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { NO_TICKETS } from "../../plugins/warden/src/commands/tools.ts";
-import { runTicketTool } from "../../plugins/warden/src/engine/tickets.ts";
 import { barrel, TEMPLATES, writeRoles, writeTools } from "../helpers/tools-fixture.ts";
 
 const PLUGIN = resolve(import.meta.dir, "../../plugins/warden");
@@ -138,7 +137,7 @@ describe("list and run", () => {
     expect(tools(["echo", "-h"])).toMatchObject({ code: 0, out: "echo [args...]\n" });
     expect(tools(["show", "--help"])).toMatchObject({ code: 0, out: "echo [args...]\n" });
     expect(tools(["later", "-h"])).toMatchObject({ code: 0, out: "async run\n" });
-    expect(tools(["-h"]).out).toContain("usage: warden tools [--check [<name>] | --init | --skill | --log [--since YYYY-MM-DD] | --verify tickets [--write]]");
+    expect(tools(["-h"]).out).toContain("usage: warden tools [--check [<name>] | --init | --skill | --usage [--since YYYY-MM-DD] | --verify tickets [--write]]");
   });
 
   test("a throw is exit 1 with the message on stderr; a non-number result is exit 1", () => {
@@ -301,45 +300,16 @@ describe("replaces.json (0.10)", () => {
   });
 });
 
-describe("the call log (0.10)", () => {
-  const logged = () => {
-    const file = join(repo, ".warden/state/_tools/calls.jsonl");
-    return existsSync(file) ? readFileSync(file, "utf8").trim().split("\n").map((l) => JSON.parse(l)) : [];
-  };
-
-  test("each call is logged with its args (secrets hidden), exit and time, -h too; the engine's and --check's probe are not", () => {
-    writeTools(repo, barrel(ECHO, ""), { tickets: "echo" });
-    tools(["echo", "list", "--token", "abc123", "--auth-token", "s3cr3t", "--db-password=pw"]);
-    tools(["boom"]);
-    tools(["echo", "-h"]);
-    tools(["--check"]);
-    writeFileSync(join(repo, ".warden/warden.json"), "{}"); // the engine needs a set-up project to run the tickets tool
-    expect(() => runTicketTool(repo, PLUGIN, ["dag"], 30)).toThrow(/exit 4/); // the engine's own call: not logged
-    const calls = logged();
-    expect(calls.map((c) => [c.tool, c.args, c.exit])).toEqual([["echo", ["list", "--token", "***", "--auth-token", "***", "--db-password=***"], 4], ["boom", [], 1], ["echo", ["-h"], 0]]);
-    expect(typeof calls[0].ms).toBe("number");
-  });
-
-  test("--log sums the calls, the agent's apart from the check step's; --since is a local date; bad flags are exit 2", () => {
+describe("--usage (0.10)", () => {
+  test("nothing is logged while tools run; --usage reads the session transcripts, so with none it is empty", () => {
     writeTools(repo, barrel(ECHO, ""));
     tools(["echo", "a"]);
-    tools(["echo", "b"]);
-    tools(["boom"]);
-    const byCheck = Bun.spawnSync([process.execPath, CLI, "tools", "echo", "c"], { cwd: repo, env: { ...process.env, WARDEN_ROOT: PLUGIN, WARDEN_TOOLS_BY: "check" } });
-    expect(byCheck.exitCode).toBe(4);
-    const pad = (n: number) => String(n).padStart(2, "0");
-    const now = new Date();
-    const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-    expect(tools(["--log"]).json).toEqual({
-      since: null, raw: [], commands: [],
-      tools: [
-        { tool: "echo", agent: { calls: 2, failed: 2 }, check: { calls: 1, failed: 1 } },
-        { tool: "boom", agent: { calls: 1, failed: 1 }, check: { calls: 0, failed: 0 } },
-      ],
-    });
-    expect(tools(["--log", "--since", today]).json.tools).toHaveLength(2);
-    expect(tools(["--log", "--since", "2999-01-01"]).json.tools).toEqual([]);
-    for (const args of [["--log", "x"], ["--log", "--since"], ["--log", "--since", "yesterday"], ["--log", "--since", "2026-13-01"], ["--log", "--since", "2026-02-30"]]) {
+    expect(existsSync(join(repo, ".warden/state/_tools"))).toBe(false);
+    expect(tools(["--usage"]).json).toEqual({ since: null, sessions: { read: 0, missing: 0 }, tools: [], raw: [], commands: [] });
+  });
+
+  test("bad flags, and a date that does not exist, are exit 2", () => {
+    for (const args of [["--usage", "x"], ["--usage", "--since"], ["--usage", "--since", "yesterday"], ["--usage", "--since", "2026-13-01"], ["--usage", "--since", "2026-02-30"]]) {
       expect(tools(args).code).toBe(2);
     }
   });
@@ -369,9 +339,11 @@ describe("the project tools skill (0.10)", () => {
     expect(skill()).toContain("## constructor");
   });
 
-  test("commands must be an array of strings; a path in replaces.json is a FAIL", () => {
-    writeTools(repo, barrel(`  { name: "pr", summary: "s", commands: "create" as any, run: () => 0 },`, ""));
-    expect(tools([]).err).toContain("commands must be an array of strings");
+  test("a wrong commands value is a --check warning and never stops a tool; a path in replaces.json is a FAIL", () => {
+    writeTools(repo, barrel(`  { name: "pr", summary: "s", commands: "create" as any, run: () => 0 },`, ""), { tickets: "pr" });
+    expect(tools(["pr"]).code).toBe(0);
+    expect(tools(["--check"]).json.checks).toContainEqual(expect.objectContaining({ label: "commands pr", status: "WARN" }));
+    expect(tools(["--skill"]).code).toBe(0);
     writeTools(repo, barrel(`  { name: "db", summary: "s", run: () => 0 },`, ""), { tickets: "db" });
     writeFileSync(join(repo, ".warden/tools/replaces.json"), JSON.stringify({ db: ["bin/rails db"] }));
     expect(tools(["--check"]).json.checks).toContainEqual(expect.objectContaining({ label: "replaces.json", status: "FAIL", detail: expect.stringContaining("without a path") }));

@@ -1,7 +1,7 @@
 // warden tools --verify tickets [--write] (0.10): the tickets contract, checked in a throwaway worktree of the
 // current checkout (HEAD plus its uncommitted files), so the checkout itself never changes.
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { commit, write } from "../helpers/repo.ts";
@@ -191,5 +191,51 @@ export const mover = { name: "mover", summary: "s", run: (argv: string[]) => {
     expect(r.rows.find((x) => x.label === "warden.json")).toMatchObject({ status: "FAIL" });
     expect(left()).toBe(before);
     expect(worktrees()).toBe(1);
+  });
+});
+
+describe("0.10: the copy is its own project", () => {
+  test("a tool that writes through $WARDEN_MAIN_ROOT writes into the copy, never into the project", () => {
+    const LEAKY = `import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+const out = (v: unknown) => { console.log(JSON.stringify(v)); return 0; };
+export const leaky = { name: "leaky", summary: "s", run: (argv: string[]) => {
+  const [cmd, id, status] = argv;
+  const main = process.env.WARDEN_MAIN_ROOT!;
+  if (cmd === "dag") return out([]);
+  if (cmd === "show") return 3;
+  if (cmd === "create") {
+    if (!argv.includes("--title")) return 1;
+    writeFileSync(join(main, "T-1.md"), "todo");
+    const body = readFileSync(argv[argv.indexOf("--body-file") + 1]!, "utf8").trim();
+    return out({ ticket: { id: "T-1", title: "warden verify", status: "todo", blocked_by: [], body }, changed: ["T-1.md"] });
+  }
+  if (cmd === "set-status") {
+    const was = existsSync(join(main, id + ".md")) ? readFileSync(join(main, id + ".md"), "utf8") : "";
+    if (was === status) return out({ id, status, changed: [] });
+    writeFileSync(join(main, id + ".md"), status);
+    return out({ id, status, changed: [id + ".md"] });
+  }
+  return 2;
+} };`;
+    commit(repo, {
+      ".warden/warden.json": WARDEN_JSON, ".gitignore": ".warden/state/\n",
+      ".warden/tools/tool.ts": readFileSync(join(TEMPLATES, "tool.ts"), "utf8"),
+      ".warden/tools/leaky.ts": LEAKY,
+      ".warden/tools/index.ts": barrel("  leaky,", 'import { leaky } from "./leaky";'),
+      ".warden/tools/roles.json": JSON.stringify({ tickets: "leaky" }),
+    }, "setup");
+    const r = verify("tickets", "--write");
+    expect(status(r.rows)).toMatchObject({ create: "OK", "set-status doing": "OK", "set-status archived": "OK" });
+    expect(existsSync(join(repo, "T-1.md"))).toBe(false);
+    expect(git("status", "--porcelain")).toBe("");
+  });
+
+  test("the copy knows the ids of the project's runs: a tool that reuses one fails as it would in real use", () => {
+    // The fixture tool numbers by ticket files only, so it picks T-2, which a run already used.
+    commit(repo, { ".warden/warden.json": WARDEN_JSON, ".gitignore": ".warden/state/\n", ...ticketToolFiles(), ...ticketFiles(["T-1"]) }, "setup");
+    mkdirSync(join(repo, ".warden/state/T-2"), { recursive: true });
+    const r = verify("tickets", "--write");
+    expect(r.rows.find((x) => x.label === "create")).toMatchObject({ status: "FAIL", detail: expect.stringContaining("id T-2 is already used by a warden run") });
   });
 });

@@ -7,7 +7,6 @@ import { join } from "node:path";
 import { DEFAULT_COMMAND_TIMEOUT_SEC } from "../config/config.ts";
 import { dirtyOutsideHistory } from "../engine/proof.ts";
 import * as proc from "../lib/proc.ts";
-import { BY_ENV } from "../lib/tool-log.ts";
 import { taskDir } from "../state/paths.ts";
 import { appendEvent, readRun, withLock, writeRun } from "../state/store.ts";
 import type { CommandDef, EventType, RunJson } from "../types.ts";
@@ -57,7 +56,6 @@ export function commandEnv(ctx: GateContext, cmd: CommandDef, worktree: string):
     WARDEN_TASK: ctx.run.task,
     WARDEN_MAIN_ROOT: ctx.main,
     WARDEN_WORKTREE: worktree,
-    [BY_ENV]: "check", // a `warden tools` call here is logged as the check step's, not the agent's (0.10)
   };
 }
 

@@ -1,18 +1,20 @@
 // warden tools --verify tickets [--write] (0.10): proves a project's tickets tool keeps the contract the engine and the
 // site read, with the engine's own checks. Warden ships this check instead of a ticket tool.
-// It always runs in a throwaway copy of the current checkout, removed afterwards, so the checkout never changes:
-// a worktree of HEAD with the uncommitted files copied in and node_modules linked, or, in a repo with no commit yet
-// (during /warden:init), a new repo with those files. A tool that is not committed yet is tested too.
+// It always runs in a throwaway copy, removed afterwards, so the project never changes: a new repo with the current
+// checkout's last commit (when there is one) and its uncommitted files, the ids of the project's warden runs as
+// empty .warden/state/<id> folders, and node_modules linked. Inside it, the main checkout is the copy itself, so a
+// tool that writes through $WARDEN_MAIN_ROOT writes into the copy too. A tool that is not committed yet is tested too.
 // --write also creates a ticket and changes its status: only for tickets kept as repo files. A tool for a tracker
 // outside the repo tests those with saved tracker answers instead (see the ticket tool recipe).
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { loadWardenJson } from "../config/config.ts";
 import { WardenError } from "../lib/exit.ts";
-import { head, porcelain, worktreeAdd, worktreeRemove } from "../lib/git.ts";
+import { hasHead, porcelain } from "../lib/git.ts";
+import { stateRoot } from "../state/paths.ts";
 import {
   createProblem, DAG_TIMEOUT_SEC, dagRowProblem, detailProblem, isSetStatusOutput, runTicketTool, SET_STATUS_SHAPE, SHORT_TIMEOUT_SEC,
   ticketsTool, TicketToolError,
@@ -22,7 +24,6 @@ import type { DagTicket, TicketDetail, ToolCheck } from "../types.ts";
 const UNKNOWN_ID = "WARDEN-VERIFY-0";
 const BODY = "Made by warden tools --verify tickets --write in a throwaway copy.";
 
-type Row = ToolCheck;
 // Runs the tool in the throwaway copy, with the tool code from there.
 type Call = (args: string[], timeoutSec?: number) => unknown;
 
@@ -42,7 +43,7 @@ function exitOf(call: Call, args: string[]): number {
   }
 }
 
-function dagRows(out: unknown, label: string, rows: Row[]): DagTicket[] | null {
+function dagRows(out: unknown, label: string, rows: ToolCheck[]): DagTicket[] | null {
   if (!Array.isArray(out)) {
     rows.push({ status: "FAIL", label, detail: "must print a JSON array of tickets" });
     return null;
@@ -86,7 +87,7 @@ function changedProblem(changed: string[], actual: string[]): string | null {
   return null;
 }
 
-function readChecks(call: Call, wt: string, rows: Row[]): DagTicket[] {
+function readChecks(call: Call, wt: string, rows: ToolCheck[]): DagTicket[] {
   let pattern: RegExp;
   try {
     pattern = new RegExp(loadWardenJson(join(wt, ".warden", "warden.json")).taskIdPattern);
@@ -151,7 +152,7 @@ function readChecks(call: Call, wt: string, rows: Row[]): DagTicket[] {
 
 // create, then set-status doing (twice) and archived, each checked with the engine's own checks and against the files
 // it really changed.
-function writeChecks(call: Call, main: string, wt: string, known: DagTicket[], rows: Row[]): void {
+function writeChecks(call: Call, wt: string, known: DagTicket[], rows: ToolCheck[]): void {
   const bodyFile = join(dirname(wt), "body.md"); // next to the copy, not in it
   writeFileSync(bodyFile, `${BODY}\n`);
   const step = (label: string, args: string[], problemOf: (out: Record<string, unknown>) => string | null): Record<string, unknown> | null => {
@@ -169,7 +170,7 @@ function writeChecks(call: Call, main: string, wt: string, known: DagTicket[], r
     }
   };
   const created = step("create", ["create", "--title", "warden verify", "--type", "chore", "--body-file", bodyFile], (out) => {
-    const problem = createProblem(main, out, "chore");
+    const problem = createProblem(wt, out, "chore"); // the copy holds the ids of the project's runs
     if (problem) return problem;
     const ticket = out.ticket as TicketDetail;
     return known.some((t) => t.id === ticket.id) ? `id ${ticket.id} is already a ticket; create must pick a new id`
@@ -190,12 +191,22 @@ function writeChecks(call: Call, main: string, wt: string, known: DagTicket[], r
   step("set-status archived", ["set-status", id, "archived"], moved("archived"));
 }
 
-function hasCommit(checkout: string): boolean {
-  return spawnSync("git", ["-C", checkout, "rev-parse", "-q", "--verify", "HEAD"], { stdio: "ignore" }).status === 0;
+function git(cwd: string, args: string[], input?: Buffer): Buffer {
+  const res = spawnSync("git", ["-C", cwd, ...args], { input, maxBuffer: 1024 * 1024 * 1024 });
+  if (res.status !== 0) throw new Error(`git ${args[0]} failed: ${res.stderr?.toString().trim() ?? ""}`);
+  return res.stdout;
 }
 
-// Fills the throwaway copy `wt` with `checkout`'s uncommitted files and links its node_modules.
-function copyUncommitted(checkout: string, wt: string): void {
+// The throwaway copy at `wt`: see the top of this file. Its files are committed there, so each check sees only what
+// the tool changed.
+function makeCopy(main: string, checkout: string, wt: string): void {
+  mkdirSync(wt, { recursive: true });
+  git(wt, ["init", "-q"]);
+  if (hasHead(checkout)) {
+    const tar = git(checkout, ["archive", "--format=tar", "HEAD"]);
+    const res = spawnSync("tar", ["-x", "-C", wt], { input: tar, maxBuffer: 1024 * 1024 * 1024 });
+    if (res.status !== 0) throw new Error(`tar failed: ${res.stderr?.toString().trim() ?? ""}`);
+  }
   for (const [path, hash] of dirty(checkout)) {
     const target = join(wt, path);
     if (hash === null) rmSync(target, { force: true });
@@ -204,11 +215,17 @@ function copyUncommitted(checkout: string, wt: string): void {
       copyFileSync(join(checkout, path), target);
     }
   }
+  const state = stateRoot(main);
+  if (existsSync(state)) {
+    for (const task of readdirSync(state).filter((d) => !d.startsWith("_"))) mkdirSync(join(stateRoot(wt), task), { recursive: true });
+  }
+  git(wt, ["add", "-A"]);
+  git(wt, ["-c", "user.name=warden", "-c", "user.email=warden@localhost", "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "--no-verify", "-m", "copy"]);
   const modules = join(checkout, "node_modules");
   if (existsSync(modules) && !existsSync(join(wt, "node_modules"))) symlinkSync(modules, join(wt, "node_modules"));
 }
 
-export function verifyTickets(main: string, checkout: string, root: string, write: boolean): Row[] {
+export function verifyTickets(main: string, checkout: string, root: string, write: boolean): ToolCheck[] {
   let tool: string;
   try {
     tool = ticketsTool(checkout);
@@ -216,28 +233,18 @@ export function verifyTickets(main: string, checkout: string, root: string, writ
     if (!(err instanceof WardenError)) throw err;
     return [{ status: "FAIL", label: "role tickets", detail: err.message }];
   }
-  const rows: Row[] = [{ status: "OK", label: "role tickets", detail: tool }];
+  const rows: ToolCheck[] = [{ status: "OK", label: "role tickets", detail: tool }];
   const dir = mkdtempSync(join(tmpdir(), "warden-verify-"));
   const wt = join(dir, "checkout");
-  const worktree = hasCommit(checkout); // with no commit yet (during /warden:init), a new repo instead of a worktree
   try {
-    if (worktree) worktreeAdd(main, wt, head(checkout));
-    else if (spawnSync("git", ["init", "-q", wt], { stdio: "ignore" }).status !== 0) throw new Error("git init failed");
-    copyUncommitted(checkout, wt);
+    makeCopy(main, checkout, wt);
     const call: Call = (args, timeoutSec = SHORT_TIMEOUT_SEC) => runTicketTool(main, root, args, timeoutSec, wt);
     const known = readChecks(call, wt, rows);
-    if (write) writeChecks(call, main, wt, known, rows);
+    if (write) writeChecks(call, wt, known, rows);
     else rows.push({ status: "SKIP", label: "create, set-status", detail: "add --write for tickets kept as repo files; a tool for a tracker tests them with saved tracker answers" });
   } catch (err) {
     rows.push({ status: "FAIL", label: "throwaway copy", detail: `could not make or use it: ${message(err)}` });
   } finally {
-    if (worktree) {
-      try {
-        worktreeRemove(main, wt);
-      } catch {
-        // never added, or already gone; git forgets a removed folder at its next prune
-      }
-    }
     rmSync(dir, { recursive: true, force: true });
   }
   return rows;

@@ -12,7 +12,7 @@ A tool is a small TypeScript object with a name and a `run` function. Anyone (yo
 warden tools <name> <args...>
 ```
 
-Typical tools wrap something your project already has: an end-to-end test runner, a CI status lookup, a code graph query, your ticket system. A tool gives the agent one short, safe command for a job it would otherwise do with long raw commands. Warden steers the agent to the tools with a skill, a rule and the retro, not by blocking (see [Raw commands a tool covers](#raw-commands-a-tool-covers)).
+Typical tools wrap something your project already has: an end-to-end test runner, a CI status lookup, a code graph query, your ticket system. A tool gives the agent one short, safe command for a job it would otherwise do with long raw commands. Warden steers the agent to the tools with a skill, a rule and the retro, not by watching or blocking commands (see [Raw commands a tool covers](#raw-commands-a-tool-covers)).
 
 ## The layout
 
@@ -99,7 +99,7 @@ For the common jobs, the skill has a **recipe** each: what to build, its subcomm
 | `warden tools --init` | `{"written":[...]}` | 0 |
 | `warden tools --skill` | `{"written":[".claude/skills/project-tools/SKILL.md"]}`, see [The project tools skill](#the-project-tools-skill) | 0 |
 | `warden tools --verify tickets [--write]` | `{"checks":[{"status","label","detail"}]}`: the `tickets` tool against its contract, in a throwaway worktree (the last commit plus uncommitted files), so the checkout never changes. `--write` also checks `create` and `set-status`: only for tickets kept as repo files | 1 when any row is `FAIL`; 2 for bad flags |
-| `warden tools --log [--since YYYY-MM-DD]` | `{"since","tools":[...],"raw":[...],"commands":[...]}`, see [The logs](#the-logs) | 0; 2 for bad flags |
+| `warden tools --usage [--since YYYY-MM-DD]` | `{"since","sessions","tools":[...],"raw":[...],"commands":[...]}`, see [Usage statistics](#usage-statistics) | 0; 2 for bad flags |
 
 `--check` has warden's own rows first: `index.ts` loads, each role names a tool in `index.ts`, each tool in `replaces.json` is in `index.ts`, the project tools skill is up to date, and the `tickets` tool has `create` (`role tickets create`: warden calls `create` with no flags, which must exit 1; exit 2 means it is missing). Then it runs each tool's `probe`. A probe returns rows with status `OK`, `FAIL`, `WARN` or `SKIP`; a tool without a probe gets one `SKIP` row. Use a probe to check that a program or a token the tool needs is there. Run `warden tools --check` before you commit a tool change.
 
@@ -139,37 +139,36 @@ Every run starts from a ticket (0.9), so every project needs a `tickets` role; `
 Warden refuses nothing for it: the goal is to steer the agent to the tools, not to block it. The file is used twice:
 
 - The project tools skill tells the agent to run the tool instead of those commands.
-- The command log marks each time the agent ran one anyway. The retro then finds out why (the tool lacks a command, its usage is unclear, or a rule is needed) and fixes that.
+- `warden tools --usage` counts each time the agent ran one anyway. The retro then finds out why (the tool lacks a command, its usage is unclear, or a rule is needed) and fixes that.
 
-An entry is the words of a command as typed, with no path in its first word: `gh pr` matches `gh pr create`, `x=$(gh pr list)` and `sudo -E gh pr view` wherever they run as a program, not `gh run list`, `which gh` or a path to `gh`. Words in quotes and in heredoc file contents do not count. A later word may hold a `/`, as in `npx @playwright/test`. Only the main checkout's file counts; a missing or broken file marks nothing, and `warden tools --check` reports a broken one. List a command only when the tool covers every use of it, with narrow words (`gh pr`, not `gh`).
+An entry is the words of a command as typed, with no path in its first word: `gh pr` matches `gh pr create`, `x=$(gh pr list)` and `sudo -E gh pr view` wherever they run as a program, not `gh run list`, `which gh` or a path to `gh`. Words in quotes and in heredoc file contents do not count. A later word may hold a `/`, as in `npx @playwright/test`. Only the main checkout's file counts; a missing or broken file counts nothing, and `warden tools --check` reports a broken one. List a command only when the tool covers every use of it, with narrow words (`gh pr`, not `gh`).
 
 ## The project tools skill
 
 `warden tools --skill` writes `.claude/skills/project-tools/SKILL.md` from `index.ts` and `replaces.json`. Its description names every tool with its first-level commands (the tool's `commands` field) and summary, so the agent always knows the tools exist; the body has each tool's usage and the raw commands it covers. Run it after each tool change and commit the file with it. `warden tools --check` warns (`project-tools skill`) when the file is missing or out of date. Nobody edits it by hand.
 
-## The logs
+## Usage statistics
 
-Warden keeps two logs in `.warden/state/_tools/` of the main checkout. They are gitignored with the rest of `.warden/state/` and never leave your machine. Every line passes one filter before it is written. The filter replaces secrets by `***`: values of names like `TOKEN`, `KEY`, `PASS`, `SECRET` and `PRIVATE`, `--token` and `--password` flags, `-u user:password`, auth and API-key headers, and passwords in URLs. A filter only knows the forms it was given, which is one more reason the logs stay local.
+Warden writes nothing while the agent works: there is no log to keep, rotate or clean. At retro time, `warden tools --usage [--since YYYY-MM-DD]` reads what the agent ran from Claude Code's own session transcripts, the ones warden linked to this project (each session's record in `.warden/state/_sessions/` and each task's `sessions.jsonl`, subagents included).
 
-- `calls.jsonl`: every `warden tools` call the agent makes: tool, args, exit code and time. The engine's ticket tool calls are not logged.
-- `commands.jsonl`: every other Bash command the agent runs that does more than look around (`ls`, `cat`, `sed`, `grep`, `git` and `warden` itself are left out), with the task it ran for and the raw command a tool covers, if any.
-
-Times are stored in UTC. Past 2 MB a log moves aside under a name of its own (`<name>.old-<time>-<pid>.jsonl`), so two agents writing at once never overwrite each other; the two newest of those are kept. A command warden refuses is not logged, since it did not run.
-
-`warden tools --log [--since YYYY-MM-DD]` sums them. `--since` is a date in your own timezone, like the retro's `last`, and counts from local midnight.
+- Only commands that ran count: one the user or a hook refused is left out.
+- Claude Code keeps transcripts for about 30 days by default (`cleanupPeriodDays` in its settings). `sessions.missing` counts the ones already gone; the retro runs every few days, well within that.
+- `--since` is a date in your own timezone, like the retro's `last`, counted from local midnight.
+- Secrets in the printed examples are replaced by `***`: values of names like `TOKEN`, `KEY`, `PASS`, `SECRET` and `PRIVATE` (`PGPASSWORD=...` too), `--token` and `--password` flags, `-p` after a login, `-u user:password`, auth and API-key headers, and passwords in URLs. A filter only knows the forms it was given; nothing is stored, and the summary stays on your machine unless someone copies it out.
 
 ```json
 {
   "since": "2026-10-01",
-  "tools": [{ "tool": "e2e", "agent": { "calls": 6, "failed": 1 }, "check": { "calls": 8, "failed": 2 } }],
+  "sessions": { "read": 12, "missing": 0 },
+  "tools": [{ "tool": "e2e", "calls": 14, "failed": 3 }],
   "raw": [{ "tool": "pr", "prefix": "gh pr", "count": 2 }],
   "commands": [{ "shape": "curl", "count": 9, "avgChars": 240, "example": "curl -s https://..." }]
 }
 ```
 
-- `tools`: per tool, the agent's own calls apart from those warden's check step (or a periodic command check) made, as when `steps.json` runs `warden tools verify types`. A failure is any exit that is not 0, so failing tests count for a test tool too.
+- `tools`: `warden tools <name>` calls the agent made, per tool (a call through a role counts for its tool). A failure is a call that ended in an error, so failing tests count for a test tool too. Calls that warden's check step makes are not in the transcripts and do not count.
 - `raw`: raw commands a tool covers that the agent ran anyway.
-- `commands`: commands typed at least twice, costliest (count times length) first, grouped by their first program and up to two subcommand words.
+- `commands`: commands run at least twice with no tool, costliest (count times length) first, grouped by their program and up to two subcommand words. Commands that only look around (`ls`, `cat`, `sed`, `grep`) and `git` are left out.
 
 The retro reads this summary to suggest the next tool, a fix to a tool, or a rule.
 

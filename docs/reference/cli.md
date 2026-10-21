@@ -446,7 +446,7 @@ warden tools
 warden tools --check [<name|role>]
 warden tools --init
 warden tools --skill
-warden tools --log [--since YYYY-MM-DD]
+warden tools --usage [--since YYYY-MM-DD]
 warden tools --verify tickets [--write]
 warden tools <name|role> [args...]
 ```
@@ -460,13 +460,13 @@ Runs the project's own tools from `.warden/tools/`. See [tools and roles](../con
 | `--init` | Writes the missing files of `.warden/tools/` (`index.ts`, `tool.ts`, `roles.json`, `replaces.json`). Never overwrites | `{"written":[...]}` |
 | `--skill` | Writes `.claude/skills/project-tools/SKILL.md` from the tools (0.10): each tool's name, first-level `commands`, summary, usage and the raw commands it covers, so the agent knows they exist. `--check` warns when it is missing or out of date | `{"written":[".claude/skills/project-tools/SKILL.md"]}` |
 | `--verify tickets [--write]` | Checks the `tickets` tool against its contract (0.10), in a throwaway copy, removed afterwards: a worktree of the checkout's last commit plus its uncommitted files, with its `node_modules` linked, or, in a repo with no commit yet, a new repo with those files. A problem with the copy or with `warden.json` is a `FAIL` row. It checks `dag`, `dag <epic>`, `show`, exit 3 for an unknown id, exit 2 for bad usage, exit 1 and no writes for `create` without flags. `--write`, for tickets kept as repo files only, also creates a ticket, sets it to `doing` twice and to `archived`, and checks `changed` against the files that changed. Exit 1 when any row is `FAIL` | `{"checks":[{status, label, detail}]}` |
-| `--log [--since YYYY-MM-DD]` | Sums the tool call and command logs (0.10), all of them or since a local date: calls and failures per tool, the agent's apart from the check step's, raw commands a tool covers that the agent ran anyway, and commands typed at least twice, costliest first. See [the logs](../concepts/tools-and-roles.md#the-logs). Exit 2 for bad flags or a date that does not exist | `{"since", "tools":[{tool, agent: {calls, failed}, check: {calls, failed}}], "raw":[{tool, prefix, count}], "commands":[{shape, count, avgChars, example}]}` |
+| `--usage [--since YYYY-MM-DD]` | Counts what the agent ran (0.10), from Claude Code's session transcripts that warden linked to this project, all of them or since a local date: `warden tools` calls and failures per tool, raw commands a tool covers that the agent ran anyway, and commands run at least twice, costliest first. Refused commands are left out; secrets in the examples are hidden. Writes nothing. See [usage statistics](../concepts/tools-and-roles.md#usage-statistics). Exit 2 for bad flags or a date that does not exist | `{"since", "sessions":{read, missing}, "tools":[{tool, calls, failed}], "raw":[{tool, prefix, count}], "commands":[{shape, count, avgChars, example}]}` |
 | `<name> [args]` | Runs the tool. A word is a tool name first, then a role | The tool's own output. warden prints nothing on stdout |
 | `<name> -h` | Prints the tool's `usage`, or its `summary` | Text |
 
 A tool runs in the checkout root, with `WARDEN_MAIN_ROOT` set to the main checkout and the plugin's `bin` first on `PATH`. In a task worktree, that worktree's tools run. When the engine runs the `tickets` tool, the code always comes from the main checkout.
 
-Exit codes: the tool's own exit code (0 to 255). A tool that throws or returns something else exits 1. Exit 3 when there is no such tool or role, or `.warden/tools/index.ts` is missing (`no project tools: run warden tools --init`). Exit 1 when `index.ts` or `roles.json` is broken; each problem is a line on stderr. A broken `replaces.json` stops nothing: it refuses no command, and `--check` shows each problem as a `FAIL` row. Each call is logged, with secrets hidden, to `.warden/state/_tools/calls.jsonl`.
+Exit codes: the tool's own exit code (0 to 255). A tool that throws or returns something else exits 1. Exit 3 when there is no such tool or role, or `.warden/tools/index.ts` is missing (`no project tools: run warden tools --init`). Exit 1 when `index.ts` or `roles.json` is broken; each problem is a line on stderr. A broken `replaces.json` stops nothing: `--check` shows each problem as a `FAIL` row.
 
 ---
 

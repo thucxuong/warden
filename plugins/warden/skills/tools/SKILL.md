@@ -8,7 +8,7 @@ argument-hint: "[<name>]"
 
 This project owns its tools. They live in `.warden/tools/`, and warden ships none and sends no fixes for them: change them like any other code in the repo. A tool gives the agent one short, safe command for a job it would otherwise do with long raw commands.
 
-The ARGUMENTS given with this skill, if any, name the tool to write or change. Without a name, run `warden tools` to see what exists and `warden tools --log` to see which commands keep coming back (see "The logs"), then ask the user what the tool should do.
+The ARGUMENTS given with this skill, if any, name the tool to write or change. Without a name, run `warden tools` to see what exists and `warden tools --usage` to see which commands keep coming back (see "Usage statistics"), then ask the user what the tool should do.
 
 ## Layout
 
@@ -45,7 +45,7 @@ Every tool follows these, so warden and the agent can use any tool the same way.
 - **Same in every checkout.** Paths are relative to the checkout the tool runs in; the main checkout is `$WARDEN_MAIN_ROOT`.
 - **One environment per worktree.** Warden runs tasks side by side, each in its own worktree. A tool that starts the app or touches data works on this checkout's own ports and database only, from `.dev-env.json` (see `recipes/dev.md`). Two worktrees never share a server or a database.
 - **Remote systems through a list.** A tool that reaches a tracker, a CI, a cloud or a repo host works only on the org, project or resources named in a config file, and refuses the rest. Reads are open; each write is its own narrow subcommand.
-- **No logging of its own.** Warden logs every call (see "The logs").
+- **No logging of its own.** `warden tools --usage` counts every call from the session transcripts (see "Usage statistics").
 - **`commands` lists its first-level commands** (`["create", "show", "merge"]`), so the project tools skill can name them.
 - **Tested.** Logic worth testing sits in plain functions with a `<name>.test.ts` next to the tool. Helpers that several tools share go in `.warden/tools/lib/`; tools import those, never each other.
 
@@ -131,25 +131,22 @@ Warden reads only the roles above. When a project needs one of these jobs, write
 
 `.warden/tools/replaces.json` maps a tool to the raw commands it covers: `{"pr": ["gh pr", "az repos pr"], "db": ["psql"]}`. Warden refuses nothing for it. It is used in two places:
 - The project tools skill tells the agent to run the tool instead of those commands.
-- The command log marks each time the agent ran one anyway, so the retro can find out why: the tool is missing a command, its usage is unclear, or a rule is needed.
+- `warden tools --usage` counts each time the agent ran one anyway, so the retro can find out why: the tool is missing a command, its usage is unclear, or a rule is needed.
 
 Rules for entries:
 - An entry is the words of a command as typed, with no path in its first word: `gh pr` matches `gh pr create`, `x=$(gh pr list)` and `sudo -E gh pr view` wherever they run as a program, not `gh run list`, `which gh` or a path to `gh`. Words in quotes and in heredoc file contents do not count. A later word may hold a `/`, as in `npx @playwright/test`.
 - List a command only when the tool covers every use of it, with narrow words: `gh pr`, not `gh`.
 - `warden tools --check` fails an entry whose tool is not in `index.ts`, or one with a path in it.
 
-## The logs
+## Usage statistics
 
-Warden keeps two logs in `.warden/state/_tools/` of the main checkout. They are not committed and never leave the machine. Every line passes one filter before it is written, which replaces secrets by `***`: values of names like `TOKEN`, `KEY`, `PASS`, `SECRET`, `PRIVATE`; `--token`/`--password` flags; `-u user:password`; auth and API-key headers; passwords in URLs. A filter only knows the forms it was given, so the logs stay on this machine too. Times are kept in UTC.
+Warden writes nothing while the agent works. At retro time, `warden tools --usage [--since YYYY-MM-DD]` reads what the agent ran from Claude Code's own session transcripts: every session and subagent warden linked to this project. A command the user or a hook refused did not run and is left out. Claude Code keeps transcripts for about 30 days by default; `sessions.missing` counts the ones already gone. `--since` is a date in this machine's timezone, like the retro's `last`. Secrets in the examples it prints are replaced by `***`.
 
-- `calls.jsonl`: every `warden tools` call the agent makes, with its args, exit code and time. The engine's ticket tool calls are not logged.
-- `commands.jsonl`: every other command the agent runs that does more than look around (`ls`, `cat`, `sed`, `grep`, `git` and the like are left out), with the raw commands a tool covers marked.
-
-`warden tools --log [--since YYYY-MM-DD]` sums them as JSON. `--since` is a date in this machine's timezone, like the retro's `last`.
-- `tools`: calls and failures per tool, the agent's (`agent`) apart from those warden's check step made (`check`). A failure is any exit that is not 0: for a test tool, failing tests count too. Many failures mean the tool or its usage text needs work, or the tests it runs keep catching something.
+It prints JSON:
+- `tools`: `warden tools <name>` calls per tool (a call through a role counts for its tool), and how many failed. For a test tool, failing tests count too. Many failures mean the tool or its usage text needs work, or the tests it runs keep catching something.
 - `raw`: the raw commands a tool covers that the agent ran anyway, with the tool. Check that the tool does that job and that its usage and the skill say how.
-- `commands`: commands typed at least twice, costliest (count times length) first, each with an example. A command that keeps coming back is the next tool, or a new subcommand of one.
+- `commands`: commands run at least twice with no tool, costliest (count times length) first, each with an example. Commands that only look around (`ls`, `cat`, `sed`, `grep`) and `git` are left out. A command that keeps coming back is the next tool, or a new subcommand of one.
 
-The retro reads this to suggest new tools.
+The retro reads this to suggest new tools, fixes to tools, and rules.
 
 Git and paths: run `git -C <dir> ...` and use absolute paths, one simple command per call. A plain `cd <dir>` on its own is fine; never chain it as `cd <dir> && ...`.

@@ -27,7 +27,7 @@ export const HELP: Record<string, string> = {
   report: "warden report --kind bug|enhancement --title <t> --body <b>|--file <p> | warden report --status [--all | --write] | warden report reply <id> --body <answer>|--file <p> | warden report sync [--background] | warden report inbox [--all] | warden report set <key|file> --status <s> [--note <t>] [--fixed-in <v>] | warden report ask <key> --question <q>",
   retro: "warden retro --done [--date YYYY-MM-DD] [--note <t>]",
   upgrade: "warden upgrade --notes | --done",
-  tools: "warden tools [--check [<name>] | --init | --skill | --log [--since YYYY-MM-DD] | --verify tickets [--write]] | warden tools <name|role> [args...]",
+  tools: "warden tools [--check [<name>] | --init | --skill | --usage [--since YYYY-MM-DD] | --verify tickets [--write]] | warden tools <name|role> [args...]",
   site: "warden site [--port <n>] [--no-open]",
   orchestrate: "warden orchestrate plan <epic> | status <epic> | set-status <id> <status> | create --title <t> --type <type> --body-file <path> [--epic <id>] [--blocked-by <id,id>]",
   checks: "warden checks | warden checks run <name> [--background] | warden checks done <name> [--date YYYY-MM-DD] [--note <t>]",

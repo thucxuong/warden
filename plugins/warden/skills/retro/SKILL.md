@@ -11,7 +11,7 @@ Run this only when the user asked for a retro or agreed to one you offered (sess
    - Run `warden status --all`.
    - Read `.warden/history/*/summary.json` for shipped runs. History is written only when a run enters its ship step, with status `shipping` (meaning "written at ship entry"). A run without a ship step (for example `do`) has no history folder: its data is in `.warden/state/<task>/` (`run.json`, `events.jsonl`), and `warden status --all` shows its status.
    - Read the notes in `.warden/fixes/`.
-   - Run `warden tools --log --since <last>` (just `warden tools --log` when `last` is `null`). It sums what the agent ran: `tools` (calls and failures per tool, the agent's apart from the check step's), `raw` (raw commands a tool covers that the agent ran anyway) and `commands` (commands typed at least twice with no tool, costliest first).
+   - Run `warden tools --usage --since <last>` (just `warden tools --usage` when `last` is `null`). It counts what the agent ran, from the session transcripts: `tools` (calls and failures per tool), `raw` (raw commands a tool covers that the agent ran anyway) and `commands` (commands run at least twice with no tool, costliest first).
    - Look at the current conversation.
 2. Write the retro in two parts.
    - `## Friction`: a list of what went wrong or took too long. Each item says what happened. Do not write a vague item.

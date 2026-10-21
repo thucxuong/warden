@@ -53,6 +53,11 @@ export function revParse(cwd: string, ...args: string[]): string {
   return gitOk(cwd, ["rev-parse", ...args]).trim();
 }
 
+// Whether the repo has a commit yet (a new repo during /warden:init has none).
+export function hasHead(cwd: string): boolean {
+  return git(cwd, ["rev-parse", "-q", "--verify", "HEAD"]).code === 0;
+}
+
 export function head(cwd: string): string {
   return revParse(cwd, "HEAD");
 }

@@ -6,7 +6,6 @@ import { join } from "node:path";
 import { loadWardenJson } from "../config/config.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
 import * as proc from "../lib/proc.ts";
-import { BY_ENV } from "../lib/tool-log.ts";
 import { mainRoot, stateRoot } from "../state/paths.ts";
 import { listTasks, readRun, runExists } from "../state/store.ts";
 import type { Ctx } from "../types.ts";
@@ -57,7 +56,7 @@ function localDate(now = new Date()): string {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
-function validDate(text: string): boolean {
+export function validDate(text: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return false;
   const ms = Date.parse(text);
   return !Number.isNaN(ms) && new Date(ms).toISOString().slice(0, 10) === text;
@@ -488,7 +487,7 @@ async function runCheck(args: string[], ctx: Ctx): Promise<void> {
   try {
     const result = await proc.run(check.run, {
       cwd: main,
-      env: { PROJECT_AGENT: undefined, WARDEN_MAIN_ROOT: main, PATH: proc.pathWithBin(ctx.root, ctx.env.PATH), [BY_ENV]: "check" },
+      env: { PROJECT_AGENT: undefined, WARDEN_MAIN_ROOT: main, PATH: proc.pathWithBin(ctx.root, ctx.env.PATH) },
       timeoutSec: check.timeoutSec,
       log,
     });
