@@ -130,7 +130,6 @@ function barrelProblems(value: unknown): string[] {
 export const TOOLS_MAIN_ENV = "WARDEN_TOOLS_MAIN";
 
 // Loads <root>/.warden/tools/index.ts and roles.json. Exit 3 when index.ts is missing, ToolsError when either is broken.
-
 export async function loadTools(root: string): Promise<LoadedTools> {
   const index = join(toolsDir(root), "index.ts");
   if (!existsSync(index)) throw new WardenError("no project tools: run warden tools --init", EXIT.NOT_FOUND);
@@ -153,7 +152,7 @@ export async function loadTools(root: string): Promise<LoadedTools> {
 }
 
 // replaces.json only marks commands and feeds the skill, so a broken one never stops a tool (or the engine's tickets tool):
-// it counts as {} here and in the hook, and --check reports it.
+// it counts as {} wherever it is read, and --check reports it.
 export function replacesOrNone(root: string): { replaces: Replaces; problems: string[] } {
   try {
     return { replaces: readReplaces(root), problems: [] };

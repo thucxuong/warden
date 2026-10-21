@@ -30,8 +30,8 @@ Jira, Linear, GitHub, Azure DevOps and the like. Wrap the tracker's CLI or API.
 ## Prove it
 
 1. Write the tool in the worktree of the task (or, during `/warden:init`, in the main checkout before anything is committed). Add it to the array in `.warden/tools/index.ts`, and set `"tickets": "<name>"` in `.warden/tools/roles.json`.
-2. Run `warden tools --verify tickets`. It tests the tool in a throwaway worktree (this checkout's last commit plus its uncommitted files, removed afterwards), so this checkout never changes. It reads the tickets, checks the JSON and the exit codes, and that `create` without flags writes nothing.
-   - Tickets as repo files: run `warden tools --verify tickets --write`. It also creates a ticket, moves it to `doing` twice and to `archived`, and checks that `changed` names exactly the files that changed, all in the throwaway worktree.
+2. Run `warden tools --verify tickets`. It tests the tool in a throwaway copy that is its own repo (this checkout's last commit plus its uncommitted files, removed afterwards), so the project never changes. It reads the tickets, checks the JSON and the exit codes, and that `create` without flags writes nothing.
+   - Tickets as repo files: run `warden tools --verify tickets --write`. It also creates a ticket, moves it to `doing` twice and to `archived`, and checks that `changed` names exactly the files that changed, all in the throwaway copy.
    - A tracker: never add `--write`, since it would make a real ticket. Run the tool's own tests with the saved answers instead.
 3. Fix the tool until it exits 0. Each `FAIL` row says what is wrong.
 4. Run `warden tools --skill`, then `warden tools --check`: it must exit 0. Show the user the outputs.

@@ -2,7 +2,7 @@
 
 Connect warden to your tickets by writing a tool for the `tickets` role. Every warden run starts from a ticket (0.9), so every project needs one: `warden start` reads the ticket, `/warden:orchestrate` plans and updates them, and the agent creates a ticket for a request that has none.
 
-No tracker? Keep tickets as Markdown files in the repo (step 1 below). Warden ships no ticket tool code: `/warden:init` has the project's agent write the tool from a recipe, then prove it with `warden tools --verify tickets --write` (0.10), which runs in a throwaway worktree. The engine and the warden site read the tool's output, so that check is what tells you it works.
+No tracker? Keep tickets as Markdown files in the repo (step 1 below). Warden ships no ticket tool code: `/warden:init` has the project's agent write the tool from a recipe, then prove it with `warden tools --verify tickets --write` (0.10), which runs in a throwaway copy of the project. The engine and the warden site read the tool's output, so that check is what tells you it works.
 
 Warden does not know where your tickets live. It could be Markdown files in the repo, Jira, Linear or Azure DevOps. You write one small tool that answers a few questions in a fixed format, and point the `tickets` role at it. Everything else (waves, runs, shipping) is warden's job.
 
@@ -198,7 +198,7 @@ A `tool.ts` written before 0.8 has no `CreateResult` or `LinkResult`; add the tw
    warden orchestrate plan PG-100
    ```
 
-   `--verify tickets` runs each subcommand in a throwaway worktree (the last commit plus your uncommitted files, removed afterwards), so your checkout never changes, and prints one row per check (`OK`, `WARN`, `FAIL` or `SKIP`). It exits 1 when a row is `FAIL`, and the row says what to fix. With `--write` it also creates a ticket, sets it to `doing` twice (the second time must change nothing) and to `archived`, and checks that `changed` names exactly the files that changed. Use `--write` only for tickets kept as repo files: for a tracker it would create a real ticket, so test `create` and `set-status` there with saved tracker answers in the tool's own tests.
+   `--verify tickets` runs each subcommand in a throwaway copy (its own repo: the last commit plus your uncommitted files, removed afterwards), so your checkout never changes, and prints one row per check (`OK`, `WARN`, `FAIL` or `SKIP`). It exits 1 when a row is `FAIL`, and the row says what to fix. With `--write` it also creates a ticket, sets it to `doing` twice (the second time must change nothing) and to `archived`, and checks that `changed` names exactly the files that changed. Use `--write` only for tickets kept as repo files: for a tracker it would create a real ticket, so test `create` and `set-status` there with saved tracker answers in the tool's own tests.
 
    `--check` must show `role tickets` and `role tickets create` as `OK`. The plan puts PG-101 in wave 1 and PG-102 and PG-103 in wave 2:
 

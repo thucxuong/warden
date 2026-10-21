@@ -34,7 +34,7 @@ Rules:
 - A tool can use anything your project has: Bun, `node:*` modules and your `node_modules`.
 - Write imports without an extension (`./tool`), so your project's tsconfig needs no extra flags.
 
-Every tool also follows the [principles](../concepts/tools-and-roles.md#principles): it never asks, keeps its output short, uses exit codes 0/1/2/3, checks its login in its probe, and leaves logging to warden.
+Every tool also follows the [principles](../concepts/tools-and-roles.md#principles): it never asks, keeps its output short, uses exit codes 0/1/2/3, checks its login in its probe, and does no logging of its own: the retro counts its calls with `warden tools --usage`.
 
 ## The Tool shape
 
@@ -49,6 +49,7 @@ export interface Tool {
   summary: string;                                   // one line, shown by `warden tools`
   usage?: string;                                    // shown by `warden tools <name> -h`
   probe?: () => Check[] | Promise<Check[]>;          // run by `warden tools --check`
+  commands?: string[];                                // first-level commands, listed in the project tools skill (0.10)
   run: (argv: string[]) => number | Promise<number>; // returns the exit code
 }
 ```

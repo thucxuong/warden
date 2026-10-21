@@ -24,7 +24,6 @@ function verify(...args: string[]): { code: number; rows: { status: string; labe
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) if (v !== undefined) env[k] = v;
   env.WARDEN_ROOT = PLUGIN;
-  delete env.WARDEN_TOOLS_NO_LOG;
   const r = Bun.spawnSync([process.execPath, CLI, "tools", "--verify", ...args], { cwd: repo, env, stdout: "pipe", stderr: "pipe" });
   const out = r.stdout.toString();
   return { code: r.exitCode, rows: out.trim() === "" ? [] : JSON.parse(out).checks };

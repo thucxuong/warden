@@ -39,6 +39,7 @@ export interface Tool {
   summary: string;                                // one line, shown by `warden tools`
   usage?: string;                                 // shown by `warden tools <name> -h`
   probe?: () => Check[] | Promise<Check[]>;       // run by `warden tools --check`
+  commands?: string[];                            // first-level commands, listed in the project tools skill (0.10)
   run: (argv: string[]) => number | Promise<number>; // the exit code
 }
 ```
@@ -75,7 +76,7 @@ Every tool follows the same rules, so warden and the agent can use any tool the 
 - Exit codes: 0 ok, 1 error, 2 bad usage, 3 not found.
 - It is safe to run twice, and anything that can hang has a time limit.
 - A tool that needs a login checks it in its `probe` and names the command that fixes it (for example `gh auth login`). It never starts a login itself; you run it with `! gh auth login`. Tokens come from the environment, never from args, and are never printed.
-- It needs no logging of its own: warden logs every call.
+- It needs no logging of its own: at retro time, `warden tools --usage` counts its calls from the session transcripts.
 - One environment per worktree: a tool that starts the app or touches data uses this checkout's own ports and database, never another task's.
 - Remote systems (a tracker, a CI, a cloud) only through the org, project or resources named in a config file.
 
@@ -98,7 +99,7 @@ For the common jobs, the skill has a **recipe** each: what to build, its subcomm
 | `warden tools --check [<name>]` | `{"checks":[{"tool","status","label","detail"}]}` | 1 when any row is `FAIL` |
 | `warden tools --init` | `{"written":[...]}` | 0 |
 | `warden tools --skill` | `{"written":[".claude/skills/project-tools/SKILL.md"]}`, see [The project tools skill](#the-project-tools-skill) | 0 |
-| `warden tools --verify tickets [--write]` | `{"checks":[{"status","label","detail"}]}`: the `tickets` tool against its contract, in a throwaway worktree (the last commit plus uncommitted files), so the checkout never changes. `--write` also checks `create` and `set-status`: only for tickets kept as repo files | 1 when any row is `FAIL`; 2 for bad flags |
+| `warden tools --verify tickets [--write]` | `{"checks":[{"status","label","detail"}]}`: the `tickets` tool against its contract, in a throwaway copy that is its own repo (the last commit plus uncommitted files), so the checkout never changes. `--write` also checks `create` and `set-status`: only for tickets kept as repo files | 1 when any row is `FAIL`; 2 for bad flags |
 | `warden tools --usage [--since YYYY-MM-DD]` | `{"since","sessions","tools":[...],"raw":[...],"commands":[...]}`, see [Usage statistics](#usage-statistics) | 0; 2 for bad flags |
 
 `--check` has warden's own rows first: `index.ts` loads, each role names a tool in `index.ts`, each tool in `replaces.json` is in `index.ts`, the project tools skill is up to date, and the `tickets` tool has `create` (`role tickets create`: warden calls `create` with no flags, which must exit 1; exit 2 means it is missing). Then it runs each tool's `probe`. A probe returns rows with status `OK`, `FAIL`, `WARN` or `SKIP`; a tool without a probe gets one `SKIP` row. Use a probe to check that a program or a token the tool needs is there. Run `warden tools --check` before you commit a tool change.

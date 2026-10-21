@@ -57,6 +57,7 @@ export interface Tool {
   summary: string;                                // one line, shown by `warden tools`
   usage?: string;                                 // shown by `warden tools <name> -h`
   probe?: () => Check[] | Promise<Check[]>;       // run by `warden tools --check`
+  commands?: string[];                            // first-level commands, listed in the project tools skill (0.10)
   run: (argv: string[]) => number | Promise<number>; // the exit code
 }
 ```
@@ -109,7 +110,7 @@ The `tickets` tool prints one JSON value on stdout. Exit 0 is ok, 1 an error, 2 
 
 The types are in `tool.ts` (`DagTicket`, `TicketDetail`, `SetStatusResult`, `CreateResult`, `LinkResult`). `ticket-tool-recipe.md` in this skill's base directory says how to write the tool, for tickets as Markdown files in `backlog/<ID>.md` or for a tracker. Warden ships no ticket tool code.
 
-The engine and the warden site read this tool's output, so prove every change with `warden tools --verify tickets`. It runs the tool in a throwaway worktree (this checkout's last commit plus its uncommitted files) and removes it afterwards, so this checkout never changes. It must exit 0. For tickets kept as repo files, add `--write`: it also creates a ticket and changes its status, in that throwaway worktree. A tool for a tracker outside the repo never runs `--write`, since it would make a real ticket: test its `create` and `set-status` with saved tracker answers instead (see `ticket-tool-recipe.md`).
+The engine and the warden site read this tool's output, so prove every change with `warden tools --verify tickets`. It runs the tool in a throwaway copy that is its own repo (this checkout's last commit plus its uncommitted files) and removes it afterwards, so this checkout never changes. It must exit 0. For tickets kept as repo files, add `--write`: it also creates a ticket and changes its status, in that throwaway copy. A tool for a tracker outside the repo never runs `--write`, since it would make a real ticket: test its `create` and `set-status` with saved tracker answers instead (see `ticket-tool-recipe.md`).
 
 Anything else, such as end-to-end tests or CI status, needs no role. A check in `.warden/steps.json` simply runs `warden tools e2e run ...`.
 
