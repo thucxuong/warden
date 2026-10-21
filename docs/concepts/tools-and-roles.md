@@ -152,7 +152,7 @@ An entry is the words of a command as typed, without a path: `gh pr` matches `gh
 Warden keeps two logs in `.warden/state/_tools/` of the main checkout. They are gitignored with the rest of `.warden/state/` and never leave your machine. Every line passes one filter before it is written. The filter replaces secrets by `***`: values of names like `TOKEN`, `KEY`, `PASS`, `SECRET` and `PRIVATE`, `--token` and `--password` flags, `-u user:password`, auth and API-key headers, and passwords in URLs. A filter only knows the forms it was given, which is one more reason the logs stay local.
 
 - `calls.jsonl`: every `warden tools` call the agent makes: tool, args, exit code and time. The engine's ticket tool calls are not logged.
-- `commands.jsonl`: every other Bash command the agent runs that does more than look around (`ls`, `cat`, `grep` and `warden` itself are left out), with the task it ran for and the raw command a tool covers, if any.
+- `commands.jsonl`: every other Bash command the agent runs that does more than look around (`ls`, `cat`, `grep`, `git` and `warden` itself are left out), with the task it ran for and the raw command a tool covers, if any.
 
 Times are stored in UTC. Each log moves to `<name>.old.jsonl` past 2 MB, so at most two files of each are kept.
 

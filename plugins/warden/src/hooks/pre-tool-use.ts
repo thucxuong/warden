@@ -434,10 +434,11 @@ function rawCommand(main: string, cmd: string): Raw | null {
   return null;
 }
 
-// Programs that only look around; the retro wants the commands worth a tool. warden calls have their own log.
-const LOOK_AROUND = new Set(["cd", "ls", "cat", "head", "tail", "wc", "pwd", "echo", "printf", "grep", "rg", "find", "which", "true", "sleep", "warden"]);
+// Programs that only look around, and git, whose everyday commands are never worth a tool; the retro wants the
+// commands that are. warden calls have their own log. A raw command a tool covers is still marked.
+const LOOK_AROUND = new Set(["cd", "ls", "cat", "head", "tail", "wc", "pwd", "echo", "printf", "grep", "rg", "find", "which", "true", "sleep", "git", "warden"]);
 
-// What the command does, in a few words: the first program that does more than look around, plus up to two
+// What the command does, in a few words: the first program that is not in LOOK_AROUND, plus up to two
 // subcommand words (`gh pr create`, `bun run dev`, `docker compose up`). null when it only looks around.
 function commandShape(cmd: string): string | null {
   for (const part of splitCommands(cmd)) {

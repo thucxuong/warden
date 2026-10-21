@@ -94,7 +94,7 @@ A `tool.ts` written before 0.8 has no `CreateResult` or `LinkResult`; add the tw
 
 1. **Write the tool**, or have the agent write it with `/warden:tools tickets` (it follows the plugin's `ticket-tool-recipe.md`). Warden ships no ticket tool code: any code that keeps the contract above works. For tickets as Markdown files, save it as `.warden/tools/backlog.ts` and follow these rules:
 
-   - Each ticket is `backlog/<ID>.md`: a header between two `---` lines (`title`, `status`, `type`, and optional `epic` and `blocked_by`, ids comma-separated), then the body. Paths are relative to the checkout the tool runs in.
+   - Each ticket is `backlog/<ID>.md`: a header between two `---` lines (`title`, `status`, `type`, and optional `epic` and `blocked_by`: ids as `A, B`, or in the form your existing tickets already use, such as `[A, B]`), then the body. Paths are relative to the checkout the tool runs in.
    - `dag` lists every ticket whose `type` is not `epic`; `dag <epic>` lists the tickets whose `epic` is that id. A missing `blocked_by` is `[]`.
    - `show <id>` adds the body; an id with no file is exit 3.
    - `set-status` rewrites only the `status` line, and writes nothing (`changed: []`) when the status is already that value.

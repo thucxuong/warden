@@ -36,7 +36,7 @@ describe("raw commands a tool covers", () => {
     for (const cmd of ['git commit -m "use gh pr less"', "grep -r 'gh pr' docs", "cat > notes.md <<'EOF'\nSome notes\ngh pr list shows them\nEOF"]) {
       expect(await bash(cmd, { cwd: main })).toBeNull();
     }
-    expect(log().map((e) => [e.shape, e.raw ?? null])).toEqual([["git commit", null]]);
+    expect(log()).toEqual([]); // git and grep are left out, and nothing in quotes or the heredoc is a command
   });
 
   test("a missing or broken replaces.json marks nothing", async () => {
@@ -61,12 +61,14 @@ describe("the command log", () => {
     await bash("ls -la && cat README.md", { cwd: main });
     await bash("warden next", { cwd: main });
     await bash("cd app && STRIPE_KEY=sk_live_1 curl -u admin:hunter2 -H 'Authorization: Bearer abc.def.ghi' https://x.test/api", { cwd: main });
+    await bash("git add -A && git commit -m 'x\n\nCo-Authored-By: Claude <noreply@anthropic.com>' && bunx prettier --check .", { cwd: main });
     await startFlow(FEATURE);
     await bash("docker compose up -d db");
-    expect(log().map((e) => e.shape)).toEqual(["bun run dev", "curl", "docker compose up"]);
+    expect(log().map((e) => e.shape)).toEqual(["bun run dev", "curl", "bunx prettier", "docker compose up"]);
+    expect(log()[2]!.command).toContain("Co-Authored-By: Claude <noreply@anthropic.com>");
     expect(log()[1]!.command).toBe("cd app && STRIPE_KEY=*** curl -u admin:*** -H 'Authorization: ***' https://x.test/api");
     expect(log()[0]!.task).toBeUndefined();
-    expect(log()[2]!.task).toBe(T);
+    expect(log()[3]!.task).toBe(T);
   });
 
   test("the summary counts the raw commands apart from the repeated ones; --since is a local date", async () => {

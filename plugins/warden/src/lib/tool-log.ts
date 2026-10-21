@@ -27,9 +27,9 @@ const SECRETS: [RegExp, string][] = [
   [/((?:^|\s)(?:-u|--user)(?:=|\s+))(['"]?)([^\s:'"]+):[^\s'"]+\2/g, "$1$2$3:***$2"],
   // mysql -pSecret
   [/(\bmysql\b[^|;&\n]*\s-p)(?!\s)\S+/g, "$1***"],
-  // Authorization: Bearer|Basic|token v, and headers like X-Api-Key, Cookie, X-Auth-Token
-  [/\b(Bearer|Basic|token)\s+[A-Za-z0-9._~+/=-]{8,}/g, "$1 ***"],
-  [/\b((?:X-)?(?:Api-?Key|Auth[A-Za-z-]*|Cookie|[A-Za-z-]*Token)\s*:\s*)[^'"\n]+/gi, "$1***"],
+  // auth headers by their real names (not words like Co-Authored-By), and Bearer/Basic values anywhere
+  [/\b((?:Proxy-)?Authorization|(?:X-)?Api-?Key|X-Auth-Token|Auth-Token|(?:Set-)?Cookie|X-[A-Za-z-]*-Token)(\s*:\s*)[^'"\n]+/gi, "$1$2***"],
+  [/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/g, "$1 ***"],
   // passwords in URLs: scheme://user:password@host
   [/(:\/\/[^\s/:@]+:)[^\s/@]+@/g, "$1***@"],
 ];

@@ -8,7 +8,7 @@ The contract (subcommands, JSON shapes, exit codes, time limits) is in the warde
 
 For a project without a tracker. One tool file, `.warden/tools/backlog.ts`, named `backlog`.
 
-- Each ticket is `backlog/<ID>.md`: a header between two `---` lines, then the body. Header lines are `key: value`: `title`, `status`, `type`, and optional `epic` and `blocked_by` (ids, comma-separated). Paths are relative to the checkout the tool runs in.
+- Each ticket is `backlog/<ID>.md`: a header between two `---` lines, then the body. Header lines are `key: value`: `title`, `status`, `type`, and optional `epic` and `blocked_by` (ids). If the repo already has tickets, read and write every field in the form they use, for example `blocked_by: PG-005, PG-011` or `blocked_by: [PG-005, PG-011]`; for a new repo use `A, B`. Paths are relative to the checkout the tool runs in.
 - `dag` reads every file. Without an epic it lists every ticket whose `type` is not `epic`; with one, the tickets whose `epic` is that id. A missing `blocked_by` is `[]`.
 - `show <id>` adds the body. An id with no file is exit 3.
 - `set-status <id> <status>` rewrites only the `status` line. When the status is already that value, it writes nothing and prints `changed: []`.
