@@ -459,7 +459,7 @@ function rawCommand(main: string, cmd: string): Raw | null {
 
 // Programs that only look around, and git, whose everyday commands are never worth a tool; the retro wants the
 // commands that are. warden calls have their own log. A raw command a tool covers is still marked.
-const LOOK_AROUND = new Set(["cd", "ls", "cat", "head", "tail", "wc", "pwd", "echo", "printf", "grep", "rg", "find", "which", "type", "true", "sleep", "git", "warden"]);
+const LOOK_AROUND = new Set(["cd", "ls", "cat", "head", "tail", "sed", "wc", "pwd", "echo", "printf", "grep", "rg", "find", "which", "type", "true", "sleep", "git", "warden"]);
 
 // What the command does, in a few words: the first program that is not in LOOK_AROUND, plus up to two
 // subcommand words (`gh pr create`, `bun run dev`, `docker compose up`). null when it only looks around.

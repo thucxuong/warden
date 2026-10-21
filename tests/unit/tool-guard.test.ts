@@ -88,7 +88,7 @@ describe("the command log", () => {
 
   test("each command that does more than look around is logged with its shape, task and secrets hidden", async () => {
     await bash("bun run dev --port 3000", { cwd: main });
-    await bash("ls -la && cat README.md", { cwd: main });
+    await bash("ls -la && cat README.md && sed -n 1,20p README.md", { cwd: main });
     await bash("warden next", { cwd: main });
     await bash("cd app && STRIPE_KEY=sk_live_1 curl -u admin:hunter2 -H 'Authorization: Bearer abc.def.ghi' https://x.test/api", { cwd: main });
     await bash("git add -A && git commit -m 'x\n\nCo-Authored-By: Claude <noreply@anthropic.com>' && bunx prettier --check .", { cwd: main });

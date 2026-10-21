@@ -143,7 +143,7 @@ Rules for entries:
 Warden keeps two logs in `.warden/state/_tools/` of the main checkout. They are not committed and never leave the machine. Every line passes one filter before it is written, which replaces secrets by `***`: values of names like `TOKEN`, `KEY`, `PASS`, `SECRET`, `PRIVATE`; `--token`/`--password` flags; `-u user:password`; auth and API-key headers; passwords in URLs. A filter only knows the forms it was given, so the logs stay on this machine too. Times are kept in UTC.
 
 - `calls.jsonl`: every `warden tools` call the agent makes, with its args, exit code and time. The engine's ticket tool calls are not logged.
-- `commands.jsonl`: every other command the agent runs that does more than look around (`ls`, `cat`, `grep`, `git` and the like are left out), with the raw commands a tool covers marked.
+- `commands.jsonl`: every other command the agent runs that does more than look around (`ls`, `cat`, `sed`, `grep`, `git` and the like are left out), with the raw commands a tool covers marked.
 
 `warden tools --log [--since YYYY-MM-DD]` sums them as JSON. `--since` is a date in this machine's timezone, like the retro's `last`.
 - `tools`: calls and failures per tool, the agent's (`agent`) apart from those warden's check step made (`check`). A failure is any exit that is not 0: for a test tool, failing tests count too. Many failures mean the tool or its usage text needs work, or the tests it runs keep catching something.
