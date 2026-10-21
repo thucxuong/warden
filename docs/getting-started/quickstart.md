@@ -14,6 +14,8 @@ This page assumes warden is installed (see [Installation](installation.md)) and 
 
    Only you can start this skill; the agent does not run it on its own.
 
+   To set up the project's tools in the same session, type `/warden:init set up the tools too` instead (see [Set up the tools too](#set-up-the-tools-too)).
+
 2. Answer the questions. The agent reads your README, your docs and any `AGENTS.md` or `CLAUDE.md`, then asks one thing per message:
 
    | Question | What it means |
@@ -55,6 +57,27 @@ This page assumes warden is installed (see [Installation](installation.md)) and 
    - Do not allow bypassing the above rules.
 
    Warden blocks the agent from pushing or opening pull requests outside the ship step. Branch protection is the hard guarantee behind that.
+
+### Set up the tools too
+
+Tools are short commands your project owns, such as `warden tools db reset` or `warden tools pr create`, that the agent uses instead of long raw commands (see [Tools and roles](../concepts/tools-and-roles.md)). To set them up in the same session, start the setup with this line instead of plain `/warden:init`:
+
+```text
+/warden:init set up the tools too
+```
+
+After the normal questions and the ticket tool, the agent goes through each common tool. For each one it says what it found in your repo, asks whether you need it, and if you do, asks what it needs to know:
+
+| Tool | What it asks |
+|---|---|
+| `verify` | Which commands check types, lint, unit tests and the build, and whether the check step should run them through the tool |
+| `dev` | How the app starts, which ports it uses, which env file it reads |
+| `db` | Which database, where its server runs, how migrations and seed data run |
+| `e2e` | Which test runner, and which parts of the app it needs running |
+| `pr` | Which Git host, pull request or direct merge, and which merge method |
+| `ci` | Which CI system, and how to read a run and its logs |
+
+It writes each tool you agree to, tests it, and gives each task worktree its own ports and database. A tracker tool is tested with saved tracker answers only, so no real ticket changes. At the end it shows a table of the tools and whether each check passed. You can add what you skip later with `/warden:tools <name>`, and you can add your own wishes after the command, for example `/warden:init set up the tools too. Tickets are in Jira project APP.`
 
 ## 2. Run a first small task
 

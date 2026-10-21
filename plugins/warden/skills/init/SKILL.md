@@ -1,6 +1,7 @@
 ---
 name: init
 description: Set up warden in this project. Scans the stack, drafts the context files, the check commands and the setup script, asks you to confirm, then writes the .warden folder.
+argument-hint: "[extra instructions]"
 disable-model-invocation: true
 allowed-tools: Bash(warden *) Read Glob Grep Write
 ---
@@ -8,6 +9,8 @@ allowed-tools: Bash(warden *) Read Glob Grep Write
 # Set up warden in this project
 
 Do these steps in order. Ask one question per message. Prefer multiple choice.
+
+The ARGUMENTS given with this skill, if any, are the user's extra instructions for this setup. Follow them together with these steps. When they ask to set up the tools too (for example `/warden:init set up the tools too`, from the quick start), do "Set up the tools too" below after step 6.
 
 1. Run `warden init --scan`. If `hasWarden` is true, stop. Tell the user the project is already set up.
 2. Read the README, up to 10 files from `docs/`, and every file in `agentFiles`.
@@ -49,6 +52,24 @@ Do these steps in order. Ask one question per message. Prefer multiple choice.
 8. Tell the user to commit and push to the main branch. `warden start` reads `.warden/` from there.
    Build the `git add` list from the `written` array that `warden init --write` printed, so it names only files that exist. For example, as three separate commands: `git add .warden .gitignore scripts/warden-setup.sh`, `git commit -m "chore: set up warden"`, `git push`. Add `.claude/settings.json` only when it is in `written`, and `.claude/skills/project-tools/SKILL.md`, which `warden tools --skill` wrote in step 6. If `.claude/` is gitignored, tell the user; `git add` refuses ignored files.
    Also suggest branch protection on the main branch: a pull request is required and direct pushes are off.
+
+## Set up the tools too
+
+Go through these tools in this order, one at a time, with the warden:tools skill (`../tools/SKILL.md` from this skill's base directory) and its recipes in `../tools/recipes/`: verify, dev, db, e2e, pr, ci. For each one:
+- Tell the user in one or two lines what you found in the repo for it (scripts, config files, CI files, docs).
+- Ask whether the project needs it. Skip it when the user says no.
+- If yes, ask what its recipe needs to know, one question per message:
+  - verify: which commands check types, lint, unit tests and the build, and whether the check step in `.warden/steps.json` should run them through the tool
+  - dev: how the app starts, which ports it uses, which env file it reads
+  - db: which database, where its server runs, how migrations and seed data run
+  - e2e: which test runner, and which parts of the app it needs running
+  - pr: which Git host, pull request or direct merge, and which merge method
+  - ci: which CI system, and how to read a run and its logs
+- Write the tool as its recipe says. Add it to `index.ts`, to `roles.json` when it has a role, and to `replaces.json`. Prove it as the recipe's "Prove it" says. Each task worktree gets its own ports and its own database (`recipes/dev.md`).
+
+For a tracker in step 6, write the ticket tool now instead of sending the user to `/warden:tools`. Test it only with saved tracker answers, as `ticket-tool-recipe.md` says; never create or change real tickets.
+
+Then set `agent.ship.instructions` in `.warden/steps.json` to match the pr answers. Run `warden tools --skill` and `warden tools --check`, and show the user a table: each tool, what it does, and whether its check passed. Add the new tool files to the `git add` list in step 8.
 
 What `warden init --write` creates:
 - `.warden/warden.json`, `.warden/steps.json` and `.warden/triage-rules.json`

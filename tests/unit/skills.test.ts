@@ -9,7 +9,7 @@ const expectedSkills = ["init", "compose", "work", "plan", "retro", "report", "u
 
 // Frontmatter extras from spec section 8 (string values, unquoted).
 const expectedExtras: Record<string, Record<string, string>> = {
-  init: { "disable-model-invocation": "true", "allowed-tools": "Bash(warden *) Read Glob Grep Write" },
+  init: { "argument-hint": "[extra instructions]", "disable-model-invocation": "true", "allowed-tools": "Bash(warden *) Read Glob Grep Write" },
   compose: { "argument-hint": "[ticket-id] [what to do]" },
   work: { "argument-hint": "[task-id]", "allowed-tools": "Bash(warden *)" },
   upgrade: {},
@@ -78,6 +78,16 @@ describe("skills", () => {
       for (const part of ["**Job:**", "## Subcommands", "## Owns (`replaces.json`)", "## Traps", "## Prove it"]) expect(recipe).toContain(part);
       expect(recipe).not.toMatch(/```(ts|js|typescript|javascript)\b/);
     }
+  });
+
+  test("0.10.1: /warden:init set up the tools too walks through every recipe, in the order the quick start lists", () => {
+    const section = read(join(skillsDir, "init", "SKILL.md")).split("## Set up the tools too")[1]!.split("What `warden init --write` creates:")[0]!;
+    const recipes = readdirSync(join(skillsDir, "tools", "recipes")).map((f) => f.replace(/\.md$/, ""));
+    const asked = [...section.matchAll(/^ {2}- ([a-z0-9-]+):/gm)].map((m) => m[1]!);
+    expect([...asked].sort()).toEqual([...recipes].sort());
+    const quickstart = read(resolve(pluginRoot, "../../docs/getting-started/quickstart.md")).split("### Set up the tools too")[1]!.split("## 2.")[0]!;
+    expect(quickstart).toContain("/warden:init set up the tools too");
+    expect([...quickstart.matchAll(/^\| `([a-z0-9-]+)` \|/gm)].map((m) => m[1]!)).toEqual(asked);
   });
 
   test("0.10: the plugin ships the ticket tool recipe and the check, never ticket tool code", () => {

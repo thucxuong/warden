@@ -8,7 +8,7 @@ A skill is a set of instructions the plugin gives Claude Code. You start one by 
 
 | Skill | Arguments | Use it to |
 |---|---|---|
-| [`/warden:init`](#wardeninit) | none | Set up warden in a project |
+| [`/warden:init`](#wardeninit) | extra instructions (optional) | Set up warden in a project |
 | [`/warden:compose`](#wardencompose) | `[ticket-id] [what to do]` | Pick a flow for a task and start the run from its ticket (created first for a plain request) |
 | [`/warden:work`](#wardenwork) | `[task-id]` | Drive a run step by step until it ships, waits or blocks |
 | [`/warden:plan`](#wardenplan) | none | Write the plan in a plan step |
@@ -23,7 +23,7 @@ A skill is a set of instructions the plugin gives Claude Code. You start one by 
 
 ## /warden:init
 
-Sets up warden in the current project. Only a person can start it: the agent never runs it by itself.
+Sets up warden in the current project. Only a person can start it: the agent never runs it by itself. Text after the command is extra instructions the agent follows as well, such as `set up the tools too`, which also walks you through the common tools (verify, dev, db, e2e, pr, ci); see [Set up the tools too](../getting-started/quickstart.md#set-up-the-tools-too).
 
 What it does:
 
