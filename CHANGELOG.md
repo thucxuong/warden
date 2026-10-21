@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.1 — 2026-10-21
+
+- `/warden:init set up the tools too` runs the normal setup, then goes through the common tools one at a time (verify, dev, db, e2e, pr, ci). For each one it says what it found in the repo, asks whether the project needs it and what it needs to know, then writes and proves the tools you agree to. A tracker ticket tool is written in the same session and tested with saved tracker answers only. The quick start page has the line to copy.
+- Text after `/warden:init` is extra instructions the agent follows as well.
+
 ## 0.10.0 — 2026-10-21
 
 Warden ships rules, recipes and checks for a project's own tools, never tool code, and the retro helps the agent use those tools more and raw commands less. Warden does not watch or block commands for this: the hook rules are as in 0.9.4.
