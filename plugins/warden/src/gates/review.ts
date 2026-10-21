@@ -2,7 +2,6 @@
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { replacesOrNone, type Replaces } from "../commands/tools.ts";
 import { loadStepsJson } from "../config/config.ts";
 import { branchBase, diffText, head, hunkRanges } from "../lib/git.ts";
 import { writeJsonAtomic } from "../lib/json.ts";
@@ -41,7 +40,6 @@ export async function runReview(ctx: Ctx, run: RunJson): Promise<ReviewRound> {
     steps,
     worktree: run.worktree,
     changedFiles: [...hunks.keys()],
-    replaces: replacesOrNone(main).replaces,
   });
   const stdin = capDiff(diff);
   const round = run.counters.reviewRound + 1;
@@ -96,20 +94,7 @@ export function reviewerArgs(prompt: string, review: StepsJson["review"]): strin
   ];
 }
 
-// 0.10: the hook refuses these commands to the agent; a change that gets around that is a finding.
-function replacesLines(replaces: Replaces): string[] {
-  const owned = Object.entries(replaces).flatMap(([tool, entries]) => entries.map((entry) => `- ${entry}: warden tools ${tool}`));
-  if (owned.length === 0) return [];
-  return [
-    ``,
-    `This project's tools own these commands; the agent must run the tool instead:`,
-    ...owned,
-    `A change that adds a script, alias or package.json script so the agent can run one of them without the tool`,
-    `gets around the tool: that is "blocking" unless the task below asks for it.`,
-  ];
-}
-
-export function buildPrompt(input: { base: string; task: string; steps: StepsJson; worktree: string; changedFiles: string[]; replaces?: Replaces }): string {
+export function buildPrompt(input: { base: string; task: string; steps: StepsJson; worktree: string; changedFiles: string[] }): string {
   const { base, task, steps, worktree, changedFiles } = input;
   const ruleLines = steps.review.rules.map((rule) => `- ${rule}`);
   const fileBlocks = steps.review.rulesFiles.map((file) => `--- ${file} ---\n${readRulesFile(worktree, file)}`);
@@ -128,7 +113,6 @@ export function buildPrompt(input: { base: string; task: string; steps: StepsJso
     `Anchor every finding on a line this change adds or modifies (file path relative to the repo`,
     `root, line number in the new file). If the problem shows up elsewhere, name that place in`,
     `the summary. Use line 0 only for a whole-file problem.`,
-    ...replacesLines(input.replaces ?? {}),
     ``,
     `The task this change is for:`,
     task,

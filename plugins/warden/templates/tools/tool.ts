@@ -9,6 +9,7 @@ export interface Tool {
   summary: string;                                // one line, shown by `warden tools`
   usage?: string;                                 // shown by `warden tools <name> -h`
   probe?: () => Check[] | Promise<Check[]>;       // run by `warden tools --check`
+  commands?: string[];                            // first-level commands, listed in the project tools skill
   run: (argv: string[]) => number | Promise<number>; // the exit code
 }
 

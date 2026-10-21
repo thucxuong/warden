@@ -25,10 +25,13 @@ Jira, Linear, GitHub, Azure DevOps and the like. Wrap the tracker's CLI or API.
 - Add `link <id> <url>` so warden can record the pull request on the ticket.
 - Check the login in `probe` (a `FAIL` row that names the login command); never start a login from the tool.
 - Every call has a time limit: `dag` 300 s, the others 60 s. Page through big result sets.
+- Keep the calls to the tracker in one small function, and turn its answers into warden's JSON in plain functions. Test those functions in `<name>.test.ts` with saved tracker answers (a JSON file per call: a list of tickets, one ticket, the answer to a create and to a status change), so `create` and `set-status` are tested without making a real ticket. Save the answers from a real read, with private data taken out.
 
 ## Prove it
 
-1. Add the tool to the array in `.warden/tools/index.ts`, and set `"tickets": "<name>"` in `.warden/tools/roles.json`.
-2. Run `warden tools --verify tickets --write`. It reads the tickets, then creates one, moves it to `doing` twice and to `archived`, and checks that `changed` names exactly the files that changed. It puts those files back afterwards. In a tracker, the test ticket stays, archived: ask the user before you run `--write` there, and use a test project if there is one.
+1. Write the tool in the worktree of the task (or, during `/warden:init`, in the main checkout before anything is committed). Add it to the array in `.warden/tools/index.ts`, and set `"tickets": "<name>"` in `.warden/tools/roles.json`.
+2. Run `warden tools --verify tickets`. It tests the tool in a throwaway worktree (this checkout's last commit plus its uncommitted files, removed afterwards), so this checkout never changes. It reads the tickets, checks the JSON and the exit codes, and that `create` without flags writes nothing.
+   - Tickets as repo files: run `warden tools --verify tickets --write`. It also creates a ticket, moves it to `doing` twice and to `archived`, and checks that `changed` names exactly the files that changed, all in the throwaway worktree.
+   - A tracker: never add `--write`, since it would make a real ticket. Run the tool's own tests with the saved answers instead.
 3. Fix the tool until it exits 0. Each `FAIL` row says what is wrong.
-4. Run `warden tools --check`: it must exit 0. Show the user both outputs.
+4. Run `warden tools --skill`, then `warden tools --check`: it must exit 0. Show the user the outputs.

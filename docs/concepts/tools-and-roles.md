@@ -12,7 +12,7 @@ A tool is a small TypeScript object with a name and a `run` function. Anyone (yo
 warden tools <name> <args...>
 ```
 
-Typical tools wrap something your project already has: an end-to-end test runner, a CI status lookup, a code graph query, your ticket system. A tool gives the agent one short, safe command for a job it would otherwise do with long raw commands, and warden can make the tool the only way to do that job (see [Replaced commands](#replaced-commands)).
+Typical tools wrap something your project already has: an end-to-end test runner, a CI status lookup, a code graph query, your ticket system. A tool gives the agent one short, safe command for a job it would otherwise do with long raw commands. Warden steers the agent to the tools with a skill, a rule and the retro, not by blocking (see [Raw commands a tool covers](#raw-commands-a-tool-covers)).
 
 ## The layout
 
@@ -21,7 +21,7 @@ Typical tools wrap something your project already has: an end-to-end test runner
   index.ts      the list of tools: export default [ ...tools ]
   tool.ts       the contract types and the command() helper
   roles.json    role -> tool name, for example {"tickets": "backlog", "pr": "git-pr"}
-  replaces.json tool -> the raw commands it owns, for example {"pr": ["gh pr"]}
+  replaces.json tool -> the raw commands it covers, for example {"pr": ["gh pr"]}
   <name>.ts     one tool per file, or a folder <name>/ for a bigger one
 ```
 
@@ -97,10 +97,11 @@ For the common jobs, the skill has a **recipe** each: what to build, its subcomm
 | `warden tools <name\|role> <args>` | Whatever the tool prints. | The tool's exit code; 3 when no tool or role has that name |
 | `warden tools --check [<name>]` | `{"checks":[{"tool","status","label","detail"}]}` | 1 when any row is `FAIL` |
 | `warden tools --init` | `{"written":[...]}` | 0 |
-| `warden tools --verify tickets [--write]` | `{"checks":[{"status","label","detail"}]}`: the `tickets` tool against its contract, through the readers the engine and the site use. `--write` also checks `create` and `set-status` and puts back the files they wrote | 1 when any row is `FAIL`; 2 for bad flags |
-| `warden tools --log [--since YYYY-MM-DD]` | `{"since","tools":[...],"blocked":[...],"commands":[...]}`, see [The logs](#the-logs) | 0; 2 for bad flags |
+| `warden tools --skill` | `{"written":[".claude/skills/project-tools/SKILL.md"]}`, see [The project tools skill](#the-project-tools-skill) | 0 |
+| `warden tools --verify tickets [--write]` | `{"checks":[{"status","label","detail"}]}`: the `tickets` tool against its contract, in a throwaway worktree (the last commit plus uncommitted files), so the checkout never changes. `--write` also checks `create` and `set-status`: only for tickets kept as repo files | 1 when any row is `FAIL`; 2 for bad flags |
+| `warden tools --log [--since YYYY-MM-DD]` | `{"since","tools":[...],"raw":[...],"commands":[...]}`, see [The logs](#the-logs) | 0; 2 for bad flags |
 
-`--check` has warden's own rows first: `index.ts` loads, each role names a tool in `index.ts`, each tool in `replaces.json` is in `index.ts`, and the `tickets` tool has `create` (`role tickets create`: warden calls `create` with no flags, which must exit 1; exit 2 means it is missing). Then it runs each tool's `probe`. A probe returns rows with status `OK`, `FAIL`, `WARN` or `SKIP`; a tool without a probe gets one `SKIP` row. Use a probe to check that a program or a token the tool needs is there. Run `warden tools --check` before you commit a tool change.
+`--check` has warden's own rows first: `index.ts` loads, each role names a tool in `index.ts`, each tool in `replaces.json` is in `index.ts`, the project tools skill is up to date, and the `tickets` tool has `create` (`role tickets create`: warden calls `create` with no flags, which must exit 1; exit 2 means it is missing). Then it runs each tool's `probe`. A probe returns rows with status `OK`, `FAIL`, `WARN` or `SKIP`; a tool without a probe gets one `SKIP` row. Use a probe to check that a program or a token the tool needs is there. Run `warden tools --check` before you commit a tool change.
 
 ## Roles
 
@@ -125,57 +126,58 @@ Anything else needs no role. A check in `.warden/steps.json` can simply run `war
 
 ### The tickets role
 
-Every run starts from a ticket (0.9), so every project needs a `tickets` role; `/warden:init` sets one up. `warden start <task>` reads the task text from `warden tools tickets show <task>` (the ticket's title and body). When the run reaches its ship step, the engine runs `set-status <task> done` in the task's worktree and the ship step commits the changed ticket files with the run record. If the ticket tool fails, the ship goes on and the instructions tell the agent to have you set the status after the merge. Once the ship output is handed in with a `pr`, the engine also runs the optional `link <task> <pr>` in the main checkout (0.8).
+Every run starts from a ticket (0.9), so every project needs a `tickets` role; `/warden:init` sets one up. `warden start <task>` reads the task text from `warden tools tickets show <task>` (the ticket's title and body). A ticket is done only once its task is merged into the main branch (0.9.3): after a ship hand-in with `merged: true`, the engine runs `set-status <task> done` in the main checkout, and a warning tells the agent to commit any `changed` files there. With a pull request still open, it says to set the ticket to done after the merge. A failure is a warning and never undoes the ship. Once the ship output is handed in with a `pr`, the engine also runs the optional `link <task> <pr>` in the main checkout (0.8).
 
-## Replaced commands
+## Raw commands a tool covers
 
-`.warden/tools/replaces.json` maps a tool to the raw commands it owns:
+`.warden/tools/replaces.json` maps a tool to the raw commands it covers:
 
 ```json
 { "pr": ["gh pr", "az repos pr"], "db": ["psql"] }
 ```
 
-The PreToolUse hook then refuses those commands to the agent, in a run or not, and names the tool to run instead:
+Warden refuses nothing for it: the goal is to steer the agent to the tools, not to block it. The file is used twice:
 
-```text
-warden: gh pr is done by this project's pr tool: run warden tools pr <args> instead (warden tools pr -h for usage). If the tool cannot do what you need, tell the user.
-```
+- The project tools skill tells the agent to run the tool instead of those commands.
+- The command log marks each time the agent ran one anyway. The retro then finds out why (the tool lacks a command, its usage is unclear, or a rule is needed) and fixes that.
 
-- An entry is the leading words of a command: `gh pr` refuses `gh pr create` and `gh pr list`, not `gh issue list`. A path, `VAR=value` or `env` in front does not hide it. Words inside quotes (a commit message, an `echo`) do not count.
-- The tool itself still runs the command: a hook sees only the agent's own commands.
-- Only the main checkout's file counts. No file, or `{}`, refuses nothing; a broken file refuses nothing and `warden tools --check` reports it.
-- The reviewer is told which commands the tools own, and a change that adds a script to get around a tool is a blocking finding.
-- Like every hook rule, it catches the common shortcut; it is not a sandbox.
+An entry is the words of a command as typed, without a path: `gh pr` matches `gh pr create`, `x=$(gh pr list)` and `sudo -E gh pr view`, not `gh run list`. Words in quotes and in a heredoc do not count. Only the main checkout's file counts; a missing or broken file marks nothing, and `warden tools --check` reports a broken one. List a command only when the tool covers every use of it, with narrow words (`gh pr`, not `gh`).
 
-List a command only when the tool covers every use of it, and pick narrow words (`gh pr`, not `gh`).
+## The project tools skill
+
+`warden tools --skill` writes `.claude/skills/project-tools/SKILL.md` from `index.ts` and `replaces.json`. Its description names every tool with its first-level commands (the tool's `commands` field) and summary, so the agent always knows the tools exist; the body has each tool's usage and the raw commands it covers. Run it after each tool change and commit the file with it. `warden tools --check` warns (`project-tools skill`) when the file is missing or out of date. Nobody edits it by hand.
 
 ## The logs
 
-Warden keeps two logs in `.warden/state/_tools/` of the main checkout. They are gitignored with the rest of `.warden/state/` and never leave your machine. Secrets in them (`TOKEN=...`, `--token ...`, auth headers, passwords in URLs) are replaced by `***`.
+Warden keeps two logs in `.warden/state/_tools/` of the main checkout. They are gitignored with the rest of `.warden/state/` and never leave your machine. Every line passes one filter before it is written. The filter replaces secrets by `***`: values of names like `TOKEN`, `KEY`, `PASS`, `SECRET` and `PRIVATE`, `--token` and `--password` flags, `-u user:password`, auth and API-key headers, and passwords in URLs. A filter only knows the forms it was given, which is one more reason the logs stay local.
 
-- `calls.jsonl`: every `warden tools` call the agent makes: tool, args, exit code and time. The engine's own calls are not logged.
-- `commands.jsonl`: every other Bash command the agent runs that does more than look around (`ls`, `cat`, `grep` and `warden` itself are left out), with the task it ran for, and each replaced command it tried.
+- `calls.jsonl`: every `warden tools` call the agent makes: tool, args, exit code and time. The engine's ticket tool calls are not logged.
+- `commands.jsonl`: every other Bash command the agent runs that does more than look around (`ls`, `cat`, `grep` and `warden` itself are left out), with the task it ran for and the raw command a tool covers, if any.
 
-Each log moves to `<name>.old.jsonl` past 2 MB, so at most two files of each are kept.
+Times are stored in UTC. Each log moves to `<name>.old.jsonl` past 2 MB, so at most two files of each are kept.
 
-`warden tools --log [--since YYYY-MM-DD]` sums them:
+`warden tools --log [--since YYYY-MM-DD]` sums them. `--since` is a date in your own timezone, like the retro's `last`, and counts from local midnight.
 
 ```json
 {
   "since": "2026-10-01",
   "tools": [{ "tool": "e2e", "calls": 14, "failed": 3 }],
-  "blocked": [{ "tool": "pr", "prefix": "gh pr", "count": 2 }],
+  "raw": [{ "tool": "pr", "prefix": "gh pr", "count": 2 }],
   "commands": [{ "shape": "curl", "count": 9, "avgChars": 240, "example": "curl -s https://..." }]
 }
 ```
 
-`commands` lists commands typed at least twice, costliest (count times length) first, grouped by their first program and up to two subcommand words. The retro reads this summary to suggest the next tool, or a fix to a tool that fails often.
+- `tools`: a failure is any exit that is not 0, so failing tests count for a test tool too.
+- `raw`: raw commands a tool covers that the agent ran anyway.
+- `commands`: commands typed at least twice, costliest (count times length) first, grouped by their first program and up to two subcommand words.
+
+The retro reads this summary to suggest the next tool, a fix to a tool, or a rule.
 
 ## Changing tools during a run
 
-`.warden/tools/roles.json` and `.warden/tools/replaces.json` are treated like gate files: they cannot change while a run is live, and the fixer may never change them. The tool code itself (`.warden/tools/**`) can be changed by an implement step, and is in the fixer's default scope.
+`.warden/tools/roles.json` is treated like a gate file: it cannot change while a run is live, and the fixer may never change it. The tool code itself (`.warden/tools/**`) can be changed by an implement step, and is in the fixer's default scope.
 
-The `/warden:tools <name>` skill writes or changes a tool for you: it writes the file, adds it to `index.ts`, tries it, sets a role if needed, and runs `warden tools --check`.
+The `/warden:tools <name>` skill writes or changes a tool for you: it writes the file, adds it to `index.ts`, tries it, sets a role if needed, runs `warden tools --skill` and `warden tools --check`.
 
 ## See also
 

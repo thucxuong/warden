@@ -1,9 +1,9 @@
-// warden tools [--check [<name>] | --init | --log | --verify tickets] | warden tools <name|role> [args...] (0.6): the
+// warden tools [--check [<name>] | --init | --skill | --log | --verify tickets] | warden tools <name|role> [args...] (0.6): the
 // project's own tools. They live in <checkout>/.warden/tools/: index.ts lists them, roles.json maps role names to tool
-// names, replaces.json (0.10) names the raw commands each tool owns.
+// names, replaces.json (0.10) names the raw commands each tool covers, for the log and the project tools skill.
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { EXIT, WardenError } from "../lib/exit.ts";
 import { pathWithBin } from "../lib/proc.ts";
@@ -14,7 +14,7 @@ import type { Ctx, ProjectTool, ToolCheck } from "../types.ts";
 export const TOOL_NAME = /^[a-z][a-z0-9-]{0,40}$/;
 const TOOL_FILES = ["index.ts", "tool.ts", "roles.json", "replaces.json"];
 const STATUSES = ["OK", "FAIL", "WARN", "SKIP"];
-const USAGE = "warden tools [--check [<name>] | --init | --log [--since YYYY-MM-DD] | --verify tickets [--write]] | warden tools <name|role> [args...]";
+const USAGE = "warden tools [--check [<name>] | --init | --skill | --log [--since YYYY-MM-DD] | --verify tickets [--write]] | warden tools <name|role> [args...]";
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export type Roles = Record<string, string>;
@@ -80,8 +80,8 @@ function replacesProblems(value: unknown): string[] {
     }
     for (const entry of entries as unknown[]) {
       const words = typeof entry === "string" ? entry.trim().split(/\s+/) : [];
-      const bad = words.length === 0 || words[0] === "" || words[0]!.startsWith("-") || words[0] === "warden" || /[;&|<>()`$"'\\]/.test(String(entry));
-      if (bad) problems.push(`${file}: ${tool}: ${JSON.stringify(entry)} must be the leading words of a command, e.g. "gh pr" (not warden, no flags first, no shell syntax)`);
+      const bad = words.length === 0 || words[0] === "" || words[0]!.startsWith("-") || words[0] === "warden" || /[;&|<>()`$"'\\/]/.test(String(entry));
+      if (bad) problems.push(`${file}: ${tool}: ${JSON.stringify(entry)} must be the leading words of a command as typed without a path, e.g. "gh pr" or "rails db" (not warden, no flags first, no shell syntax)`);
     }
   }
   return problems;
@@ -119,6 +119,7 @@ function barrelProblems(value: unknown): string[] {
     if (typeof t.run !== "function") problems.push(`${at}: run must be a function`);
     if (t.usage !== undefined && typeof t.usage !== "string") problems.push(`${at}: usage must be a string`);
     if (t.probe !== undefined && typeof t.probe !== "function") problems.push(`${at}: probe must be a function`);
+    if (t.commands !== undefined && !(Array.isArray(t.commands) && t.commands.every((c) => typeof c === "string" && c !== ""))) problems.push(`${at}: commands must be an array of strings`);
   });
   return problems;
 }
@@ -127,7 +128,7 @@ function barrelProblems(value: unknown): string[] {
 // Set by the engine when it runs a tool in a ticket worktree (runTicketTool).
 export const TOOLS_MAIN_ENV = "WARDEN_TOOLS_MAIN";
 // Set by --check for its own probe call: the call log keeps the agent's calls only (the engine's are never logged).
-const NO_LOG_ENV = "WARDEN_TOOLS_NO_LOG";
+export const NO_LOG_ENV = "WARDEN_TOOLS_NO_LOG";
 
 export async function loadTools(root: string): Promise<LoadedTools> {
   const index = join(toolsDir(root), "index.ts");
@@ -161,16 +162,36 @@ export function replacesOrNone(root: string): { replaces: Replaces; problems: st
   }
 }
 
-// Session start (0.10): the project's tools and the raw commands they own, so the agent reaches for a tool first.
-// null when there is no tool. Throws when the barrel is broken (the hook logs it).
-export async function toolsLine(main: string): Promise<string | null> {
-  if (!existsSync(join(toolsDir(main), "index.ts"))) return null;
-  const loaded = await loadTools(main);
-  if (loaded.tools.length === 0) return null;
-  const list = loaded.tools.map((t) => `${t.name} (${t.summary})`).join("; ");
-  const owned = Object.entries(replacesOrNone(main).replaces).flatMap(([tool, entries]) => entries.map((entry) => `${entry} -> ${tool}`));
-  const refused = owned.length > 0 ? ` These raw commands are refused, use the tool: ${owned.join(", ")}.` : "";
-  return `warden: this project's tools: ${list}. Use them before writing your own command for the same job: warden tools <name> <args> (-h for usage).${refused}`;
+// 0.10: .claude/skills/project-tools/SKILL.md tells the agent which tools exist, with their first-level commands in the
+// description, so it reaches for a tool before a raw command. Written by `warden tools --skill`, never by hand.
+export const SKILL_FILE = ".claude/skills/project-tools/SKILL.md";
+const MAX_DESCRIPTION = 1000;
+
+export function skillText(loaded: LoadedTools, replaces: Replaces): string {
+  const commands = (t: ProjectTool) => (t.commands && t.commands.length > 0 ? ` (${t.commands.join(", ")})` : "");
+  let description = `This project's own tools: run warden tools <name> <command>, and use them instead of raw commands for the same job. ${loaded.tools.map((t) => `${t.name}${commands(t)}: ${t.summary}`).join("; ")}`;
+  if (description.length > MAX_DESCRIPTION) description = `${description.slice(0, MAX_DESCRIPTION - 1)}…`;
+  const sections = loaded.tools.map((t) => {
+    const lines = [`## ${t.name}`, "", t.summary];
+    if (t.commands && t.commands.length > 0) lines.push("", `Commands: ${t.commands.map((c) => `\`${c}\``).join(", ")}`);
+    if (replaces[t.name]) lines.push("", `Use it instead of: ${replaces[t.name]!.map((c) => `\`${c}\``).join(", ")}`);
+    if (t.usage) lines.push("", "```text", t.usage.trim(), "```");
+    return lines.join("\n");
+  });
+  return [
+    "---",
+    "name: project-tools",
+    `description: ${JSON.stringify(description)}`,
+    "---",
+    "",
+    "# Project tools",
+    "",
+    "Written by `warden tools --skill` from `.warden/tools/index.ts`. Do not edit it: change the tools, then run `warden tools --skill` again.",
+    "",
+    "Run a tool with `warden tools <name> <command> [args]`; `warden tools <name> -h` prints its usage. Use a tool instead of the raw commands it covers. When a tool cannot do what you need, tell the user, so the tool can grow, rather than working around it.",
+    "",
+    ...sections.flatMap((section) => [section, ""]),
+  ].join("\n");
 }
 
 // A word is a tool name first, then a role. null when it is neither, or the role names a missing tool.
@@ -233,6 +254,12 @@ function wardenRows(loaded: LoadedTools): CheckRow[] {
   }
   const { replaces, problems } = replacesOrNone(loaded.root);
   for (const problem of problems) row("FAIL", "replaces.json", problem);
+  if (loaded.tools.length > 0) {
+    const path = join(loaded.root, SKILL_FILE);
+    const current = existsSync(path) ? readFileSync(path, "utf8") : null;
+    if (current === skillText(loaded, replaces)) row("OK", "project-tools skill", SKILL_FILE);
+    else row("WARN", "project-tools skill", `${SKILL_FILE} is ${current === null ? "missing" : "out of date"}; run warden tools --skill`);
+  }
   for (const [tool, entries] of Object.entries(replaces)) {
     if (!names.has(tool)) row("FAIL", `replaces ${tool}`, `${tool} is not in .warden/tools/index.ts, so nothing can run ${entries.join(", ")}`);
     else row("OK", `replaces ${tool}`, entries.join(", "));
@@ -314,12 +341,12 @@ async function runLogged(tool: ProjectTool, argv: string[], main: string, log: b
   return code;
 }
 
-// `warden tools --verify tickets [--write]` (0.10): the tickets contract, checked through the engine's own readers.
+// `warden tools --verify tickets [--write]` (0.10): the tickets contract, checked in a throwaway worktree.
 async function verify(root: string, rest: string[], pluginRoot: string): Promise<number> {
   const write = rest[1] === "--write";
   if (rest[0] !== "tickets" || rest.length > (write ? 2 : 1)) throw new WardenError(`usage: ${USAGE}`, EXIT.USAGE);
   const { verifyTickets } = await import("./tools-verify.ts"); // engine/tickets.ts imports this module
-  const checks = verifyTickets(mainRoot(root), pluginRoot, write);
+  const checks = verifyTickets(mainRoot(root), root, pluginRoot, write);
   console.log(JSON.stringify({ checks }));
   return checks.some((c) => c.status === "FAIL") ? EXIT.REJECTED : EXIT.OK;
 }
@@ -344,7 +371,7 @@ export async function run(args: string[], ctx: Ctx): Promise<number> {
   }
   if (first === "--log") return log(root, rest);
   if (first === "--verify") return verify(root, rest, ctx.root);
-  if (first?.startsWith("-") && first !== "--check") throw new WardenError(`usage: ${USAGE}`, EXIT.USAGE);
+  if (first?.startsWith("-") && first !== "--check" && first !== "--skill") throw new WardenError(`usage: ${USAGE}`, EXIT.USAGE);
   if (first === "--check" && (rest.length > 1 || rest[0]?.startsWith("-"))) throw new WardenError(`usage: ${USAGE}`, EXIT.USAGE);
 
   // Tools and probes run in the checkout root, with the main checkout known and warden on PATH.
@@ -372,6 +399,14 @@ export async function run(args: string[], ctx: Ctx): Promise<number> {
     return EXIT.OK;
   }
   if (first === "--check") return check(loaded, rest[0], ctx.root);
+  if (first === "--skill") {
+    if (rest.length > 0) throw new WardenError(`usage: ${USAGE}`, EXIT.USAGE);
+    const path = join(root, SKILL_FILE);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, skillText(loaded, replacesOrNone(root).replaces));
+    console.log(JSON.stringify({ written: [SKILL_FILE] }));
+    return EXIT.OK;
+  }
   const tool = resolveTool(loaded, first);
   return tool ? runLogged(tool, rest, main, logged) : notFound(first);
 }

@@ -36,10 +36,11 @@ export function ticketsTool(main: string): string {
 // Runs `warden tools <tickets tool> <args>` in the main checkout, with no shell. `root` is the plugin root.
 // The role and the tool code are read from the main checkout (WARDEN_TOOLS_MAIN).
 // The child leads its own process group, so a timeout also kills what the tool started (a `command()` shell).
-export function runTicketTool(main: string, root: string, args: string[], timeoutSec: number): unknown {
-  const tool = ticketsTool(main);
+// With `checkout` (0.10, for `warden tools --verify tickets`), the role and the tool code come from that checkout instead.
+export function runTicketTool(main: string, root: string, args: string[], timeoutSec: number, checkout = main): unknown {
+  const tool = ticketsTool(checkout);
   // Bun honours `detached` in spawnSync; Node's types leave it out, hence the separate object.
-  const options = { cwd: main, env: toolEnv(root), encoding: "utf8" as const, timeout: timeoutSec * 1000, maxBuffer: MAX_TOOL_STDOUT, detached: true };
+  const options = { cwd: checkout, env: toolEnv(root, checkout === main), encoding: "utf8" as const, timeout: timeoutSec * 1000, maxBuffer: MAX_TOOL_STDOUT, detached: true };
   const res = spawnSync(process.execPath, toolArgv(root, tool, args), options);
   if (res.status === null && res.pid) killGroup(res.pid, "SIGKILL"); // timed out or killed: stop the rest of the group
   return toolResult(res.status, res.stdout ?? "", res.stderr ?? "", res.error?.message);
@@ -47,10 +48,9 @@ export function runTicketTool(main: string, root: string, args: string[], timeou
 
 const MAX_TOOL_STDOUT = 16 * 1024 * 1024;
 
-function toolEnv(root: string): Record<string, string | undefined> {
-  const env: Record<string, string | undefined> = {
-    ...process.env, PATH: pathWithBin(root, process.env.PATH), WARDEN_ROOT: root, [TOOLS_MAIN_ENV]: "1",
-  };
+function toolEnv(root: string, fromMain = true): Record<string, string | undefined> {
+  const env: Record<string, string | undefined> = { ...process.env, PATH: pathWithBin(root, process.env.PATH), WARDEN_ROOT: root };
+  if (fromMain) env[TOOLS_MAIN_ENV] = "1";
   delete env.PROJECT_AGENT;
   return env;
 }
@@ -135,7 +135,7 @@ export function dagRowProblem(row: unknown): string | null {
   return null;
 }
 
-function detailProblem(value: unknown): string | null {
+export function detailProblem(value: unknown): string | null {
   return dagRowProblem(value) ?? (typeof (value as { body?: unknown }).body !== "string" ? "body must be a string" : null);
 }
 

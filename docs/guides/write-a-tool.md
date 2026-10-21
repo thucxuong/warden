@@ -22,7 +22,7 @@ A **tool** is a small TypeScript command your project owns. Warden runs it with 
   index.ts      the list of tools: export default [ ...tools ]
   tool.ts       the contract types and the command() helper
   roles.json    role -> tool name, for example {"tickets": "backlog", "pr": "pr"}
-  replaces.json tool -> the raw commands it owns, for example {"e2e": ["npx playwright"]}
+  replaces.json tool -> the raw commands it covers, for example {"e2e": ["npx playwright"]}
   <name>.ts     one tool per file, or a folder <name>/ for a bigger tool
 ```
 
@@ -128,13 +128,17 @@ export interface Tool {
 
    A tool with no probe gets a `SKIP` row. A probe that throws, or returns the wrong shape, gets a `FAIL` row.
 
-5. **Make it the only way, if it should be.** When the tool covers every use of a raw command, list that command in `.warden/tools/replaces.json`, so the agent is sent to the tool instead:
+5. **Point the agent to it.** When the tool covers every use of a raw command, list that command in `.warden/tools/replaces.json`, then write the project tools skill:
 
    ```json
    { "e2e": ["npx playwright", "bunx playwright"] }
    ```
 
-   Run `warden tools --check` again: it shows a `replaces e2e` row. See [Replaced commands](../concepts/tools-and-roles.md#replaced-commands).
+   ```bash
+   warden tools --skill
+   ```
+
+   The skill tells the agent which tools exist and what they replace, and the command log marks each time the agent ran the raw command anyway, for the retro. Nothing is refused. Give the tool a `commands` list (`commands: ["run", "install"]`) so the skill can name them. See [Raw commands a tool covers](../concepts/tools-and-roles.md#raw-commands-a-tool-covers).
 
 6. **Commit it** on your branch, like any other code. A tool change in a task worktree is used by `warden tools` in that worktree, so you can test it before it merges.
 
@@ -191,7 +195,7 @@ export const stats: Tool = {
 | `graph` | the work skill and the ticket agent | `query "<question>"` prints plain text and exits 0. The agent asks it before a broad search of the repo. |
 | `pr` | the push and merge rules | `create` and `merge` subcommands. The hooks treat `warden tools pr create` and `warden tools pr merge` like `gh pr create` and `gh pr merge`: allowed only in the ship step. |
 
-Write a `pr` tool from the `pr` recipe: run `/warden:tools pr`, and the agent builds it for your repo host (GitHub, Azure DevOps, GitLab) with `create`, `show`, `merge` and `abandon`, a sign-in check in its probe, and `gh pr` (or the like) in `replaces.json`. Set `"pr": "<name>"` in `roles.json` when the tool has another name.
+Write a `pr` tool from the `pr` recipe: run `/warden:tools pr`, and the agent builds it for your repo host (GitHub, Azure DevOps, GitLab) with `create`, `show`, `merge` and `abandon`, a sign-in check in its probe, and `gh pr` (or the like) in `replaces.json`, then runs `warden tools --skill`. Set `"pr": "<name>"` in `roles.json` when the tool has another name.
 
 Then set the role:
 
@@ -205,7 +209,7 @@ Role rules:
 - When a role and a tool have the same name, the tool wins. `warden tools --check` warns about this.
 - `warden tools <role> <args>` runs the tool the role names.
 - You may add roles of your own.
-- `roles.json` and `replaces.json` are config files like `.warden/steps.json`: they cannot change while a run is live. Change them when no run is live, then commit them.
+- `roles.json` is a config file like `.warden/steps.json`: it cannot change while a run is live. Change it when no run is live, then commit it.
 
 ## What a tool can rely on
 

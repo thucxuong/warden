@@ -6,22 +6,35 @@ import { stateRoot } from "../state/paths.ts";
 
 export type LogName = "calls" | "commands";
 export interface CallEntry { at: string; tool: string; args: string[]; exit: number; ms: number }
-export interface Blocked { tool: string; prefix: string }
-export interface CommandEntry { at: string; task?: string; shape: string; command: string; blocked?: Blocked }
+// A raw command that a project tool covers (replaces.json), run by the agent anyway.
+export interface Raw { tool: string; prefix: string }
+export interface CommandEntry { at: string; task?: string; shape: string; command: string; raw?: Raw }
 
 const MAX_BYTES = 2 * 1024 * 1024; // past this, the log moves to <name>.old.jsonl and a new one starts
 const MAX_TEXT = 2000;
 const EXAMPLE_CHARS = 300;
 const TOP = 20;
 
+// The one filter every log line passes before it is written. A pattern only catches the forms it knows, so the logs
+// stay on this machine too.
+const VALUE = String.raw`(?:'[^']*'|"[^"]*"|\S+)`;
 const SECRETS: [RegExp, string][] = [
-  [/\b([A-Za-z0-9_]*(?:TOKEN|SECRET|PASSWORD|PASSWD|API_KEY|APIKEY|AUTH)[A-Za-z0-9_]*=)(?:'[^']*'|"[^"]*"|\S+)/gi, "$1***"],
-  [/(--?(?:token|password|passwd|secret|api-key|apikey)(?:=|\s+))(?:'[^']*'|"[^"]*"|\S+)/gi, "$1***"],
-  [/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+/g, "$1 ***"],
+  // NAME=value, for names like API_TOKEN, STRIPE_KEY, DB_PASS, PRIVATE_KEY, AWS_SECRET_ACCESS_KEY, GH_AUTH, *_CREDENTIALS
+  [new RegExp(String.raw`\b((?:[A-Za-z0-9]+_)*(?:TOKEN|SECRET|PASS|PASSWORD|PASSWD|PWD|KEY|APIKEY|AUTH|CREDENTIALS?|PRIVATE|SESSION|COOKIE)S?(?:_[A-Za-z0-9]+)*=)${VALUE}`, "gi"), "$1***"],
+  // --token v, --password=v, --api-key v, --client-secret v
+  [new RegExp(String.raw`(--?(?:[A-Za-z]+-)*(?:token|password|passwd|secret|api-?key|credentials?)(?:=|\s+))${VALUE}`, "gi"), "$1***"],
+  // curl -u user:password, --user user:password
+  [/((?:^|\s)(?:-u|--user)(?:=|\s+))(['"]?)([^\s:'"]+):[^\s'"]+\2/g, "$1$2$3:***$2"],
+  // mysql -pSecret
+  [/(\bmysql\b[^|;&\n]*\s-p)(?!\s)\S+/g, "$1***"],
+  // Authorization: Bearer|Basic|token v, and headers like X-Api-Key, Cookie, X-Auth-Token
+  [/\b(Bearer|Basic|token)\s+[A-Za-z0-9._~+/=-]{8,}/g, "$1 ***"],
+  [/\b((?:X-)?(?:Api-?Key|Auth[A-Za-z-]*|Cookie|[A-Za-z-]*Token)\s*:\s*)[^'"\n]+/gi, "$1***"],
+  // passwords in URLs: scheme://user:password@host
   [/(:\/\/[^\s/:@]+:)[^\s/@]+@/g, "$1***@"],
 ];
 
-// Secrets in a command line become ***: NAME=value for token-like names, --token <v>, auth headers, URL passwords.
+// Secrets in a command line become ***.
 export function redact(text: string): string {
   const capped = text.length > MAX_TEXT ? `${text.slice(0, MAX_TEXT)}…` : text;
   return SECRETS.reduce((out, [re, to]) => out.replace(re, to), capped);
@@ -54,8 +67,10 @@ export function appendLog(main: string, name: LogName, entry: CallEntry | Comman
   }
 }
 
-// The entries since a date (YYYY-MM-DD, inclusive), oldest first. Broken lines are skipped.
+// The entries since a local date (YYYY-MM-DD, from local midnight), oldest first. Broken lines are skipped.
+// Entries keep UTC times; the date the reader gives is in this machine's timezone, like the retro's `last`.
 export function readLog<T extends { at: string }>(main: string, name: LogName, since?: string): T[] {
+  const from = since === undefined ? null : new Date(`${since}T00:00:00`).getTime();
   const entries: T[] = [];
   for (const file of [logFile(main, name, true), logFile(main, name)]) {
     if (!existsSync(file)) continue;
@@ -63,7 +78,7 @@ export function readLog<T extends { at: string }>(main: string, name: LogName, s
       if (line.trim() === "") continue;
       try {
         const entry = JSON.parse(line) as T;
-        if (typeof entry.at === "string" && (since === undefined || entry.at.slice(0, 10) >= since)) entries.push(entry);
+        if (typeof entry.at === "string" && (from === null || Date.parse(entry.at) >= from)) entries.push(entry);
       } catch {
         // a line cut short by a crash
       }
@@ -75,7 +90,7 @@ export function readLog<T extends { at: string }>(main: string, name: LogName, s
 export interface LogSummary {
   since: string | null;
   tools: { tool: string; calls: number; failed: number }[];
-  blocked: { tool: string; prefix: string; count: number }[];
+  raw: { tool: string; prefix: string; count: number }[];
   commands: { shape: string; count: number; avgChars: number; example: string }[];
 }
 
@@ -87,7 +102,7 @@ function count<K>(map: Map<string, K>, key: string, make: () => K): K {
   return made;
 }
 
-// `warden tools --log`: calls and failures per tool, raw commands a tool owns that the agent still tried, and the
+// `warden tools --log`: calls and failures per tool, raw commands a tool covers that the agent ran anyway, and the
 // commands typed at least twice with no tool, costliest (count x length) first.
 export function summarize(main: string, since?: string): LogSummary {
   const tools = new Map<string, { tool: string; calls: number; failed: number }>();
@@ -96,11 +111,11 @@ export function summarize(main: string, since?: string): LogSummary {
     row.calls += 1;
     if (call.exit !== 0) row.failed += 1;
   }
-  const blocked = new Map<string, { tool: string; prefix: string; count: number }>();
+  const raw = new Map<string, { tool: string; prefix: string; count: number }>();
   const shapes = new Map<string, { shape: string; count: number; chars: number; example: string }>();
   for (const entry of readLog<CommandEntry>(main, "commands", since)) {
-    if (entry.blocked) {
-      count(blocked, `${entry.blocked.tool}\0${entry.blocked.prefix}`, () => ({ ...entry.blocked!, count: 0 })).count += 1;
+    if (entry.raw) {
+      count(raw, `${entry.raw.tool}\0${entry.raw.prefix}`, () => ({ ...entry.raw!, count: 0 })).count += 1;
       continue;
     }
     const row = count(shapes, entry.shape, () => ({ shape: entry.shape, count: 0, chars: 0, example: "" }));
@@ -116,7 +131,7 @@ export function summarize(main: string, since?: string): LogSummary {
   return {
     since: since ?? null,
     tools: [...tools.values()].sort((a, b) => b.calls - a.calls),
-    blocked: [...blocked.values()].sort((a, b) => b.count - a.count),
+    raw: [...raw.values()].sort((a, b) => b.count - a.count),
     commands,
   };
 }

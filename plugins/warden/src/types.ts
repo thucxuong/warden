@@ -391,6 +391,7 @@ export interface ProjectTool {
   summary: string;                                // one line, shown by `warden tools`
   usage?: string;                                 // shown by `warden tools <name> -h`
   probe?: () => ToolCheck[] | Promise<ToolCheck[]>; // run by `warden tools --check`
+  commands?: string[];                            // 0.10: first-level commands, for the project tools skill
   run: (argv: string[]) => number | Promise<number>; // the exit code
 }
 

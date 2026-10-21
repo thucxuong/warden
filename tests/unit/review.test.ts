@@ -188,11 +188,7 @@ describe("argv and stdin", () => {
     const s = steps({ rulesFiles: [], rules: [] });
     const prompt = buildPrompt({ base: "abc", task: "T", steps: s, worktree: repo, changedFiles: ["x.ts"] });
     expect(prompt).toContain("Project review rules:\n\nChanged files:\n- x.ts");
-    expect(prompt).not.toContain("own these commands");
     expect(reviewerArgs("p", s.review)[0]).toBe("-p");
-    const owned = buildPrompt({ base: "abc", task: "T", steps: s, worktree: repo, changedFiles: ["x.ts"], replaces: { pr: ["gh pr"], db: ["psql"] } });
-    expect(owned).toContain("This project's tools own these commands; the agent must run the tool instead:\n- gh pr: warden tools pr\n- psql: warden tools db\n");
-    expect(owned).toContain('gets around the tool: that is "blocking" unless the task below asks for it.');
   });
 });
 

@@ -6,7 +6,7 @@ import { editAllowed, isFixForbidden, isGateFile, matchesAny } from "../engine/c
 import { replacesOrNone, readRoles } from "../commands/tools.ts";
 import { gatesProven } from "../engine/proof.ts";
 import { currentBranch } from "../lib/git.ts";
-import { appendLog, type Blocked, redact } from "../lib/tool-log.ts";
+import { appendLog, type Raw, redact } from "../lib/tool-log.ts";
 import { taskDir } from "../state/paths.ts";
 import { runExists, readRun } from "../state/store.ts";
 import type { RunJson } from "../types.ts";
@@ -22,7 +22,6 @@ const DENY_LOCK_WAIT_MS = 1000;
 // The gate files a live run's checks depend on (E3). State and history are E1.
 const CONFIG_GATE_GLOBS = [
   ".warden/steps.json", ".warden/flows/**", ".warden/warden.json", ".warden/triage-rules.json", ".warden/tools/roles.json",
-  ".warden/tools/replaces.json",
 ];
 
 export async function preToolUse(call: HookCall): Promise<string | null> {
@@ -137,16 +136,14 @@ const HUMAN_ONLY = [
 ];
 const WARDEN_ENV_NAMES = [
   "PROJECT_AGENT", "WARDEN_ROLE", "WARDEN_CLAUDE_BIN", "WARDEN_DATA", "WARDEN_ROOT", "WARDEN_TEST_MODE",
-  "CLAUDE_PLUGIN_ROOT", "CLAUDE_PLUGIN_DATA", "WARDEN_TOOLS_NO_LOG",
+  "CLAUDE_PLUGIN_ROOT", "CLAUDE_PLUGIN_DATA", "WARDEN_TOOLS_NO_LOG", "WARDEN_TOOLS_MAIN",
 ];
 const CLAUDE_PRINT = /(^|[;&|(\s])claude\b[^;&|\n]*\s(-p|--print)(?=\s|$)/;
 // `script` as the command word of a simple command, not the word in prose or JSON.
 const SCRIPT_CMD = /^[\s(]*(?:(?:exec|env|sudo|command|nohup|time)\s+)*(?:\w+=\S*\s+)*(?:\S*\/)?script(?:\s|$)/;
 const ENGINE_PATHS = [".warden/state", ".warden/history"];
-const CONFIG_PATHS = [
-  ".warden/steps.json", ".warden/warden.json", ".warden/triage-rules.json", ".warden/flows", ".warden/tools/roles.json", ".warden/tools/replaces.json",
-];
-const CONFIG_PATH_ARG = /[^\s'"<>|;&()]*\.warden\/(?:steps\.json|warden\.json|triage-rules\.json|flows|tools\/(?:roles|replaces)\.json)[^\s'"<>|;&()]*/g;
+const CONFIG_PATHS = [".warden/steps.json", ".warden/warden.json", ".warden/triage-rules.json", ".warden/flows", ".warden/tools/roles.json"];
+const CONFIG_PATH_ARG = /[^\s'"<>|;&()]*\.warden\/(?:steps\.json|warden\.json|triage-rules\.json|flows|tools\/roles\.json)[^\s'"<>|;&()]*/g;
 // Redirects that write no file: fd duplication (2>&1, >&2) and /dev/null.
 const HARMLESS_REDIRECT = /(?:\d*|&)>>?\s*\/dev\/null(?![\w./-])|\d*>&\s*(?:\d+|-)/g;
 // A command word only when it is not part of a path or a longer name (".../cp/...", "bunx").
@@ -182,19 +179,20 @@ const EPIC_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const RUN_COMMAND = /(?:^|[;&|(\s])(?:[\w./-]*\/)?(?:warden|cli\.ts)\s+(start|next|done|wait|ask)\b([^;&|\n]*)/;
 
 // Drops the body of a heredoc that feeds `warden done` or `warden report`: it is JSON or prose, not a command.
-export function stripHeredocs(cmd: string): string {
+// With all, the body of every heredoc (file contents), for the command log.
+export function stripHeredocs(cmd: string, all = false): string {
   const lines = cmd.split("\n");
   const kept: string[] = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
     kept.push(line);
     const heredoc = /<<(-?)\s*(['"]?)([\w.-]+)\2/.exec(line);
-    if (!heredoc || !/(warden|cli\.ts)\s+(done|report)\b/.test(line)) continue;
+    if (!heredoc || (!all && !/(warden|cli\.ts)\s+(done|report)\b/.test(line))) continue;
     const [, dash, , end] = heredoc;
     while (i + 1 < lines.length) {
       const body = lines[++i]!;
       if ((dash ? body.replace(/^\t+/, "") : body) === end) {
-        kept.push(body);
+        if (!all) kept.push(body);
         break;
       }
     }
@@ -402,15 +400,15 @@ async function bash(call: HookCall): Promise<string | null> {
   await linkBash(call, cmd, dirRun);
 
   const run = dirRun ?? runForSession(call);
-  const blocked = replacedCommand(call.main, cmd);
-  const reason = blocked ? replacedReason(blocked) : bashDecision(call, cmd, run);
-  logCommand(call.main, cmd, run, blocked);
+  const reason = bashDecision(call, cmd, run);
+  logCommand(call.main, stripHeredocs(typeof command === "string" ? command : "", true), run);
   return reason === null ? null : deny(call, "Bash", reason, run);
 }
 
-// 0.10: a tool owns a raw command when .warden/tools/replaces.json of the main checkout lists its leading words.
-// The agent gets the tool instead; the tool itself still runs the command (a hook sees only the agent's calls).
-// Like every rule here, this catches the common shortcut, not a script written to get around it.
+// 0.10: every command the agent runs is logged for the retro (warden tools --log). Nothing is refused for it: the retro
+// and the project's rules steer the agent to its tools. A raw command that a tool covers (.warden/tools/replaces.json
+// of the main checkout) is marked, wherever it sits in the line: after `x=$(`, a pipe or `sudo -E`. Quoted text is
+// left out, so a commit message that names a command is not one.
 const WRAPPERS = new Set(["env", "command", "exec", "sudo", "nohup", "time"]);
 
 // The words of a simple command from its program on: no leading VAR=value or wrapper, the program without its path.
@@ -423,22 +421,17 @@ function programWords(part: string): string[] {
   return rest;
 }
 
-function replacedCommand(main: string, cmd: string): Blocked | null {
+function rawCommand(main: string, cmd: string): Raw | null {
   const { replaces } = replacesOrNone(main);
-  for (const part of splitCommands(cmd)) {
-    const words = programWords(part);
-    for (const [tool, entries] of Object.entries(replaces)) {
-      for (const prefix of entries) {
-        const want = prefix.trim().split(/\s+/);
-        if (want.every((word, i) => words[i] === word)) return { tool, prefix: want.join(" ") };
-      }
-    }
+  const entries = Object.entries(replaces).flatMap(([tool, list]) => list.map((prefix) => ({ tool, words: prefix.trim().split(/\s+/) })));
+  if (entries.length === 0) return null;
+  const unquoted = cmd.replace(QUOTED, (q) => (q[0] === '"' && /\$\(|`/.test(q) ? q.slice(1, -1) : " "));
+  const tokens = unquoted.split(/\$\(|[\s;&|()`]+/).filter((t) => t !== "").map((t) => t.replace(/^\w+=/, "").replace(/^.*\//, ""));
+  for (let i = 0; i < tokens.length; i++) {
+    const found = entries.find(({ words }) => words.every((word, j) => tokens[i + j] === word));
+    if (found) return { tool: found.tool, prefix: found.words.join(" ") };
   }
   return null;
-}
-
-function replacedReason({ tool, prefix }: Blocked): string {
-  return `${prefix} is done by this project's ${tool} tool: run warden tools ${tool} <args> instead (warden tools ${tool} -h for usage). If the tool cannot do what you need, tell the user.`;
 }
 
 // Programs that only look around; the retro wants the commands worth a tool. warden calls have their own log.
@@ -461,15 +454,17 @@ function commandShape(cmd: string): string | null {
   return null;
 }
 
-function logCommand(main: string, cmd: string, run: RunJson | null, blocked: Blocked | null): void {
-  const shape = commandShape(cmd);
-  if (shape === null && blocked === null) return;
+// `cmd` has its heredoc bodies taken out: they are file contents, not commands.
+function logCommand(main: string, cmd: string, run: RunJson | null): void {
+  const raw = rawCommand(main, cmd);
+  const shape = commandShape(cmd) ?? raw?.prefix ?? null;
+  if (shape === null) return;
   appendLog(main, "commands", {
     at: new Date().toISOString(),
     ...(run ? { task: run.task } : {}),
-    shape: shape ?? blocked!.prefix,
+    shape,
     command: redact(cmd),
-    ...(blocked ? { blocked } : {}),
+    ...(raw ? { raw } : {}),
   });
 }
 

@@ -45,5 +45,5 @@ Rules
 - When the user decides a ticket with a live run will not be done (stale, a duplicate, no longer wanted), run `warden archive <id> --reason "<why>"` and do what its `warnings` say. Never archive on your own, and never set such a ticket to `archived` with the ticket tool alone: the run would stay live.
 - When something surprises you, add a line to `.warden/knowledge/<area>.md`.
 - When you make a choice, write `.warden/decisions/NNNN-<slug>.md`. Never edit an old decision. Write a new one that replaces it.
-- Session start lists this project's tools; `warden tools` lists them with their roles. Run one with `warden tools <name> <args>` (`-h` for usage), before writing your own command for the same job. If a `graph` role is listed, run `warden tools graph query "<question>"` before a broad search of the repo.
-- When the hook refuses a raw command because a tool does that job, run that tool. Never get around it with a script. If the tool cannot do what you need, tell the user.
+- The project tools skill (`project-tools`) lists this project's tools; `warden tools` lists them with their roles. Run one with `warden tools <name> <args>` (`-h` for usage), before writing your own command for the same job. If a `graph` role is listed, run `warden tools graph query "<question>"` before a broad search of the repo.
+- Use a project tool instead of the raw commands it covers. If the tool cannot do what you need, tell the user, so the tool can grow; do not write a script around it.

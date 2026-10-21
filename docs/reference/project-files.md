@@ -37,7 +37,8 @@ Each doc folder (`context`, `rules`, `decisions`, `knowledge`, `checks`, `retros
 | `.warden/reports.md` | `warden report`, `warden report --status --write` | session start | yes | No |
 | `.warden/tools/index.ts`, `tool.ts` | `warden tools --init`, then you | `warden tools` | yes | Yes, it is your code |
 | `.warden/tools/roles.json` | `warden tools --init`, then you | `warden tools`, orchestrate, hooks | yes | Yes. Locked while a run is live |
-| `.warden/tools/replaces.json` | `warden tools --init`, then you | `warden tools`, hooks, review | yes | Yes. Locked while a run is live |
+| `.warden/tools/replaces.json` | `warden tools --init`, then you | the command log, `warden tools --skill` | yes | Yes |
+| `.claude/skills/project-tools/SKILL.md` | `warden tools --skill` | Claude Code (the agent) | yes | No: run `warden tools --skill` again |
 | `.warden/flows/<name>.json` | `warden flow save` | `warden start --flow` | yes | Yes. Locked while a run is live |
 | `.warden/context/*.md` | `/warden:init`, then you | agent steps (via `INDEX.md`), site | yes | Yes |
 | `.warden/rules/*.md` | you, retros | every agent step | yes | Yes |
@@ -138,7 +139,7 @@ The project's own tools. See [tools and roles](../concepts/tools-and-roles.md) a
 | `index.ts` | `export default [ ...tools ]`. Only tools listed here exist; warden never scans the folder |
 | `tool.ts` | The contract types (`Tool`, `Check`, `DagTicket`, `TicketDetail`, `SetStatusResult`, and from 0.8 `CreateResult` and `LinkResult`) and the `command()` helper. Written once; the project owns it |
 | `roles.json` | Role name to tool name, for example `{"tickets": "backlog", "graph": "graph", "pr": "git-pr"}`. Starts as `{}` |
-| `replaces.json` | Tool name to the raw commands it owns, for example `{"pr": ["gh pr", "az repos pr"]}`. The hook refuses those commands to the agent and names the tool (0.10). Starts as `{}` |
+| `replaces.json` | Tool name to the raw commands it covers, for example `{"pr": ["gh pr", "az repos pr"]}`. Nothing is refused for it: the project tools skill points the agent to the tool, and the command log marks those commands for the retro (0.10). Starts as `{}` |
 | `<name>.ts` or `<name>/` | One tool per file or folder |
 
 Role and tool names match `^[a-z][a-z0-9-]{0,40}$`. warden uses the roles `tickets`, `graph` and `pr`.

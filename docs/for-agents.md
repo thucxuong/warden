@@ -20,8 +20,8 @@ The short form ships with the plugin as the [`/warden:guide`](reference/skills.m
 | Push, open a pull request or merge outside the ship step | Hooks refuse it until all gates pass for HEAD. |
 | Run `warden approve`, `warden retry` or `warden reset` | They are for a person. The hook refuses them and they need a terminal anyway (exit 6). |
 | Set `PROJECT_AGENT`, any `WARDEN_*` or `CLAUDE_PLUGIN_*` variable on a command, or start `claude -p` | That changes how warden itself runs. Hooks refuse warden's own variables (the list is in [Hooks](reference/hooks.md), rule B2) and nested `claude -p`. |
-| Edit the locked config files while a run is live: `.warden/steps.json`, `.warden/flows/`, `.warden/warden.json`, `.warden/triage-rules.json`, `.warden/tools/roles.json`, `.warden/tools/replaces.json` | The live run's checks depend on them. The hook message calls them gate files. |
-| Run a raw command that a project tool owns (listed in `.warden/tools/replaces.json`), or write a script to get around that | The hook refuses it and names the tool; the reviewer flags the script. Run the tool, or tell the user what it cannot do. |
+| Edit the locked config files while a run is live: `.warden/steps.json`, `.warden/flows/`, `.warden/warden.json`, `.warden/triage-rules.json`, `.warden/tools/roles.json` | The live run's checks depend on them. The hook message calls them gate files. |
+| Run a raw command that a project tool covers (the `project-tools` skill lists them), or write a script around a tool | Use the tool. If it cannot do the job, tell the user, so the tool can grow. Warden logs raw commands a tool covers for the retro. |
 | Edit or commit while a gate runs (`running_gate`) | The engine throws the result away when HEAD or the tree moves, and blocks after the third time. |
 | Start a second run for a task that has one | `warden start` refuses: a run for that task exists. |
 | Start the fixer or a ticket agent with `run_in_background` | A background agent cannot ask for permissions, so its Bash calls are denied. |

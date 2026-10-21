@@ -137,7 +137,7 @@ describe("list and run", () => {
     expect(tools(["echo", "-h"])).toMatchObject({ code: 0, out: "echo [args...]\n" });
     expect(tools(["show", "--help"])).toMatchObject({ code: 0, out: "echo [args...]\n" });
     expect(tools(["later", "-h"])).toMatchObject({ code: 0, out: "async run\n" });
-    expect(tools(["-h"]).out).toContain("usage: warden tools [--check [<name>] | --init | --log [--since YYYY-MM-DD] | --verify tickets [--write]]");
+    expect(tools(["-h"]).out).toContain("usage: warden tools [--check [<name>] | --init | --skill | --log [--since YYYY-MM-DD] | --verify tickets [--write]]");
   });
 
   test("a throw is exit 1 with the message on stderr; a non-number result is exit 1", () => {
@@ -230,13 +230,13 @@ describe("--check", () => {
 
   test("warns on what 0.5 left: tools.md and a steps.json tickets key", () => {
     writeTools(repo, barrel(`  { name: "good", summary: "s", run: () => 0 },`, ""), { graph: "good", tickets: "good" });
-    expect(tools(["--check"]).json.checks.filter((c: any) => c.status === "WARN")).toEqual([]);
+    const warns = (r: ReturnType<typeof tools>) => r.json.checks.filter((c: any) => c.status === "WARN" && c.label !== "project-tools skill");
+    expect(warns(tools(["--check"]))).toEqual([]);
     writeFileSync(join(repo, ".warden/tools.md"), "| Name |\n");
     writeFileSync(join(repo, ".warden/steps.json"), JSON.stringify({ schema: 1, tickets: { tool: "backlog" } }));
     const r = tools(["--check"]);
     expect(r.code).toBe(0);
-    const warns = r.json.checks.filter((c: any) => c.status === "WARN").map((c: any) => c.label);
-    expect(warns).toEqual(["tools.md", "steps.json tickets"]);
+    expect(warns(r).map((c: any) => c.label)).toEqual(["tools.md", "steps.json tickets"]);
   });
 });
 
@@ -326,10 +326,37 @@ describe("the call log (0.10)", () => {
     tools(["boom"]);
     const today = new Date().toISOString().slice(0, 10);
     expect(tools(["--log"]).json).toEqual({
-      since: null, tools: [{ tool: "echo", calls: 2, failed: 2 }, { tool: "boom", calls: 1, failed: 1 }], blocked: [], commands: [],
+      since: null, tools: [{ tool: "echo", calls: 2, failed: 2 }, { tool: "boom", calls: 1, failed: 1 }], raw: [], commands: [],
     });
     expect(tools(["--log", "--since", today]).json.tools).toHaveLength(2);
     expect(tools(["--log", "--since", "2999-01-01"]).json.tools).toEqual([]);
     for (const args of [["--log", "x"], ["--log", "--since"], ["--log", "--since", "yesterday"]]) expect(tools(args).code).toBe(2);
+  });
+});
+
+describe("the project tools skill (0.10)", () => {
+  const skill = () => readFileSync(join(repo, ".claude/skills/project-tools/SKILL.md"), "utf8");
+
+  test("--skill writes it from the tools, their commands and the raw commands they cover; --check warns until it is fresh", () => {
+    writeTools(repo, barrel(`  { name: "pr", summary: "Pull requests", commands: ["create", "show", "merge"], usage: "pr create | pr show | pr merge", run: () => 0 },
+  { name: "dev", summary: "The dev server", run: () => 0 },`, ""), { tickets: "dev" });
+    writeFileSync(join(repo, ".warden/tools/replaces.json"), JSON.stringify({ pr: ["gh pr"] }));
+    const label = (r: ReturnType<typeof tools>) => r.json.checks.find((c: any) => c.label === "project-tools skill");
+    expect(label(tools(["--check"]))).toMatchObject({ status: "WARN", detail: ".claude/skills/project-tools/SKILL.md is missing; run warden tools --skill" });
+    expect(tools(["--skill"]).json).toEqual({ written: [".claude/skills/project-tools/SKILL.md"] });
+    expect(skill()).toContain('description: "This project\'s own tools: run warden tools <name> <command>, and use them instead of raw commands for the same job. pr (create, show, merge): Pull requests; dev: The dev server"');
+    expect(skill()).toContain("## pr\n\nPull requests\n\nCommands: `create`, `show`, `merge`\n\nUse it instead of: `gh pr`\n\n```text\npr create | pr show | pr merge\n```");
+    expect(label(tools(["--check"]))).toMatchObject({ status: "OK" });
+    writeFileSync(join(repo, ".warden/tools/replaces.json"), JSON.stringify({ pr: ["gh pr", "az repos pr"] }));
+    expect(label(tools(["--check"]))).toMatchObject({ status: "WARN", detail: ".claude/skills/project-tools/SKILL.md is out of date; run warden tools --skill" });
+    expect(tools(["--skill", "x"]).code).toBe(2);
+  });
+
+  test("commands must be an array of strings; a path in replaces.json is a FAIL", () => {
+    writeTools(repo, barrel(`  { name: "pr", summary: "s", commands: "create" as any, run: () => 0 },`, ""));
+    expect(tools([]).err).toContain("commands must be an array of strings");
+    writeTools(repo, barrel(`  { name: "db", summary: "s", run: () => 0 },`, ""), { tickets: "db" });
+    writeFileSync(join(repo, ".warden/tools/replaces.json"), JSON.stringify({ db: ["bin/rails db"] }));
+    expect(tools(["--check"]).json.checks).toContainEqual(expect.objectContaining({ label: "replaces.json", status: "FAIL", detail: expect.stringContaining("without a path") }));
   });
 });
