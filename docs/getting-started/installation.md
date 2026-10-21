@@ -91,6 +91,14 @@ Each team member still needs Bun, as above. See [Team setup](../guides/team-setu
 
    It prints the installed version, for example `{"version":"0.6.1"}`.
 
+4. In a project that has warden set up (see the [quick start](quickstart.md)), check the whole setup:
+
+   ```bash
+   warden doctor
+   ```
+
+   It lists Bun, git, `claude`, whether `.warden/` is on the main branch, and your tools, and says what to fix.
+
 Inside Claude Code, the project's agent can run `warden` directly; it does not need the alias.
 
 ## Your tools and the worktrees folder

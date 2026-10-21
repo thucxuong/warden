@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- `warden doctor [--no-fetch]` checks everything a first task needs and says what to fix: Bun, git, `claude`, whether `.warden/` is on the main branch, whether git ignores `.worktrees/`, the `tickets` role and `warden tools --check`. It changes nothing in the project, works from any task worktree, and exits 1 when a row fails.
+- `warden start` now says where `.warden/` is when it is not on the main branch: committed on the local main branch but not pushed (`run git push origin <main>`), committed on another branch (`merge <branch> into <main>`, with a pull request when main is protected), or never committed (the old `commit and push .warden/ to <main> first`). `warden doctor` shows the same message.
+- `/warden:init` asks whether you can push straight to the main branch. For a protected main it gives the commands for a `chore/warden-setup` branch and a pull request, and it ends by running `warden doctor`.
+
 ## 0.10.1 — 2026-10-21
 
 - `/warden:init set up the tools too` runs the normal setup, then goes through the common tools one at a time (verify, dev, db, e2e, pr, ci). For each one it says what it found in the repo, asks whether the project needs it and what it needs to know, then writes and proves the tools you agree to. A tracker ticket tool is written in the same session and tested with saved tracker answers only. The quick start page has the line to copy.

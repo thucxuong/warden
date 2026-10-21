@@ -8,7 +8,7 @@ Every warden message starts with `warden:`. Most of them already say what to do;
 
 When something is off and no message explains it:
 
-1. Run `warden status --all` in the project. It lists every run with its status, step and worktree.
+1. Run `warden doctor` in the project. It checks Bun, git, `claude`, whether `.warden/` is on the main branch, the tools and the ticket tool, and says what to fix. Then run `warden status --all`, which lists every run with its status, step and worktree.
 2. Look at the run's files in `.warden/state/<task>/` in the main checkout: `run.json` (where the run is), `events.jsonl` (what happened, in order), `gate.log` (the engine worker), `checks/` (one log per check command), `triage/` (why a failed check was sorted the way it was).
 3. Hooks never stop a session over their own errors. They log them to `hook-errors.log` in the warden data dir (by default `~/.claude/plugins/data/warden-warden-marketplace/`). See [Environment](reference/environment.md).
 
@@ -43,7 +43,9 @@ When something is off and no message explains it:
 | `--branch needs --worktree` | `--branch` only names the branch of a new worktree. | Add `--worktree`. |
 | `on <branch>: start on a ticket branch, or pass --worktree` | Without `--worktree`, the run uses the current branch, which may not be the main branch. | Add `--worktree`, or switch to a ticket branch first. |
 | `task id <id> does not match <pattern>` | The id does not fit `taskIdPattern` in `.warden/warden.json`. | Use an id that fits, for example `APP-12` for `^APP-\d+$`. |
-| `commit and push .warden/ to <main> first` | `warden start` reads the config from the main branch (from `origin/<main>` when there is a remote), not from your working tree. | Commit `.warden/` on the main branch and push it. |
+| `commit and push .warden/ to <main> first` | `warden start` reads the config from the main branch (from `origin/<main>` when there is a remote), not from your working tree. `.warden/` was never committed. | Commit `.warden/` on the main branch and push it. If main is protected, use a branch and a pull request (see the next two rows). |
+| `.warden/ is committed on <main> but not pushed: run git push origin <main>` | The commit exists on your local main branch, but `origin/<main>` does not have it. | Run the `git push` it names. |
+| `.warden/ is committed on <branch> but not on <main>: merge <branch> into <main> ...` | The setup commit is on another branch, for example a branch for a pull request. | Merge that branch (or the pull request) into the main branch, then run `warden start` again. |
 | `warden: fetch of <main> failed; using the last fetched <ref>` | No network, or no access to the remote. | Only a warning. The run uses the last fetched main. |
 | `a run for <task> exists (status <s>); a person can run warden reset <task>` | Each task has one run. | Go on with it (`warden next <task>`), or reset it in a terminal: `warden reset <task>`. |
 | `flow is invalid: <code> <message>; ...` | The flow breaks a lint rule. | Run `warden flow check <file>` and fix each error. See [Flow files](reference/flow-files.md). |

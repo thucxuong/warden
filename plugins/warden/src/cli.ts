@@ -7,7 +7,7 @@ import { EXIT, WardenError } from "./lib/exit.ts";
 // Only these names are ever imported (spec 3.1). `gate` is internal.
 export const COMMANDS = [
   "version", "init", "start", "next", "done", "wait", "ask", "status", "approve", "retry", "reset",
-  "flow", "report", "retro", "upgrade", "tools", "site", "hook", "gate", "checks", "orchestrate", "docs", "clean", "archive",
+  "flow", "report", "retro", "upgrade", "tools", "site", "hook", "gate", "checks", "orchestrate", "docs", "clean", "archive", "doctor",
 ] as const;
 
 // One line per command for --help. hook and gate are internal and not listed.
@@ -34,6 +34,7 @@ export const HELP: Record<string, string> = {
   docs: "warden docs check",
   clean: "warden clean [--dry-run]   (removes the worktrees and branches of shipped, merged tasks and of archived tasks)",
   archive: 'warden archive <task> --reason "<why>"   (closes a live run without doing it; its ticket is set to archived)',
+  doctor: "warden doctor [--no-fetch]   (checks that a first task can start; changes nothing)",
 };
 
 const USAGE = `usage: warden <command> [args]   (warden <command> --help for details)\n${Object.values(HELP).map((l) => `  ${l}`).join("\n")}`;
