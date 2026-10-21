@@ -103,8 +103,7 @@ describe("init --scan", () => {
       { name: "type-check", run: "pnpm run type-check" },
       { name: "test:unit", run: "pnpm run test:unit" }, // "test" has --watch, so it is skipped
       { name: "build", run: "pnpm run build" },
-      { name: "e2e", run: "pnpm run e2e" },
-    ]);
+    ]); // e2e is left out (0.10): it starts the app on a fixed port
     expect(scan.makeTargets).toEqual(["all", "lint-docs"]);
     expect(scan.ciFiles).toEqual([".github/workflows/ci.yml"]);
     expect(scan.docs).toEqual(["README.md", "docs/deep/more.md", "docs/guide.md"]);

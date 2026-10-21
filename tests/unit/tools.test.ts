@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync,
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { NO_TICKETS } from "../../plugins/warden/src/commands/tools.ts";
+import { runTicketTool } from "../../plugins/warden/src/engine/tickets.ts";
 import { barrel, TEMPLATES, writeRoles, writeTools } from "../helpers/tools-fixture.ts";
 
 const PLUGIN = resolve(import.meta.dir, "../../plugins/warden");
@@ -308,29 +309,39 @@ describe("the call log (0.10)", () => {
 
   test("each call is logged with its args (secrets hidden), exit and time, -h too; the engine's and --check's probe are not", () => {
     writeTools(repo, barrel(ECHO, ""), { tickets: "echo" });
-    tools(["echo", "list", "--token", "abc123"]);
+    tools(["echo", "list", "--token", "abc123", "--auth-token", "s3cr3t", "--db-password=pw"]);
     tools(["boom"]);
     tools(["echo", "-h"]);
     tools(["--check"]);
-    const engine = Bun.spawnSync([process.execPath, CLI, "tools", "echo", "dag"], { cwd: repo, env: { ...process.env, WARDEN_ROOT: PLUGIN, WARDEN_TOOLS_MAIN: "1" } });
-    expect(engine.exitCode).toBe(4);
+    writeFileSync(join(repo, ".warden/warden.json"), "{}"); // the engine needs a set-up project to run the tickets tool
+    expect(() => runTicketTool(repo, PLUGIN, ["dag"], 30)).toThrow(/exit 4/); // the engine's own call: not logged
     const calls = logged();
-    expect(calls.map((c) => [c.tool, c.args, c.exit])).toEqual([["echo", ["list", "--token", "***"], 4], ["boom", [], 1], ["echo", ["-h"], 0]]);
+    expect(calls.map((c) => [c.tool, c.args, c.exit])).toEqual([["echo", ["list", "--token", "***", "--auth-token", "***", "--db-password=***"], 4], ["boom", [], 1], ["echo", ["-h"], 0]]);
     expect(typeof calls[0].ms).toBe("number");
   });
 
-  test("--log sums the calls; --since filters by date; bad flags are exit 2", () => {
+  test("--log sums the calls, the agent's apart from the check step's; --since is a local date; bad flags are exit 2", () => {
     writeTools(repo, barrel(ECHO, ""));
     tools(["echo", "a"]);
     tools(["echo", "b"]);
     tools(["boom"]);
-    const today = new Date().toISOString().slice(0, 10);
+    const byCheck = Bun.spawnSync([process.execPath, CLI, "tools", "echo", "c"], { cwd: repo, env: { ...process.env, WARDEN_ROOT: PLUGIN, WARDEN_TOOLS_BY: "check" } });
+    expect(byCheck.exitCode).toBe(4);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const now = new Date();
+    const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
     expect(tools(["--log"]).json).toEqual({
-      since: null, tools: [{ tool: "echo", calls: 2, failed: 2 }, { tool: "boom", calls: 1, failed: 1 }], raw: [], commands: [],
+      since: null, raw: [], commands: [],
+      tools: [
+        { tool: "echo", agent: { calls: 2, failed: 2 }, check: { calls: 1, failed: 1 } },
+        { tool: "boom", agent: { calls: 1, failed: 1 }, check: { calls: 0, failed: 0 } },
+      ],
     });
     expect(tools(["--log", "--since", today]).json.tools).toHaveLength(2);
     expect(tools(["--log", "--since", "2999-01-01"]).json.tools).toEqual([]);
-    for (const args of [["--log", "x"], ["--log", "--since"], ["--log", "--since", "yesterday"]]) expect(tools(args).code).toBe(2);
+    for (const args of [["--log", "x"], ["--log", "--since"], ["--log", "--since", "yesterday"], ["--log", "--since", "2026-13-01"], ["--log", "--since", "2026-02-30"]]) {
+      expect(tools(args).code).toBe(2);
+    }
   });
 });
 
@@ -352,11 +363,19 @@ describe("the project tools skill (0.10)", () => {
     expect(tools(["--skill", "x"]).code).toBe(2);
   });
 
+  test("a tool may be named like an object property (constructor)", () => {
+    writeTools(repo, barrel(`  { name: "constructor", summary: "s", run: () => 0 },`, ""));
+    expect(tools(["--skill"]).code).toBe(0);
+    expect(skill()).toContain("## constructor");
+  });
+
   test("commands must be an array of strings; a path in replaces.json is a FAIL", () => {
     writeTools(repo, barrel(`  { name: "pr", summary: "s", commands: "create" as any, run: () => 0 },`, ""));
     expect(tools([]).err).toContain("commands must be an array of strings");
     writeTools(repo, barrel(`  { name: "db", summary: "s", run: () => 0 },`, ""), { tickets: "db" });
     writeFileSync(join(repo, ".warden/tools/replaces.json"), JSON.stringify({ db: ["bin/rails db"] }));
     expect(tools(["--check"]).json.checks).toContainEqual(expect.objectContaining({ label: "replaces.json", status: "FAIL", detail: expect.stringContaining("without a path") }));
+    writeFileSync(join(repo, ".warden/tools/replaces.json"), JSON.stringify({ db: ["npx @playwright/test"] }));
+    expect(tools(["--check"]).json.checks.filter((c: any) => c.label === "replaces.json")).toEqual([]);
   });
 });

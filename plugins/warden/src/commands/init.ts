@@ -31,8 +31,10 @@ export const DEFAULT_FIX_SCOPE = [
 // Marketplace source kinds a teammate's machine can resolve. A local directory or file path cannot.
 const SHAREABLE_SOURCES = ["github", "git"];
 
-// Script names to suggest, in order. The first existing, non-watch name of a group is used.
-const CHECK_GROUPS = [["lint"], ["typecheck", "type-check", "tsc"], ["test", "test:unit"], ["build"], ["test:e2e", "e2e"]];
+// Script names to suggest, in order. The first existing, non-watch name of a group is used. End-to-end tests are left
+// out (0.10): they start the app on a fixed port, so checks in worktrees side by side would clash. A project adds them
+// through an e2e tool that gives each worktree its own port (the tools skill's recipes/e2e.md).
+const CHECK_GROUPS = [["lint"], ["typecheck", "type-check", "tsc"], ["test", "test:unit"], ["build"]];
 
 function localDate(now = new Date()): string {
   const pad = (n: number) => String(n).padStart(2, "0");

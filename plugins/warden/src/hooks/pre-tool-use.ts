@@ -136,7 +136,7 @@ const HUMAN_ONLY = [
 ];
 const WARDEN_ENV_NAMES = [
   "PROJECT_AGENT", "WARDEN_ROLE", "WARDEN_CLAUDE_BIN", "WARDEN_DATA", "WARDEN_ROOT", "WARDEN_TEST_MODE",
-  "CLAUDE_PLUGIN_ROOT", "CLAUDE_PLUGIN_DATA", "WARDEN_TOOLS_NO_LOG", "WARDEN_TOOLS_MAIN",
+  "CLAUDE_PLUGIN_ROOT", "CLAUDE_PLUGIN_DATA", "WARDEN_TOOLS_NO_LOG", "WARDEN_TOOLS_MAIN", "WARDEN_TOOLS_BY",
 ];
 const CLAUDE_PRINT = /(^|[;&|(\s])claude\b[^;&|\n]*\s(-p|--print)(?=\s|$)/;
 // `script` as the command word of a simple command, not the word in prose or JSON.
@@ -178,23 +178,27 @@ const ORCHESTRATE_COMMAND = /(?:^|[;&|(\s])(?:[\w./-]*\/)?(?:warden|cli\.ts)\s+o
 const EPIC_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const RUN_COMMAND = /(?:^|[;&|(\s])(?:[\w./-]*\/)?(?:warden|cli\.ts)\s+(start|next|done|wait|ask)\b([^;&|\n]*)/;
 
-// Drops the body of a heredoc that feeds `warden done` or `warden report`: it is JSON or prose, not a command.
-// With all, the body of every heredoc (file contents), for the command log.
-export function stripHeredocs(cmd: string, all = false): string {
+// Programs that run what they read on stdin: a heredoc fed to one of them (directly or through a pipe) is commands.
+const RUNS_STDIN = new Set(["sh", "bash", "zsh", "dash", "ksh", "fish", "ssh", "eval", "python", "python3", "node", "bun", "deno", "perl", "ruby", "php", "xargs", "source"]);
+
+// Drops the body and the end line of each heredoc: file contents, JSON or prose, not commands (0.10). A heredoc whose
+// line also runs a program from RUNS_STDIN keeps its body, so `bash <<EOF` and `cat <<EOF | sh` are still checked.
+// `<<<` (a here-string) and `<<` inside `$(( ))` are not heredocs.
+export function stripHeredocs(cmd: string): string {
   const lines = cmd.split("\n");
   const kept: string[] = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
     kept.push(line);
-    const heredoc = /<<(-?)\s*(['"]?)([\w.-]+)\2/.exec(line);
-    if (!heredoc || (!all && !/(warden|cli\.ts)\s+(done|report)\b/.test(line))) continue;
+    const heredoc = /(?<!<)<<(?!<)(-?)\s*(['"]?)([A-Za-z_][\w.-]*)\2/.exec(line);
+    if (!heredoc) continue;
+    const before = line.slice(0, heredoc.index);
+    if ((before.match(/\$\(\(/g)?.length ?? 0) > (before.match(/\)\)/g)?.length ?? 0)) continue; // a shift in $(( ))
+    if (simpleCommands(line).some((part) => RUNS_STDIN.has(programWords(part)[0] ?? ""))) continue;
     const [, dash, , end] = heredoc;
     while (i + 1 < lines.length) {
       const body = lines[++i]!;
-      if ((dash ? body.replace(/^\t+/, "") : body) === end) {
-        if (!all) kept.push(body);
-        break;
-      }
+      if ((dash ? body.replace(/^\t+/, "") : body) === end) break;
     }
   }
   return kept.join("\n");
@@ -401,21 +405,41 @@ async function bash(call: HookCall): Promise<string | null> {
 
   const run = dirRun ?? runForSession(call);
   const reason = bashDecision(call, cmd, run);
-  logCommand(call.main, stripHeredocs(typeof command === "string" ? command : "", true), run);
-  return reason === null ? null : deny(call, "Bash", reason, run);
+  if (reason !== null) return deny(call, "Bash", reason, run);
+  try {
+    logCommand(call.main, cmd, run); // only commands that run
+  } catch (err) {
+    logHookError(call.ctx.data, "hook pre-tool-use: command log", err);
+  }
+  return null;
 }
 
 // 0.10: every command the agent runs is logged for the retro (warden tools --log). Nothing is refused for it: the retro
 // and the project's rules steer the agent to its tools. A raw command that a tool covers (.warden/tools/replaces.json
-// of the main checkout) is marked, wherever it sits in the line: after `x=$(`, a pipe or `sudo -E`. Quoted text is
-// left out, so a commit message that names a command is not one.
-const WRAPPERS = new Set(["env", "command", "exec", "sudo", "nohup", "time"]);
+// of the main checkout) is marked where it runs as a program: also inside `x=$(...)`, after a pipe or behind `sudo -E`,
+// but not as an argument (`which psql`) or in quoted text (a commit message).
+const WRAPPERS = new Set(["env", "command", "exec", "sudo", "nohup", "time", "nice", "timeout"]);
+// Wrapper options that take a value: `sudo -u bob`, `env -u NAME`, `nice -n 10`, `timeout -s KILL`.
+const WRAPPER_VALUE_FLAGS = new Set(["-u", "-g", "-C", "-n", "-s", "-k"]);
 
-// The words of a simple command from its program on: no leading VAR=value or wrapper, the program without its path.
+// The simple commands of a line, with each `$( )` and backtick part as its own command.
+function simpleCommands(cmd: string): string[] {
+  return splitCommands(cmd.replace(/\$\(|`/g, ";"));
+}
+
+// The words of a simple command from its program on: no leading VAR=value, no wrapper and its options, the program
+// without its path. [] for `command -v x` (a lookup) or a part with no program.
 function programWords(part: string): string[] {
-  const words = part.replace(/^[\s({]+/, "").split(/\s+/).map(unquote);
+  const words = part.replace(/^[\s({]+/, "").replace(/[)}]+\s*$/, "").split(/\s+/).filter((w) => w !== "").map(unquote);
   let i = 0;
-  while (i < words.length && (/^\w+=/.test(words[i]!) || WRAPPERS.has(words[i]!))) i++;
+  for (;;) {
+    while (i < words.length && /^\w+=/.test(words[i]!)) i++;
+    if (i >= words.length || !WRAPPERS.has(words[i]!)) break;
+    const wrapper = words[i++]!;
+    if (wrapper === "command" && /^-[vV]$/.test(words[i] ?? "")) return [];
+    if (wrapper === "timeout" && /^\d/.test(words[i] ?? "")) i++; // timeout 30 cmd
+    while (i < words.length && words[i]!.startsWith("-")) i += WRAPPER_VALUE_FLAGS.has(words[i]!) ? 2 : 1;
+  }
   const rest = words.slice(i);
   if (rest.length > 0) rest[0] = rest[0]!.replace(/^.*\//, "");
   return rest;
@@ -425,10 +449,9 @@ function rawCommand(main: string, cmd: string): Raw | null {
   const { replaces } = replacesOrNone(main);
   const entries = Object.entries(replaces).flatMap(([tool, list]) => list.map((prefix) => ({ tool, words: prefix.trim().split(/\s+/) })));
   if (entries.length === 0) return null;
-  const unquoted = cmd.replace(QUOTED, (q) => (q[0] === '"' && /\$\(|`/.test(q) ? q.slice(1, -1) : " "));
-  const tokens = unquoted.split(/\$\(|[\s;&|()`]+/).filter((t) => t !== "").map((t) => t.replace(/^\w+=/, "").replace(/^.*\//, ""));
-  for (let i = 0; i < tokens.length; i++) {
-    const found = entries.find(({ words }) => words.every((word, j) => tokens[i + j] === word));
+  for (const part of simpleCommands(cmd)) {
+    const words = programWords(part);
+    const found = entries.find((entry) => entry.words.every((word, j) => words[j] === word));
     if (found) return { tool: found.tool, prefix: found.words.join(" ") };
   }
   return null;
@@ -436,12 +459,12 @@ function rawCommand(main: string, cmd: string): Raw | null {
 
 // Programs that only look around, and git, whose everyday commands are never worth a tool; the retro wants the
 // commands that are. warden calls have their own log. A raw command a tool covers is still marked.
-const LOOK_AROUND = new Set(["cd", "ls", "cat", "head", "tail", "wc", "pwd", "echo", "printf", "grep", "rg", "find", "which", "true", "sleep", "git", "warden"]);
+const LOOK_AROUND = new Set(["cd", "ls", "cat", "head", "tail", "wc", "pwd", "echo", "printf", "grep", "rg", "find", "which", "type", "true", "sleep", "git", "warden"]);
 
 // What the command does, in a few words: the first program that is not in LOOK_AROUND, plus up to two
 // subcommand words (`gh pr create`, `bun run dev`, `docker compose up`). null when it only looks around.
 function commandShape(cmd: string): string | null {
-  for (const part of splitCommands(cmd)) {
+  for (const part of simpleCommands(cmd)) {
     const words = programWords(part);
     const program = words[0];
     if (!program || LOOK_AROUND.has(program) || isWardenCall(words.join(" "))) continue;
@@ -455,7 +478,7 @@ function commandShape(cmd: string): string | null {
   return null;
 }
 
-// `cmd` has its heredoc bodies taken out: they are file contents, not commands.
+// `cmd` has its heredoc bodies taken out (stripHeredocs): they are file contents, not commands.
 function logCommand(main: string, cmd: string, run: RunJson | null): void {
   const raw = rawCommand(main, cmd);
   const shape = commandShape(cmd) ?? raw?.prefix ?? null;

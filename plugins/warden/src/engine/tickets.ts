@@ -3,7 +3,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { loadStepsJson, loadWardenJson } from "../config/config.ts";
-import { NO_TICKETS, readRoles, TOOLS_MAIN_ENV } from "../commands/tools.ts";
+import { NO_LOG_ENV, NO_TICKETS, readRoles, TOOLS_MAIN_ENV } from "../commands/tools.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
 import { readJson, writeJsonAtomic } from "../lib/json.ts";
 import { killGroup, pathWithBin } from "../lib/proc.ts";
@@ -18,8 +18,8 @@ export const TICKET_STATUSES: TicketStatus[] = ["backlog", "todo", "doing", "rev
 // Closed tickets never hold a dependant back. backlog is parked: never scheduled (0.7).
 export const CLOSED_STATUSES: TicketStatus[] = ["done", "archived"];
 export const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
-const DAG_TIMEOUT_SEC = 300;
-const SHORT_TIMEOUT_SEC = 60;
+export const DAG_TIMEOUT_SEC = 300;
+export const SHORT_TIMEOUT_SEC = 60;
 
 // ---------------------------------------------------------------------------
 // 5.1 Running the ticket tool (0.6: the `tickets` role, through `warden tools`)
@@ -48,8 +48,9 @@ export function runTicketTool(main: string, root: string, args: string[], timeou
 
 const MAX_TOOL_STDOUT = 16 * 1024 * 1024;
 
+// Warden's own ticket tool calls are never in the agent's call log (NO_LOG_ENV).
 function toolEnv(root: string, fromMain = true): Record<string, string | undefined> {
-  const env: Record<string, string | undefined> = { ...process.env, PATH: pathWithBin(root, process.env.PATH), WARDEN_ROOT: root };
+  const env: Record<string, string | undefined> = { ...process.env, PATH: pathWithBin(root, process.env.PATH), WARDEN_ROOT: root, [NO_LOG_ENV]: "1" };
   if (fromMain) env[TOOLS_MAIN_ENV] = "1";
   delete env.PROJECT_AGENT;
   return env;
@@ -170,16 +171,22 @@ export function createTicket(main: string, root: string, t: NewTicket): { ticket
   if (t.blockedBy !== undefined && t.blockedBy.length > 0) args.push("--blocked-by", t.blockedBy.join(","));
   const out = runOptional(main, root, args);
   if (out === null) throw new WardenError("the ticket tool has no create: add it with /warden:tools", EXIT.NOT_FOUND);
+  const problem = createProblem(main, out, t.type);
+  if (problem) throw new WardenError(`ticket tool: create: ${problem}`, EXIT.REJECTED);
+  return { ticket: out.ticket as TicketDetail, changed: out.changed as string[] };
+}
+
+// Why a `create` output is not one the engine accepts, or null. A non-epic id must match taskIdPattern and must not be
+// the id of a warden run in `main`. Also used by `warden tools --verify tickets`.
+export function createProblem(main: string, out: Record<string, unknown>, type: string): string | null {
   const pattern = loadWardenJson(join(main, ".warden", "warden.json")).taskIdPattern;
   const bad = detailProblem(out.ticket);
   const id = (out.ticket as TicketDetail | undefined)?.id;
-  const problem = bad !== null ? `ticket: ${bad}`
+  return bad !== null ? `ticket: ${bad}`
     : !isPaths(out.changed) ? "changed must be an array of paths"
-    : t.type !== "epic" && !new RegExp(pattern).test(id!) ? `id ${id} does not match taskIdPattern ${pattern}`
+    : type !== "epic" && !new RegExp(pattern).test(id!) ? `id ${id} does not match taskIdPattern ${pattern}`
     : existsSync(taskDir(main, id!)) || existsSync(historyDir(main, id!)) ? `id ${id} is already used by a warden run; the tool must skip ids that have .warden/state/<id> or .warden/history/<id>`
     : null;
-  if (problem) throw new WardenError(`ticket tool: create: ${problem}`, EXIT.REJECTED);
-  return { ticket: out.ticket as TicketDetail, changed: out.changed as string[] };
 }
 
 // `link <id> <url>` in the main checkout (0.8), for a tracker outside the repo. null when the tool has no link.
@@ -401,11 +408,17 @@ export function statusPlan(main: string, epic: string): OrchestratePlan {
 
 // Always in the main checkout: a ticket is done once its task is merged there (0.9.3).
 export function setTicketStatus(main: string, root: string, id: string, status: TicketStatus): { id: string; status: TicketStatus; changed: string[] } {
-  const out = runTicketTool(main, root, ["set-status", id, status], SHORT_TIMEOUT_SEC) as Record<string, unknown> | null;
-  const ok = typeof out === "object" && out !== null && typeof out.id === "string" && typeof out.status === "string"
-    && Array.isArray(out.changed) && out.changed.every((p) => typeof p === "string");
-  if (!ok) throw new WardenError("ticket tool: set-status did not print {id, status, changed}", EXIT.REJECTED);
-  return out as { id: string; status: TicketStatus; changed: string[] };
+  const out = runTicketTool(main, root, ["set-status", id, status], SHORT_TIMEOUT_SEC);
+  if (!isSetStatusOutput(out)) throw new WardenError(`ticket tool: ${SET_STATUS_SHAPE}`, EXIT.REJECTED);
+  return out;
+}
+
+export const SET_STATUS_SHAPE = "set-status did not print {id, status, changed}";
+
+// The shape the engine accepts from `set-status`. Also used by `warden tools --verify tickets`.
+export function isSetStatusOutput(out: unknown): out is { id: string; status: TicketStatus; changed: string[] } {
+  const o = out as Record<string, unknown> | null;
+  return typeof o === "object" && o !== null && typeof o.id === "string" && typeof o.status === "string" && isPaths(o.changed);
 }
 
 // Every cached plan, refreshed, newest first. Never throws.

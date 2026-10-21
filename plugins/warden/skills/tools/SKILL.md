@@ -134,7 +134,7 @@ Warden reads only the roles above. When a project needs one of these jobs, write
 - The command log marks each time the agent ran one anyway, so the retro can find out why: the tool is missing a command, its usage is unclear, or a rule is needed.
 
 Rules for entries:
-- An entry is the words of a command as typed, without a path: `gh pr` matches `gh pr create`, `x=$(gh pr list)` and `sudo -E gh pr view`, not `gh run list`. Words in quotes and in a heredoc do not count.
+- An entry is the words of a command as typed, with no path in its first word: `gh pr` matches `gh pr create`, `x=$(gh pr list)` and `sudo -E gh pr view` wherever they run as a program, not `gh run list`, `which gh` or a path to `gh`. Words in quotes and in heredoc file contents do not count. A later word may hold a `/`, as in `npx @playwright/test`.
 - List a command only when the tool covers every use of it, with narrow words: `gh pr`, not `gh`.
 - `warden tools --check` fails an entry whose tool is not in `index.ts`, or one with a path in it.
 
@@ -146,7 +146,7 @@ Warden keeps two logs in `.warden/state/_tools/` of the main checkout. They are 
 - `commands.jsonl`: every other command the agent runs that does more than look around (`ls`, `cat`, `grep`, `git` and the like are left out), with the raw commands a tool covers marked.
 
 `warden tools --log [--since YYYY-MM-DD]` sums them as JSON. `--since` is a date in this machine's timezone, like the retro's `last`.
-- `tools`: calls and failures per tool. A failure is any exit that is not 0: for a test tool, failing tests count too. Many failures mean the tool or its usage text needs work, or the tests it runs keep catching something.
+- `tools`: calls and failures per tool, the agent's (`agent`) apart from those warden's check step made (`check`). A failure is any exit that is not 0: for a test tool, failing tests count too. Many failures mean the tool or its usage text needs work, or the tests it runs keep catching something.
 - `raw`: the raw commands a tool covers that the agent ran anyway, with the tool. Check that the tool does that job and that its usage and the skill say how.
 - `commands`: commands typed at least twice, costliest (count times length) first, each with an example. A command that keeps coming back is the next tool, or a new subcommand of one.
 

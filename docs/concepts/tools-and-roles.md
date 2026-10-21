@@ -141,7 +141,7 @@ Warden refuses nothing for it: the goal is to steer the agent to the tools, not 
 - The project tools skill tells the agent to run the tool instead of those commands.
 - The command log marks each time the agent ran one anyway. The retro then finds out why (the tool lacks a command, its usage is unclear, or a rule is needed) and fixes that.
 
-An entry is the words of a command as typed, without a path: `gh pr` matches `gh pr create`, `x=$(gh pr list)` and `sudo -E gh pr view`, not `gh run list`. Words in quotes and in a heredoc do not count. Only the main checkout's file counts; a missing or broken file marks nothing, and `warden tools --check` reports a broken one. List a command only when the tool covers every use of it, with narrow words (`gh pr`, not `gh`).
+An entry is the words of a command as typed, with no path in its first word: `gh pr` matches `gh pr create`, `x=$(gh pr list)` and `sudo -E gh pr view` wherever they run as a program, not `gh run list`, `which gh` or a path to `gh`. Words in quotes and in heredoc file contents do not count. A later word may hold a `/`, as in `npx @playwright/test`. Only the main checkout's file counts; a missing or broken file marks nothing, and `warden tools --check` reports a broken one. List a command only when the tool covers every use of it, with narrow words (`gh pr`, not `gh`).
 
 ## The project tools skill
 
@@ -154,20 +154,20 @@ Warden keeps two logs in `.warden/state/_tools/` of the main checkout. They are 
 - `calls.jsonl`: every `warden tools` call the agent makes: tool, args, exit code and time. The engine's ticket tool calls are not logged.
 - `commands.jsonl`: every other Bash command the agent runs that does more than look around (`ls`, `cat`, `grep`, `git` and `warden` itself are left out), with the task it ran for and the raw command a tool covers, if any.
 
-Times are stored in UTC. Each log moves to `<name>.old.jsonl` past 2 MB, so at most two files of each are kept.
+Times are stored in UTC. Past 2 MB a log moves aside under a name of its own (`<name>.old-<time>-<pid>.jsonl`), so two agents writing at once never overwrite each other; the two newest of those are kept. A command warden refuses is not logged, since it did not run.
 
 `warden tools --log [--since YYYY-MM-DD]` sums them. `--since` is a date in your own timezone, like the retro's `last`, and counts from local midnight.
 
 ```json
 {
   "since": "2026-10-01",
-  "tools": [{ "tool": "e2e", "calls": 14, "failed": 3 }],
+  "tools": [{ "tool": "e2e", "agent": { "calls": 6, "failed": 1 }, "check": { "calls": 8, "failed": 2 } }],
   "raw": [{ "tool": "pr", "prefix": "gh pr", "count": 2 }],
   "commands": [{ "shape": "curl", "count": 9, "avgChars": 240, "example": "curl -s https://..." }]
 }
 ```
 
-- `tools`: a failure is any exit that is not 0, so failing tests count for a test tool too.
+- `tools`: per tool, the agent's own calls apart from those warden's check step (or a periodic command check) made, as when `steps.json` runs `warden tools verify types`. A failure is any exit that is not 0, so failing tests count for a test tool too.
 - `raw`: raw commands a tool covers that the agent ran anyway.
 - `commands`: commands typed at least twice, costliest (count times length) first, grouped by their first program and up to two subcommand words.
 

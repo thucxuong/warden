@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { loadWardenJson } from "../config/config.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
 import * as proc from "../lib/proc.ts";
+import { BY_ENV } from "../lib/tool-log.ts";
 import { mainRoot, stateRoot } from "../state/paths.ts";
 import { listTasks, readRun, runExists } from "../state/store.ts";
 import type { Ctx } from "../types.ts";
@@ -487,7 +488,7 @@ async function runCheck(args: string[], ctx: Ctx): Promise<void> {
   try {
     const result = await proc.run(check.run, {
       cwd: main,
-      env: { PROJECT_AGENT: undefined, WARDEN_MAIN_ROOT: main, PATH: proc.pathWithBin(ctx.root, ctx.env.PATH) },
+      env: { PROJECT_AGENT: undefined, WARDEN_MAIN_ROOT: main, PATH: proc.pathWithBin(ctx.root, ctx.env.PATH), [BY_ENV]: "check" },
       timeoutSec: check.timeoutSec,
       log,
     });

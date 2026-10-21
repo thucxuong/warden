@@ -28,7 +28,7 @@ The raw runners: `tsc`, `eslint`, `npx jest`, `npx vitest`, `pnpm run lint`, and
 
 ## Traps
 
-- Parse the runner's machine output (`--format json`, a JUnit file) instead of its text where it has one.
+- Parse the runner's machine output (`--format json`, a JUnit file) instead of its text where it has one. Some runners write that report to a file instead of stdout (vitest's `--reporter=json` with `--outputFile`, jest's `--json --outputFile`): pass a file in a temp folder and read it back. A run that prints no report is a failure of the tool, never "0 tests".
 - Run on the whole project, not only changed files, unless the project says otherwise: the `check` step does.
 - Never change a config to make a check pass; that is the reviewer's first blocking finding.
 - A monorepo: run each package and name the package in every entry.

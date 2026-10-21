@@ -14,7 +14,8 @@ Do these steps in order. Ask one question per message. Prefer multiple choice.
    Draft these context topics: `overview`, `architecture`, `stack`, `glossary`.
    Each topic is at most 200 lines. It holds facts only. It holds no rules.
 3. Draft `steps.json`.
-   - `check.default` is the scan's `suggestedChecks`. The scan picks package scripts in this order, when they exist: `lint`, `typecheck` (or `type-check`, `tsc`), `test` (or `test:unit`), `build`, `test:e2e` (or `e2e`). It skips `dev`, `start`, `watch`, `*:watch` and any script that contains `--watch`.
+   - `check.default` is the scan's `suggestedChecks`. The scan picks package scripts in this order, when they exist: `lint`, `typecheck` (or `type-check`, `tsc`), `test` (or `test:unit`), `build`. It skips `dev`, `start`, `watch`, `*:watch` and any script that contains `--watch`.
+   - Do not add end-to-end tests or any other check that starts the app or a server on a fixed port: runs in worktrees side by side, or a dev server already running, would make it fail. Tell the user the project can add them later with an `e2e` tool that gives each worktree its own port (`/warden:tools e2e`; the tools skill's `recipes/dev.md` and `recipes/e2e.md`).
    - Each command runs as `<package manager> run <script>`.
    - If `suggestedChecks` is empty (no `package.json`, for example a Makefile, Python or .NET project), propose commands from the scan's `makeTargets` (as `make <target>`) and from the steps in `ciFiles`. Ask the user to confirm them. `check.default` needs at least one command.
    - If the project has an aggregate script such as `test:all` or `ci`, ask the user about it. Do not add it on your own.
@@ -46,7 +47,7 @@ Do these steps in order. Ask one question per message. Prefer multiple choice.
    - A tracker: tell the user to run `/warden:tools` after this setup to write the tool for it (`ticket-tool-recipe.md`, then `warden tools --verify tickets` without `--write`). Until then `warden start` refuses.
 7. Optional: run each check command once and report the results. If one fails, report it. Do not fix it.
 8. Tell the user to commit and push to the main branch. `warden start` reads `.warden/` from there.
-   Build the `git add` list from the `written` array that `warden init --write` printed, so it names only files that exist. For example, as three separate commands: `git add .warden .gitignore scripts/warden-setup.sh`, `git commit -m "chore: set up warden"`, `git push`. Add `.claude/settings.json` only when it is in `written`. If `.claude/` is gitignored, tell the user; `git add` refuses ignored files.
+   Build the `git add` list from the `written` array that `warden init --write` printed, so it names only files that exist. For example, as three separate commands: `git add .warden .gitignore scripts/warden-setup.sh`, `git commit -m "chore: set up warden"`, `git push`. Add `.claude/settings.json` only when it is in `written`, and `.claude/skills/project-tools/SKILL.md`, which `warden tools --skill` wrote in step 6. If `.claude/` is gitignored, tell the user; `git add` refuses ignored files.
    Also suggest branch protection on the main branch: a pull request is required and direct pushes are off.
 
 What `warden init --write` creates:

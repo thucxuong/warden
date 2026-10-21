@@ -2,7 +2,8 @@
 // covers (replaces.json) is marked, wherever it sits in the line.
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { join } from "node:path";
-import { type CommandEntry, readLog, summarize } from "../../plugins/warden/src/lib/tool-log.ts";
+import { appendLog, type CommandEntry, readLog, summarize } from "../../plugins/warden/src/lib/tool-log.ts";
+import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { write } from "../helpers/repo.ts";
 import { T, FEATURE, main, startFlow, bash, editAt, reason, hook, installHooksFixture } from "../helpers/hooks-fixture.ts";
 import { barrel, writeTools } from "../helpers/tools-fixture.ts";
@@ -39,6 +40,14 @@ describe("raw commands a tool covers", () => {
     expect(log()).toEqual([]); // git and grep are left out, and nothing in quotes or the heredoc is a command
   });
 
+  test("only where it runs as a program: not as an argument or a path, nor a command warden refuses", async () => {
+    replaces({ db: ["psql"], pr: ["gh pr"] });
+    for (const cmd of ["which psql", "ls /usr/local/bin/psql", "command -v psql", "npx @playwright/test --version"]) expect(await bash(cmd, { cwd: main })).toBeNull();
+    await startFlow(FEATURE);
+    expect(reason(await bash("gh pr create --fill"))).toContain("push/PR/merge is allowed only in the ship step"); // B6
+    expect(log().map((e) => [e.shape, e.raw ?? null])).toEqual([["npx", null]]);
+  });
+
   test("a missing or broken replaces.json marks nothing", async () => {
     await bash("gh pr list", { cwd: main });
     replaces("{broken");
@@ -56,6 +65,27 @@ describe("raw commands a tool covers", () => {
 });
 
 describe("the command log", () => {
+  test("labels a command by the program that runs: inside $( ), behind wrappers and their options", async () => {
+    for (const cmd of ["json=$(curl -s https://x.test)", "sudo -E bun install", "sudo -u bob make build", "timeout 30 bun test", "sha=$(git rev-parse HEAD)", "jq . <<< '{}'"]) {
+      await bash(cmd, { cwd: main });
+    }
+    expect(log().map((e) => e.shape)).toEqual(["curl", "bun install", "make build", "bun test", "jq"]);
+  });
+
+  test("two hooks that rotate a full log at once lose no history", () => {
+    const dir = join(main, ".warden/state/_tools");
+    mkdirSync(dir, { recursive: true });
+    const line = `${JSON.stringify({ at: new Date().toISOString(), shape: "x", command: "x" })}\n`;
+    writeFileSync(join(dir, "commands.jsonl"), line.repeat(Math.ceil((2 * 1024 * 1024) / line.length) + 1));
+    appendLog(main, "commands", { at: new Date().toISOString(), shape: "first", command: "first" });
+    writeFileSync(join(dir, "commands.jsonl"), line.repeat(Math.ceil((2 * 1024 * 1024) / line.length) + 1));
+    appendLog(main, "commands", { at: new Date().toISOString(), shape: "second", command: "second" });
+    const shapes = log().map((e) => e.shape);
+    expect(shapes.filter((x) => x === "x").length).toBeGreaterThan(2 * Math.ceil((2 * 1024 * 1024) / line.length));
+    expect(shapes.at(-1)).toBe("second");
+    expect(readdirSync(dir).filter((f) => f.startsWith("commands.old-"))).toHaveLength(2);
+  });
+
   test("each command that does more than look around is logged with its shape, task and secrets hidden", async () => {
     await bash("bun run dev --port 3000", { cwd: main });
     await bash("ls -la && cat README.md", { cwd: main });
