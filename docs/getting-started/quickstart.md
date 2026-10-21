@@ -49,7 +49,9 @@ This page assumes warden is installed (see [Installation](installation.md)) and 
 
    Add `.claude/settings.json` to the `git add` line if you chose the team install. The agent prints the exact list.
 
-   If your main branch is protected, push these files on a branch instead, open a pull request, and merge it before your first task. Until then `warden start` stops with `commit and push .warden/ to <main> first`.
+   If your main branch is protected, push these files on a branch instead (for example `chore/warden-setup`), open a pull request, and merge it before your first task. Until then `warden start` stops and says where `.warden/` is: for example `.warden/ is committed on chore/warden-setup but not on main: merge chore/warden-setup into main`.
+
+   Then run `warden doctor`. It checks that `.warden/` is on the main branch and that Bun, git, `claude` and your tools are in place, and says what to fix if something is not.
 
 5. If it is not on already, turn on branch protection for your main branch (in your Git host's settings):
    - Require a pull request before merging.

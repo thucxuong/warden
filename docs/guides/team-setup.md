@@ -42,7 +42,7 @@ git push
 | `.claude/settings.json` | yes | the team install block, and any shared permission rules |
 | `.claude/settings.local.json` | no | personal. Warden does not write it. |
 
-`warden start` reads `.warden/` from your main branch on the remote (`origin/<main>` after a fetch), not from your working copy. Until it is pushed, `warden start` stops with `commit and push .warden/ to main first`. The same goes for later config changes: they count once they are on the main branch.
+`warden start` reads `.warden/` from your main branch on the remote (`origin/<main>` after a fetch), not from your working copy. Until it is pushed, `warden start` stops and says where `.warden/` is instead (not committed, not pushed, or on another branch). `warden doctor` shows the same message, and checks the rest of the setup. The same goes for later config changes: they count once they are on the main branch.
 
 ## 3. Protect the main branch
 
