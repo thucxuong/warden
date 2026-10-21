@@ -165,8 +165,6 @@ export const mover = { name: "mover", summary: "s", run: (argv: string[]) => {
   test("a new id off taskIdPattern, or a set-status without its id, fails as the engine would", () => {
     setup("X-2", true);
     expect(verify("tickets", "--write").rows.find((x) => x.label === "create")).toMatchObject({ status: "FAIL", detail: "id X-2 does not match taskIdPattern ^T-\\d+$" });
-    rmSync(join(repo, ".git"), { recursive: true, force: true });
-    Bun.spawnSync(["git", "init", "-q", "-b", "main"], { cwd: repo });
     setup("T-2", false);
     expect(verify("tickets", "--write").rows.find((x) => x.label === "set-status doing")).toMatchObject({ status: "FAIL", detail: "set-status did not print {id, status, changed}" });
   });
