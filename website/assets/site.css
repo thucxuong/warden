@@ -192,8 +192,9 @@ main:focus { outline: none; }
 /* Landing */
 .wrap { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
 .wrap-narrow { max-width: 820px; }
-.wrap-demo { max-width: 980px; }
-.demo { margin: 32px 0 0; border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); border: 1px solid var(--line); background: #f8f9ff; }
+.demo { margin: 24px 0 32px; }
+.demo video { border-radius: 12px; border: 1px solid var(--line); background: #f8f9ff; box-shadow: var(--shadow); }
+.demo figcaption { margin-top: 8px; font-size: 14px; color: var(--fg-soft); }
 .demo video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; }
 .hero { position: relative; overflow: hidden; border-bottom: 1px solid var(--line); }
 .hero::before {

@@ -2,7 +2,7 @@
 // the feature list, the "why" cards and the quick start come from README.md.
 
 import { REPO_URL } from "../config.ts";
-import { AGENTS, CTA, DEMO, FEATURES, FIX, FLOW, HERO, HERO_SESSION, PROBLEM, QUICKSTART, STATUS_NOTE } from "../content/landing.ts";
+import { AGENTS, CTA, FEATURES, FIX, FLOW, HERO, HERO_SESSION, PROBLEM, QUICKSTART, STATUS_NOTE } from "../content/landing.ts";
 import { flowDiagram, GITHUB_MARK, ICONS, type IconName } from "../content/svg.ts";
 import type { Bullet } from "./markdown.ts";
 import { escapeHtml as e } from "./text.ts";
@@ -77,15 +77,6 @@ export function homeBody(p: HomeInput): string {
 <figure class="hero-term" aria-label="Example session">
 <div class="term-bar"><span></span><span></span><span></span><em>example session</em></div>
 <div class="term-body">${session}</div>
-</figure>
-</div>
-</section>
-
-<section class="sec sec-alt" id="demo">
-<div class="wrap wrap-demo">
-${head(DEMO.kicker, DEMO.title, DEMO.lead)}
-<figure class="demo">
-<video controls preload="metadata" playsinline poster="assets/warden-demo.jpg" aria-label="${e(DEMO.label)}"><source src="assets/warden-demo.mp4" type="video/mp4"></video>
 </figure>
 </div>
 </section>
