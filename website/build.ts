@@ -10,7 +10,7 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, posix, relative, resolve } from "node:path";
 import { blobUrl, editUrl, siteUrlFrom } from "./config.ts";
-import { DEMO, META } from "./content/landing.ts";
+import { META } from "./content/landing.ts";
 import { FAVICON } from "./content/svg.ts";
 import { homeBody } from "./lib/home.ts";
 import { type NavGroup, type NavItem, pager, relHref, shell, sidebar, toc, tocHeadings } from "./lib/layout.ts";
@@ -41,10 +41,6 @@ export function privateLeftovers(sources: { path: string; text: string }[]): str
   }
   return out;
 }
-/** The demo video shown on the docs home page. */
-const demoFigure = (mp4: string, poster: string): string =>
-  `<figure class="demo"><video controls preload="metadata" playsinline poster="${escapeHtml(poster)}" aria-label="${escapeHtml(DEMO.caption)}"><source src="${escapeHtml(mp4)}" type="video/mp4"></video><figcaption>${escapeHtml(DEMO.caption)}</figcaption></figure>`;
-
 export type BuildResult = { outDir: string; pages: string[]; files: string[] };
 
 /** Mermaid's single-file browser bundle (sets window.mermaid), from the mermaid devDependency. */
@@ -159,7 +155,6 @@ ${sidebar(groups, d.out)}
 <article class="prose doc">
 <nav class="crumbs" aria-label="Breadcrumb"><a href="${relHref(d.out, "docs/index.html")}">Docs</a>${crumb ? `<span aria-hidden="true">/</span><span>${escapeHtml(crumb)}</span>` : ""}</nav>
 <h1 id="${escapeHtml(r.titleId ?? "top")}">${escapeHtml(title)}</h1>
-${d.out === "docs/index.html" ? demoFigure(relHref(d.out, "assets/warden-demo.mp4"), relHref(d.out, "assets/warden-demo.jpg")) : ""}
 ${long ? toc(r.headings, true) : ""}
 ${r.html}
 </article>
