@@ -86,6 +86,7 @@ export function homeBody(p: HomeInput): string {
 ${head(DEMO.kicker, DEMO.title, DEMO.lead)}
 <figure class="demo">
 <video controls preload="metadata" playsinline poster="assets/warden-demo.jpg" aria-label="${e(DEMO.label)}"><source src="assets/warden-demo.mp4" type="video/mp4"></video>
+<figcaption>${e(DEMO.credit)} <a href="${e(DEMO.creditHref)}" rel="noopener">uppbeat.io</a></figcaption>
 </figure>
 </div>
 </section>

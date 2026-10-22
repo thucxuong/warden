@@ -38,7 +38,9 @@ export const DEMO = {
   kicker: "Demo",
   title: "See it in 30 seconds",
   lead: "What a run looks like on the warden site: the ticket board, a failed check going back to the agent, and only a proven commit shipping.",
-  label: "Warden demo video (34 seconds, no sound)",
+  label: "Warden demo video (34 seconds, with music)",
+  credit: "Music: \"Blue Hill Valley\" by Iros Young, from Uppbeat.",
+  creditHref: "https://uppbeat.io",
 };
 
 export const PROBLEM = {
