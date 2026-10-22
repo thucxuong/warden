@@ -252,6 +252,10 @@ ${long ? toc(r.headings, false) : ""}
     copyFileSync(join(SITE_DIR, "assets", f), join(outDir, "assets", f));
     files.push(`assets/${f}`);
   }
+  for (const f of ["warden-demo.mp4", "warden-demo.jpg"]) {
+    copyFileSync(join(SITE_DIR, "assets", f), join(outDir, "assets", f));
+    files.push(`assets/${f}`);
+  }
   if (mermaid) {
     copyFileSync(mermaid, join(outDir, MERMAID_ASSET));
     files.push(MERMAID_ASSET);

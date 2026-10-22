@@ -34,6 +34,13 @@ export const HERO_SESSION: { kind: "you" | "agent" | "warden"; text: string }[] 
   { kind: "warden", text: "APP-2: implement (2/5). Back from check: CODE." },
 ];
 
+export const DEMO = {
+  kicker: "Demo",
+  title: "See it in 30 seconds",
+  lead: "What a run looks like on the warden site: the ticket board, a failed check going back to the agent, and only a proven commit shipping.",
+  label: "Warden demo video (34 seconds, no sound)",
+};
+
 export const PROBLEM = {
   kicker: "The problem",
   title: "An agent's word is not proof",

@@ -37,7 +37,7 @@ describe("pages", () => {
     expect(docs.length).toBeGreaterThan(20);
     expect(docs).toContain("docs/README.md");
     for (const d of docs) expect(existsSync(join(out, outPathFor(d)))).toBe(true);
-    for (const f of ["index.html", "docs/index.html", "404.html", "sitemap.xml", "robots.txt", "favicon.svg", "search-index.json", "assets/site.css", "assets/site.js", MERMAID_ASSET]) {
+    for (const f of ["index.html", "docs/index.html", "404.html", "sitemap.xml", "robots.txt", "favicon.svg", "search-index.json", "assets/site.css", "assets/site.js", "assets/warden-demo.mp4", "assets/warden-demo.jpg", MERMAID_ASSET]) {
       expect(existsSync(join(out, f))).toBe(true);
     }
     expect(res.pages.length).toBe(docs.length + 2);
