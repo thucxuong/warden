@@ -49,7 +49,7 @@ describe("cli", () => {
   test("allowlist is exactly the spec list", () => {
     expect([...COMMANDS]).toEqual([
       "version", "init", "start", "next", "done", "wait", "ask", "status", "approve", "retry", "reset",
-      "flow", "report", "retro", "upgrade", "tools", "site", "hook", "gate", "checks", "orchestrate", "docs", "clean", "archive",
+      "flow", "report", "retro", "upgrade", "tools", "site", "hook", "gate", "checks", "orchestrate", "docs", "clean", "archive", "doctor",
     ]);
   });
 

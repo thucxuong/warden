@@ -197,10 +197,15 @@ export function worktreeList(main: string): WorktreeInfo[] {
   return list;
 }
 
+// Whether the repo has a remote of that name (a new project may have none).
+export function hasRemote(cwd: string, name: string): boolean {
+  return git(cwd, ["remote", "get-url", name]).code === 0;
+}
+
 // Fetches origin/<mainBranch> (30 s timeout) when an origin remote exists. On a fetch failure
 // the ref is still origin/<mainBranch>, i.e. the last fetched state, and fetched is false.
 export function fetchMain(main: string, mainBranch: string): { ref: string; fetched: boolean } {
-  if (git(main, ["remote", "get-url", "origin"]).code !== 0) {
+  if (!hasRemote(main, "origin")) {
     return { ref: mainBranch, fetched: false };
   }
   const result = git(main, ["fetch", "origin", mainBranch], FETCH_TIMEOUT_MS);

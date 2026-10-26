@@ -34,7 +34,7 @@ What it does:
 5. Writes everything with `warden init --write --file <payload>`.
 6. Sets up the ticket tool, because every run starts from a ticket. It asks where your tickets live. Without a tracker, the agent writes `.warden/tools/backlog.ts` (tickets are Markdown files in `backlog/<ID>.md`, as in [Write a ticket tool](../guides/write-a-ticket-tool.md)), makes it the `tickets` role and runs `warden tools --check`. For a tracker, it tells you to run `/warden:tools` afterwards.
 7. Optionally runs each check once and reports the result.
-8. Tells you what to `git add`, commit and push to the main branch, and suggests branch protection.
+8. Asks whether you can push straight to the main branch. If yes, it gives you the `git add`, commit and push commands. If not, it gives you the commands for a `chore/warden-setup` branch and says to open a pull request and merge it before your first task. It suggests branch protection, and tells you to run `warden doctor` once the files are on the main branch.
 
 See [quick start](../getting-started/quickstart.md) and [project files](project-files.md).
 

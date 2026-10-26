@@ -49,9 +49,13 @@ The ARGUMENTS given with this skill, if any, are the user's extra instructions f
    - Files: write `.warden/tools/backlog.ts` yourself, as the warden:tools skill's `ticket-tool-recipe.md` (`../tools/ticket-tool-recipe.md` from this skill's base directory) describes; the `tickets` contract is in that skill. Each ticket is `backlog/<ID>.md`: a header between two `---` lines with `title`, `status`, `type`, and optional `epic` and `blocked_by` (ids: when the repo already has tickets, read and write the form they use, `A, B` or `[A, B]`; in a repo with no tickets yet, `A, B`), then the body. Paths are relative to the checkout the tool runs in. `create` picks one more than the highest number used by a ticket or by a folder in `.warden/state/` or `.warden/history/`, with the same prefix and width; the first id is in the form of `taskIdPattern` in `.warden/warden.json` (for `^PG-\d{3}$`: `PG-001`). Add it to the array in `.warden/tools/index.ts`, and set `"tickets": "backlog"` in `.warden/tools/roles.json`. Then run `warden tools --verify tickets --write` and fix the tool until it exits 0: it tests the tool in a throwaway copy, so the project does not change. Then run `warden tools --skill`, and `warden tools --check`: it must exit 0. Show the user the outputs.
    - A tracker: tell the user to run `/warden:tools` after this setup to write the tool for it (`ticket-tool-recipe.md`, then `warden tools --verify tickets` without `--write`). Until then `warden start` refuses.
 7. Optional: run each check command once and report the results. If one fails, report it. Do not fix it.
-8. Tell the user to commit and push to the main branch. `warden start` reads `.warden/` from there.
-   Build the `git add` list from the `written` array that `warden init --write` printed, so it names only files that exist. For example, as three separate commands: `git add .warden .gitignore scripts/warden-setup.sh`, `git commit -m "chore: set up warden"`, `git push`. Add `.claude/settings.json` only when it is in `written`, and `.claude/skills/project-tools/SKILL.md`, which `warden tools --skill` wrote in step 6. If `.claude/` is gitignored, tell the user; `git add` refuses ignored files.
+8. Get the files onto the main branch. `warden start` reads `.warden/` from there, so no task can start before this is done.
+   Build the `git add` list from the `written` array that `warden init --write` printed, so it names only files that exist. Add `.claude/settings.json` only when it is in `written`, and `.claude/skills/project-tools/SKILL.md`, which `warden tools --skill` wrote in step 6. If `.claude/` is gitignored, tell the user; `git add` refuses ignored files.
+   Ask: "Can you push straight to the main branch, or does it need a pull request?" Then give the user the commands for their answer. You cannot run git here, so the user runs them.
+   - Straight to main, as three separate commands: `git add <list>`, `git commit -m "chore: set up warden"`, `git push`.
+   - A pull request: `git switch -c chore/warden-setup`, then `git add <list>`, `git commit -m "chore: set up warden"`, `git push -u origin chore/warden-setup`. Tell the user to open a pull request from that branch and merge it before the first task. If the project has a `pr` tool, say that it can open the pull request.
    Also suggest branch protection on the main branch: a pull request is required and direct pushes are off.
+9. When the user says the files are on the main branch, run `warden doctor`. If a row fails, read its `detail` to the user and say what to run. For `main`, the detail says whether the files are not committed, not pushed, or on another branch. Run `warden doctor` again after the fix, until `ok` is true.
 
 ## Set up the tools too
 
@@ -69,7 +73,7 @@ Go through these tools in this order, one at a time, with the warden:tools skill
 
 For a tracker in step 6, write the ticket tool now instead of sending the user to `/warden:tools`. Test it only with saved tracker answers, as `ticket-tool-recipe.md` says; never create or change real tickets.
 
-Then set `agent.ship.instructions` in `.warden/steps.json` to match the pr answers. Run `warden tools --skill` and `warden tools --check`, and show the user a table: each tool, what it does, and whether its check passed. Add the new tool files to the `git add` list in step 8.
+Then set `agent.ship.instructions` in `.warden/steps.json` to match the pr answers. Run `warden tools --skill` and `warden tools --check`, and show the user a table: each tool, what it does, and whether its check passed. Add the new tool files to the `git add` list in step 8, and run `warden doctor` (step 9) after they are on the main branch.
 
 What `warden init --write` creates:
 - `.warden/warden.json`, `.warden/steps.json` and `.warden/triage-rules.json`

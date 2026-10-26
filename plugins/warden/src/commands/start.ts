@@ -6,6 +6,7 @@ import { join, resolve } from "node:path";
 import { loadStepsJson, loadWardenJson, parseStepsJson } from "../config/config.ts";
 import { lintFlow } from "../engine/flow-lint.ts";
 import { start } from "../engine/machine.ts";
+import { missingOnMain } from "../engine/main-config.ts";
 import { showTicket } from "../engine/tickets.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
 import { branchExists, currentBranch, fetchMain, isIgnored, showFile, worktreeAdd, worktreeList } from "../lib/git.ts";
@@ -70,7 +71,7 @@ function fetchRef(main: string, mainBranch: string): string {
     console.error(`warden: fetch of ${mainBranch} failed; using the last fetched ${fetched.ref}`);
   }
   if (showFile(main, fetched.ref, ".warden/warden.json") === null) {
-    throw new WardenError(`commit and push .warden/ to ${mainBranch} first`);
+    throw new WardenError(missingOnMain(main, mainBranch, fetched.ref, ".warden/warden.json"));
   }
   return fetched.ref;
 }
@@ -78,7 +79,7 @@ function fetchRef(main: string, mainBranch: string): string {
 // Step 4, before any worktree exists.
 function precheck(main: string, task: string, flow: FlowJson, ref: string, mainBranch: string): void {
   const stepsText = showFile(main, ref, ".warden/steps.json");
-  if (stepsText === null) throw new WardenError(`commit and push .warden/ to ${mainBranch} first`);
+  if (stepsText === null) throw new WardenError(missingOnMain(main, mainBranch, ref, ".warden/steps.json"));
   const steps = parseStepsJson(stepsText, `${ref}:.warden/steps.json`);
   const errors = lintFlow(flow, Object.keys(steps.check));
   if (errors.length > 0) {

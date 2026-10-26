@@ -39,6 +39,7 @@ Every `warden` command, its flags, what it prints, and who runs it.
 | [`docs`](#warden-docs) | anyone, and the built-in `warden-docs` check | Check the `.warden` doc folders |
 | [`clean`](#warden-clean) | agent, after a ship; anyone | Remove the worktrees and branches of shipped, merged tasks and of archived tasks |
 | [`archive`](#warden-archive) | agent, when the user says so | Close a live run without doing it, and set its ticket to archived |
+| [`doctor`](#warden-doctor) | anyone | Check that a first task can start, and say what to fix |
 | `hook`, `gate` | warden itself | Internal. Do not run them |
 
 The approve, reject and retry actions also work by typing a word in the chat. See [hooks](hooks.md#userpromptsubmit).
@@ -139,7 +140,7 @@ What it does, in order:
 1. Checks the task id against `taskIdPattern` (from the main checkout's `.warden/warden.json`). The id `_sessions` is reserved.
    Then reads the ticket with the `tickets` tool's `show <ticket>`. The task text is `# <id>: <title>`, a blank line and the body. Without a `tickets` role it stops (exit 3): `no tickets tool: set "tickets" in .warden/tools/roles.json. Warden runs start from a ticket: add a ticket tool with /warden:tools ...`. An unknown ticket stops it too (`ticket tool failed (exit 3): ...`).
 2. Fetches the main branch from `origin` (when there is a remote). A failed fetch prints a warning and uses the last fetched copy.
-3. Takes the run's `steps.json` **from the main branch** (`origin/<main>` when there is a remote), not from your working tree. If `.warden/warden.json` or `.warden/steps.json` is not committed there, it stops: `commit and push .warden/ to <main> first`.
+3. Takes the run's `steps.json` **from the main branch** (`origin/<main>` when there is a remote), not from your working tree. If `.warden/warden.json` or `.warden/steps.json` is not committed there, it stops. The message says where `.warden/` is instead: `.warden/ is committed on <main> but not pushed: run git push origin <main>`, `.warden/ is committed on <branch> but not on <main>: merge <branch> into <main> (open a pull request if <main> is protected)`, or, when it was never committed, `commit and push .warden/ to <main> first`. [`warden doctor`](#warden-doctor) shows the same message.
 4. Lints the flow against the check sets of that `steps.json`. A bad flow stops the start.
 5. Refuses if a run for this task already exists: `a run for <task> exists (status <s>); a person can run warden reset <task>`.
 6. With `--worktree`: uses `<repo>/.worktrees/<task>` on the branch, creating the branch from the main branch when it does not exist. A branch checked out in another worktree is refused. When git does not ignore `.worktrees/`, it stops: `.worktrees/ is not ignored by git: add the line .worktrees/ to .gitignore and commit it, then run start again`.
@@ -621,6 +622,33 @@ warden archive <task> --reason "<why>"
 It stops the engine work as [`warden reset`](#warden-reset) does (the worker, its checks and reviewer, fix worktrees, triage clean copies, fix branches), then ends the run with status `archived` and a `run.archived` event that holds the reason. Unlike reset, the run keeps its record: the site shows it as archived, with the reason on the timeline. For a run started from a ticket, it then runs the ticket tool's `set-status <task> archived` in the main checkout.
 
 Output: `{"archived":"PG-005","warnings":[...]}`. `warnings` appears when the ticket tool printed `changed` paths (commit them in the main checkout) or failed (set the ticket by hand); the run is archived either way. Exit 2 for a missing task or reason, 3 when there is no such run, 1 when the run is not live. [`warden clean`](#warden-clean) later removes the worktree and the branch.
+
+---
+
+## warden doctor
+
+```
+warden doctor [--no-fetch]
+```
+
+0.10.2. Looks at everything a first task needs and says what to fix. It changes nothing in the project. Like `warden start`, it fetches the main branch from `origin`; `--no-fetch` skips that and uses the last fetched copy.
+
+Output: `{"ok":true,"checks":[{"status":"OK","label":"bun","detail":"1.4.2"}, ...]}`. Each row has a `status` (`OK`, `WARN` or `FAIL`), a `label` and a `detail`; the `detail` of a `FAIL` row says what to run. The rows, in order, stop at the first one that makes the rest meaningless (no git, no repo, no `.warden/`):
+
+| Label | `FAIL` when |
+|---|---|
+| `bun` | Bun is older than 1.4 |
+| `git` | git is not installed |
+| `claude` | (only a `WARN`) `claude` is not on `PATH`; the review step runs it |
+| `repo` | the folder is not in a git repo, or the repo has no commit yet |
+| `config` | `.warden/` is not in the main checkout, or its `warden.json` or `steps.json` is invalid |
+| `origin` | (only a `WARN`) there is no `origin` remote, or the fetch failed |
+| `main` | `.warden/warden.json` or `.warden/steps.json` is not on the main branch, with the same message `warden start` gives |
+| `worktrees` | git does not ignore `.worktrees/` |
+| `tickets` | there is no `tickets` role in `.warden/tools/roles.json`, or the file is broken |
+| `tools` | `warden tools --check` has a failing row |
+
+Exit 0 when no row is `FAIL`, 1 otherwise, 2 for an unknown flag or an argument. It works from the main checkout and from any task worktree.
 
 ---
 
