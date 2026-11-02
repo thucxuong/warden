@@ -104,7 +104,7 @@ Every run, shipped ones by default (add "Include done runs" for runs with no shi
 
 ### Docs
 
-The Markdown files in `.warden/context/`, `rules/`, `decisions/`, `knowledge/`, `checks/`, `retros/` and `fixes/`, rendered. Links between them open in the page.
+The Markdown files in `docs/` (without `docs/archived/`) and in `.warden/rules/`, `checks/` and `fixes/`, rendered. Decisions are grouped by area. Links between them open in the page.
 
 ## Warning signals
 

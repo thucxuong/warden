@@ -26,7 +26,7 @@ function link(text: string, url: string, docPath: string): string {
   const file = url.split(/[#?]/, 1)[0]!;
   if (!file.endsWith(".md")) return label;
   const resolved = posix.normalize(posix.join(posix.dirname(docPath), file));
-  if (resolved === ".." || resolved.startsWith("../") || resolved.startsWith("/")) return label;
+  if (!/^(docs|\.warden)\//.test(resolved)) return label; // the only places the docs page can open
   return `<a href="#" data-doc="${esc(resolved)}">${label}</a>`;
 }
 

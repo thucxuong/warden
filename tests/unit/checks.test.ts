@@ -421,14 +421,14 @@ describe("retro", () => {
   test("done retro without the retro note exits 1", async () => {
     const r = await call(["done", "retro"]);
     expect(r.code).toBe(1);
-    expect(r.err).toBe(`write .warden/retros/${today}.md first`);
+    expect(r.err).toBe(`write docs/retros/${today}.md first`);
     expect(existsSync(join(main, ".warden/checks/retro.md"))).toBe(false);
   });
 
   test("done retro writes state only: no retro.md is created and warden.json is left alone", async () => {
     put(".warden/warden.json", JSON.stringify({ schema: 1, wardenVersion: "0.1.1", projectId: "demo", taskIdPattern: "^DM-\\d{3}$", lastRetro: "2020-01-01" }));
     const before = read(".warden/warden.json");
-    put(`.warden/retros/${today}.md`, "# Retro\n");
+    put(`docs/retros/${today}.md`, "# Retro\n");
     expect((await call(["done", "retro"])).out).toEqual({ name: "retro", last: today });
     expect(existsSync(join(main, ".warden/checks/retro.md"))).toBe(false);
     expect(read(".warden/warden.json")).toBe(before);
@@ -438,16 +438,16 @@ describe("retro", () => {
   test("done retro on an existing file keeps its text and the state date wins", async () => {
     const text = RETRO_CHECK("2026-01-01").replace("every: 2d", "every: 5d");
     put(".warden/checks/retro.md", text);
-    put(".warden/retros/2026-10-01.md", "# Retro\n");
+    put("docs/retros/2026-10-01.md", "# Retro\n");
     await call(["done", "retro", "--date", "2026-10-01"]);
     expect(read(".warden/checks/retro.md")).toBe(text);
     expect(row("retro")).toMatchObject({ last: "2026-10-01", every: "5d" });
   });
 
   test("retro --done is an alias with the same output", async () => {
-    put(`.warden/retros/${today}.md`, "# Retro\n");
+    put(`docs/retros/${today}.md`, "# Retro\n");
     expect((await call(["--done"], retroRun)).out).toEqual({ name: "retro", last: today });
-    put(".warden/retros/2026-10-01.md", "# Retro\n");
+    put("docs/retros/2026-10-01.md", "# Retro\n");
     expect((await call(["--done", "--date", "2026-10-01"], retroRun)).out).toEqual({ name: "retro", last: "2026-10-01" });
     expect((await call([], retroRun)).code).toBe(2);
     expect((await call(["--done", "--date", "2026-10-02"], retroRun)).code).toBe(1);
@@ -460,7 +460,7 @@ describe("retro", () => {
     const wt = `${main}.worktrees/DM-001`;
     temps.push(`${main}.worktrees`);
     Bun.spawnSync(["git", "worktree", "add", "-q", "-b", "wt", wt], { cwd: main });
-    put(`.warden/retros/${today}.md`, "# Retro\n");
+    put(`docs/retros/${today}.md`, "# Retro\n");
     const lines: string[] = [];
     const realLog = console.log;
     console.log = (...a: unknown[]) => void lines.push(a.join(" "));

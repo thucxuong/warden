@@ -29,7 +29,7 @@ export const CHECK_SH = [
 ].join("\n");
 
 export const DEFAULT_FIX_SCOPE = [
-  "scripts/**", ".warden/tools/**", ".warden/triage-rules.json", ".warden/fixes/**", ".warden/knowledge/**", "docs/**",
+  "scripts/**", ".warden/tools/**", ".warden/triage-rules.json", ".warden/fixes/**", "docs/**",
   ".env.example", "docker-compose*.yml",
 ];
 
@@ -129,7 +129,7 @@ export function createCp(opts: { checkSh?: string } = {}): Cp {
       check: { default: { commands: [{ name: "check", run: "sh check.sh" }] } },
       fix: { scope: DEFAULT_FIX_SCOPE },
     },
-    context: {},
+    docs: {},
     setupScript: "true",
     teamInstall: false,
   };

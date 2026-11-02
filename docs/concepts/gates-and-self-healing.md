@@ -96,7 +96,7 @@ For OPS and UNCLEAR failures (and every third CODE verdict), the engine inserts 
 1. Creates a fix branch `warden-fix/<task>-<n>` from the main branch, in its own worktree next to the task's worktree.
 2. Asks the project's agent to hand the step to the `warden:fixer` subagent, in the foreground.
 
-The fixer works only in the fix worktree, and only on files inside `fix.scope` from `.warden/steps.json`. The default scope is `scripts/**`, `.warden/tools/**`, `.warden/triage-rules.json`, `.warden/fixes/**`, `.warden/knowledge/**`, `docs/**`, `.env.example` and `docker-compose*.yml`. It may never change `.warden/steps.json`, `.warden/flows/`, `.warden/warden.json`, `.warden/tools/roles.json` or lockfiles, whatever the scope says. It never touches the task branch.
+The fixer works only in the fix worktree, and only on files inside `fix.scope` from `.warden/steps.json`. The default scope is `scripts/**`, `.warden/tools/**`, `.warden/triage-rules.json`, `.warden/fixes/**`, `docs/**`, `.env.example` and `docker-compose*.yml`. It may never change `.warden/steps.json`, `.warden/flows/`, `.warden/warden.json`, `.warden/tools/roles.json` or lockfiles, whatever the scope says. It never touches the task branch.
 
 The fixer finds the root cause and fixes it at the source. It does not loosen a check, add retries, raise timeouts, skip tests or set `CI`. It ends with one of four results:
 

@@ -1,6 +1,6 @@
 ---
 name: init
-description: Set up warden in this project. Scans the stack, drafts the context files, the check commands and the setup script, asks you to confirm, then writes the .warden folder.
+description: Set up warden in this project. Scans the stack, drafts the docs that are missing, the check commands and the setup script, asks you to confirm, then writes the .warden folder.
 argument-hint: "[extra instructions]"
 disable-model-invocation: true
 allowed-tools: Bash(warden *) Read Glob Grep Write
@@ -14,8 +14,10 @@ The ARGUMENTS given with this skill, if any, are the user's extra instructions f
 
 1. Run `warden init --scan`. If `hasWarden` is true, stop. Tell the user the project is already set up.
 2. Read the README, up to 10 files from `docs/`, and every file in `agentFiles`.
-   Draft these context topics: `overview`, `architecture`, `stack`, `glossary`.
-   Each topic is at most 200 lines. It holds facts only. It holds no rules.
+   The project's docs stay where they are. Warden adds what it needs around them; the warden:docs skill (`../docs/SKILL.md` from this skill's base directory) has the layout.
+   Draft a doc for each of these topics only when no existing doc covers it: `overview`, `architecture`, `stack`, `glossary`. Each is at most 200 lines. It holds facts only. It holds no rules.
+   If the project publishes `docs/` as a site (a config such as `mkdocs.yml`, `.vitepress/` or `docusaurus.config.*`, or the docs say so), tell the user two things. Warden's notes in `docs/knowledge/`, `docs/decisions/`, `docs/retros/` and `docs/archived/`, and `docs/INDEX.md`, get published unless the site leaves them out. And a home page named `docs/index.md` is the same file as `docs/INDEX.md` on macOS and Windows, so it must move or get a new name before this setup.
+   If a formatter or linter scans `docs/`, offer to add those same four folders and `docs/INDEX.md` to its ignore list.
 3. Draft `steps.json`.
    - `check.default` is the scan's `suggestedChecks`. The scan picks package scripts in this order, when they exist: `lint`, `typecheck` (or `type-check`, `tsc`), `test` (or `test:unit`), `build`. It skips `dev`, `start`, `watch`, `*:watch` and any script that contains `--watch`.
    - Do not add end-to-end tests or any other check that starts the app or a server on a fixed port: runs in worktrees side by side, or a dev server already running, would make it fail. Tell the user the project can add them later with an `e2e` tool that gives each worktree its own port (`/warden:tools e2e`; the tools skill's `recipes/dev.md` and `recipes/e2e.md`).
@@ -24,7 +26,7 @@ The ARGUMENTS given with this skill, if any, are the user's extra instructions f
    - If the project has an aggregate script such as `test:all` or `ci`, ask the user about it. Do not add it on your own.
    - `setup.commands` is always `["sh scripts/warden-setup.sh"]`.
    - Draft the script body as `setupScript`. Start with `set -e`. Then add the install command, for example `<package manager> install --frozen-lockfile`. Add any step the docs say a fresh checkout needs, for example copying `.env.example`. Ask the user to confirm it.
-   - Take `mainBranch` from the scan. Leave out `review` and `fix`: `warden init --write` fills in the defaults. The default `fix.scope` is `scripts/**`, `.warden/tools/**`, `.warden/triage-rules.json`, `.warden/fixes/**`, `.warden/knowledge/**`, `docs/**`, `.env.example` and `docker-compose*.yml`.
+   - Take `mainBranch` from the scan. Leave out `review` and `fix`: `warden init --write` fills in the defaults. The default `fix.scope` is `scripts/**`, `.warden/tools/**`, `.warden/triage-rules.json`, `.warden/fixes/**`, `docs/**`, `.env.example` and `docker-compose*.yml`.
 4. Ask the user for:
    - the task id format (show the regex, for example `^PG-\d{3}$`)
    - the project id
@@ -39,18 +41,18 @@ The ARGUMENTS given with this skill, if any, are the user's extra instructions f
        "setup": { "commands": ["sh scripts/warden-setup.sh"] },
        "check": { "default": { "commands": [{ "name": "test", "run": "pnpm run test" }] } }
      },
-     "context": { "overview": "# Overview\n...", "architecture": "...", "stack": "...", "glossary": "..." },
+     "docs": { "overview": "# Overview\n...", "glossary": "..." },
      "setupScript": "set -e\npnpm install --frozen-lockfile\n",
      "teamInstall": true
    }
    ```
-   Each check command has a `name` (lowercase, unique in its set) and a `run`.
+   Each check command has a `name` (lowercase, unique in its set) and a `run`. `docs` holds only the topics you drafted; use `{}` when the project's docs cover them all. A doc that exists is never written over.
 6. Write the ticket tool. Every warden run starts from a ticket, so the project needs a `tickets` role. Ask the user where the tickets live: as Markdown files in this repo (recommended when there is no tracker), or in a tracker such as Jira, Linear, GitHub or Azure DevOps.
    - Files: write `.warden/tools/backlog.ts` yourself, as the warden:tools skill's `ticket-tool-recipe.md` (`../tools/ticket-tool-recipe.md` from this skill's base directory) describes; the `tickets` contract is in that skill. Each ticket is `backlog/<ID>.md`: a header between two `---` lines with `title`, `status`, `type`, and optional `epic` and `blocked_by` (ids: when the repo already has tickets, read and write the form they use, `A, B` or `[A, B]`; in a repo with no tickets yet, `A, B`), then the body. Paths are relative to the checkout the tool runs in. `create` picks one more than the highest number used by a ticket or by a folder in `.warden/state/` or `.warden/history/`, with the same prefix and width; the first id is in the form of `taskIdPattern` in `.warden/warden.json` (for `^PG-\d{3}$`: `PG-001`). Add it to the array in `.warden/tools/index.ts`, and set `"tickets": "backlog"` in `.warden/tools/roles.json`. Then run `warden tools --verify tickets --write` and fix the tool until it exits 0: it tests the tool in a throwaway copy, so the project does not change. Then run `warden tools --skill`, and `warden tools --check`: it must exit 0. Show the user the outputs.
    - A tracker: tell the user to run `/warden:tools` after this setup to write the tool for it (`ticket-tool-recipe.md`, then `warden tools --verify tickets` without `--write`). Until then `warden start` refuses.
 7. Optional: run each check command once and report the results. If one fails, report it. Do not fix it.
 8. Tell the user to commit and push to the main branch. `warden start` reads `.warden/` from there.
-   Build the `git add` list from the `written` array that `warden init --write` printed, so it names only files that exist. For example, as three separate commands: `git add .warden .gitignore scripts/warden-setup.sh`, `git commit -m "chore: set up warden"`, `git push`. Add `.claude/settings.json` only when it is in `written`, and `.claude/skills/project-tools/SKILL.md`, which `warden tools --skill` wrote in step 6. If `.claude/` is gitignored, tell the user; `git add` refuses ignored files.
+   Build the `git add` list from the `written` array that `warden init --write` printed, so it names only files that exist. For example, as three separate commands: `git add .warden docs .gitignore scripts/warden-setup.sh`, `git commit -m "chore: set up warden"`, `git push`. Add `.claude/settings.json` only when it is in `written`, and `.claude/skills/project-tools/SKILL.md`, which `warden tools --skill` wrote in step 6. If `.claude/` is gitignored, tell the user; `git add` refuses ignored files.
    Also suggest branch protection on the main branch: a pull request is required and direct pushes are off.
 
 ## Set up the tools too
@@ -77,8 +79,9 @@ What `warden init --write` creates:
 - `.warden/checks/warden-docs.md`, the built-in docs check (runs by itself once a day)
 - `.warden/reports.md`
 - `.warden/tools/` with `index.ts`, `tool.ts`, `roles.json` and `replaces.json`, where this project writes its own tools (see `/warden:tools`). Files that exist are kept.
-- `.warden/context/<topic>.md` for each topic
-- an `INDEX.md` in each of `context/`, `rules/`, `decisions/`, `knowledge/`, `checks/`, `retros/`, `fixes/` and `flows/`
+- `docs/<topic>.md` for each topic you drafted
+- `docs/INDEX.md`, a line for each top-level doc and each folder in `docs/`, unless it exists
+- an `INDEX.md` in each of `.warden/rules/`, `.warden/checks/`, `.warden/fixes/`, `.warden/flows/`, `docs/knowledge/`, `docs/decisions/` and `docs/retros/`
 - `scripts/warden-setup.sh`
 - the lines `.warden/state/` and `.worktrees/` in `.gitignore`. Task worktrees live in `.worktrees/`. If the project's test runner, linter or formatter would scan that folder (it does not follow `.gitignore`), offer to add `.worktrees/` to its ignore list. Leave `tsconfig.json` alone.
 - with `teamInstall`, the warden block in `.claude/settings.json`. If warden cannot find the marketplace entry it needs, it skips this file. Then tell the user to add the warden team-install block from the warden docs (team setup) to `.claude/settings.json`.

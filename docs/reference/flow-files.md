@@ -70,16 +70,18 @@ Extra fields by type. No other keys are allowed on a step.
 
 | Type | Who does it | What it does | Files the step may change in the task worktree |
 |---|---|---|---|
-| `analyze` / `generic` | agent | Read and record findings, no code change | `.warden/knowledge/**`, `.warden/decisions/**` |
+| `analyze` / `generic` | agent | Read and record findings, no code change | notes* |
 | `analyze` / `reproduce` | agent | Write a failing test for the bug, leave it uncommitted | Anything except gate files |
-| `analyze` / `diagnose` | agent | Find the root cause, at least two links with evidence | `.warden/knowledge/**`, `.warden/decisions/**` |
-| `analyze` / `spike` | agent | Answer a question by investigation; write one note | `.warden/knowledge/**`, `.warden/decisions/**`, `docs/**` |
-| `plan` | agent | Write a plan of small tasks in waves (the `warden:plan` skill) | `.warden/knowledge/**`, `.warden/decisions/**` |
+| `analyze` / `diagnose` | agent | Find the root cause, at least two links with evidence | notes* |
+| `analyze` / `spike` | agent | Answer a question by investigation; write one note | `docs/**` |
+| `plan` | agent | Write a plan of small tasks in waves (the `warden:plan` skill) | notes* |
 | `implement` | agent | Make the change with tests, commit all of it | Anything except gate files |
 | `check` | engine | Run a check set; triage a failure | Nothing |
 | `review` | engine | Run the reviewer on the branch diff | Nothing |
 | `approve` | person | Wait for `approve` or `reject: <why>` | Nothing |
 | `ship` | agent | Commit the run record, open the PR or merge, hand in | None. It only commits what warden wrote (the run record). While a merge with conflicts is in progress, the conflicted files may be edited |
+
+*notes: `docs/knowledge/**`, `docs/decisions/**`, `docs/archived/**` and `docs/INDEX.md`. These steps may also move any file in `docs/` to the same path under `docs/archived/`.
 
 Gate files are `.warden/steps.json`, `.warden/flows/**`, `.warden/warden.json`, `.warden/triage-rules.json`, `.warden/state/**` and `.warden/history/**`. The locked config (the same config files plus `.warden/tools/roles.json`) cannot change while any run is live; see [Workflows](../concepts/workflows.md#gate-files-and-locked-config). A fix step (`fix-<n>`) is added by the engine itself when triage asks for it; you cannot put one in a flow.
 

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { renderMarkdown } from "../../plugins/warden/src/site/markdown.ts";
 
-const md = (text: string, docPath = "context/a.md") => renderMarkdown(text, { docPath });
+const md = (text: string, docPath = "docs/a.md") => renderMarkdown(text, { docPath });
 
 describe("blocks", () => {
   test("frontmatter becomes a pre.fm, only at the start", () => {
@@ -79,16 +79,17 @@ describe("links", () => {
   });
 
   test(".md links resolve against the doc folder and become data-doc links", () => {
-    expect(md("[o](other.md)", "rules/a.md")).toBe('<p><a href="#" data-doc="rules/other.md">o</a></p>');
-    expect(md("[o](../context/o.md#sec)", "rules/a.md")).toContain('data-doc="context/o.md"');
-    expect(md("[o](./sub/o.md)", "decisions/a.md")).toContain('data-doc="decisions/sub/o.md"');
-    expect(md("[o](o.md)", "top.md")).toContain('data-doc="o.md"');
+    expect(md("[o](other.md)", ".warden/rules/a.md")).toBe('<p><a href="#" data-doc=".warden/rules/other.md">o</a></p>');
+    expect(md("[o](../decisions/be/o.md#sec)", "docs/knowledge/a.md")).toContain('data-doc="docs/decisions/be/o.md"');
+    expect(md("[o](./sub/o.md)", "docs/decisions/a.md")).toContain('data-doc="docs/decisions/sub/o.md"');
+    expect(md("[o](o.md)", "docs/top.md")).toContain('data-doc="docs/o.md"');
   });
 
   test("anything else gives the text only", () => {
     expect(md("[a](javascript:alert(1))")).toBe("<p>a)</p>"); // the url stops at the first ")"; no link is made
     expect(md("[a](javascript:alert)")).toBe("<p>a</p>");
-    expect(md("[a](JavaScript:x) [b](data:text/html,x) [c](/etc/passwd.md) [d](file.txt) [e](../../x.md)", "context/a.md")).toBe("<p>a b c d e</p>");
+    expect(md("[a](JavaScript:x) [b](data:text/html,x) [c](/etc/passwd.md) [d](file.txt) [e](../../x.md)", "docs/a.md")).toBe("<p>a b c d e</p>");
+    expect(md("[readme](../README.md)", "docs/a.md")).toBe("<p>readme</p>"); // outside docs/ and .warden/
     expect(md("[e](../x.md)", "a.md")).toBe("<p>e</p>");
     expect(md("[e](a/../../x.md)", "a.md")).toBe("<p>e</p>");
   });

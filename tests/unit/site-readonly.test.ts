@@ -41,7 +41,7 @@ test("hitting every endpoint writes nothing in .warden, the data dir or the git 
   const tasks = (await getJson<RunsResponse>(opts, "/api/runs")).body.rows.map((r) => r.task);
   const paths = [
     "/", "/tickets", "/api/home", "/api/health", "/api/signals", "/api/tickets", "/api/docs", "/api/runs?status=shipped",
-    "/api/doc?path=context/overview.md&format=html", "/api/doc?path=decisions/0001-use-bun.md",
+    "/api/doc?path=docs/overview.md&format=html", "/api/doc?path=docs/decisions/devops/2026-01-05-use-bun.md",
     ...tasks.flatMap((t) => [`/api/runs/${t}`, `/api/runs/${t}/events`, `/api/runs/${t}/log?path=checks/1/lint.log`]),
   ];
   for (const path of paths) {

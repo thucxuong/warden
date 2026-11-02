@@ -40,7 +40,7 @@ Every field of `.warden/steps.json`: what it does, its default and how warden ch
   "triage": { "branchReruns": 2 },
   "fix": {
     "scope": ["scripts/**", ".warden/tools/**", ".warden/triage-rules.json", ".warden/fixes/**",
-              ".warden/knowledge/**", "docs/**", ".env.example", "docker-compose*.yml"]
+              "docs/**", ".env.example", "docker-compose*.yml"]
   }
 }
 ```
@@ -145,7 +145,7 @@ See [gates and self-healing](../concepts/gates-and-self-healing.md) for how the 
 Default from `warden init --write`:
 
 ```json
-["scripts/**", ".warden/tools/**", ".warden/triage-rules.json", ".warden/fixes/**", ".warden/knowledge/**",
+["scripts/**", ".warden/tools/**", ".warden/triage-rules.json", ".warden/fixes/**",
  "docs/**", ".env.example", "docker-compose*.yml"]
 ```
 

@@ -91,8 +91,8 @@ describe("parsing", () => {
 describe("analyze", () => {
   test("generic: notes may change and must be listed", () => {
     const run = runAt("a");
-    write(wt, ".warden/knowledge/area.md", "fact\n");
-    expect(errorsFor(run, { ...analyzeBase, filesChanged: [".warden/knowledge/area.md"] })).toEqual([]);
+    write(wt, "docs/knowledge/area.md", "fact\n");
+    expect(errorsFor(run, { ...analyzeBase, filesChanged: ["docs/knowledge/area.md"] })).toEqual([]);
   });
 
   test("generic: a code change is not allowed and must be listed", () => {
@@ -134,7 +134,7 @@ describe("analyze", () => {
     write(wt, "notes/x.md", "x\n");
     expect(errorsFor(spike, { ...analyzeBase, filesChanged: ["notes/x.md"], notePath: "notes/x.md" })).toEqual([
       "notes/x.md: not allowed in analyze step",
-      "notePath: must be under .warden/knowledge/ or docs/",
+      "notePath: must be under docs/",
     ]);
     rmSync(join(wt, "notes"), { recursive: true });
     write(wt, "docs/answer.md", "x\n");
@@ -148,14 +148,33 @@ describe("plan", () => {
 
   test("a valid plan with a decision file", () => {
     const run = runAt("p");
-    write(wt, ".warden/decisions/0001-use-a.md", "# use a\n");
+    write(wt, "docs/decisions/be/2026-01-01-use-a.md", "# use a\n");
     const plan = {
       planMarkdown: "# Plan\nAll concrete.",
       waves: [{ wave: 1, tasks: [task("T1")] }, { wave: 2, tasks: [task("T2", { blockedBy: ["T1"], approach: "build", why: "nothing to reuse" })] }],
-      decisions: [".warden/decisions/0001-use-a.md"],
+      decisions: ["docs/decisions/be/2026-01-01-use-a.md"],
       brainstorm,
     };
     expect(errorsFor(run, plan)).toEqual([]);
+  });
+
+  test("may archive any file in docs/: the old path is gone and the file is at the same path under docs/archived/", () => {
+    const plan = { planMarkdown: "# Plan", waves: [{ wave: 1, tasks: [task("T1")] }], decisions: [], brainstorm };
+    write(wt, "docs/product.md", "old\n");
+    write(wt, "docs/stack.md", "stays\n");
+    Bun.spawnSync(["git", "add", "docs"], { cwd: wt });
+    Bun.spawnSync(["git", "commit", "-qm", "docs"], { cwd: wt });
+    const run = runAt("p");
+    Bun.spawnSync(["git", "mv", "docs/product.md", "docs/archived-product.md"], { cwd: wt });
+    expect(errorsFor(run, plan)).toEqual(["docs/archived-product.md: not allowed in plan step", "docs/product.md: not allowed in plan step"]);
+    Bun.spawnSync(["git", "mv", "docs/archived-product.md", "docs/product.md"], { cwd: wt });
+
+    Bun.spawnSync(["mkdir", "-p", "docs/archived"], { cwd: wt });
+    Bun.spawnSync(["git", "mv", "docs/product.md", "docs/archived/product.md"], { cwd: wt });
+    expect(errorsFor(run, plan)).toEqual([]);
+
+    write(wt, "docs/stack.md", "edited\n");
+    expect(errorsFor(run, plan)).toEqual(["docs/stack.md: not allowed in plan step"]);
   });
 
   test("each listed error", () => {
@@ -167,7 +186,7 @@ describe("plan", () => {
         { wave: 2, tasks: [task("T1", { blockedBy: ["T2"] }), task("T1", { approach: "build" })] },
         { wave: 1, tasks: [task("T2")] },
       ],
-      decisions: [".warden/decisions/0002-missing.md", "notes/x.md"],
+      decisions: ["docs/decisions/be/2026-01-02-missing.md", "notes/x.md"],
       brainstorm: { ...brainstorm, chosen: "c" },
     };
     expect(errorsFor(run, plan)).toEqual(["waves[0].tasks[1].why: must be a string", "brainstorm.chosen: must be one of the option names"]);
@@ -179,8 +198,8 @@ describe("plan", () => {
       "task T1: blockedBy T2 is not a task of an earlier wave",
       "task T1: duplicate id",
       "waves: wave 1 must come after wave 2",
-      "decisions: .warden/decisions/0002-missing.md does not exist",
-      "decisions: notes/x.md must match .warden/decisions/NNNN-<slug>.md",
+      "decisions: docs/decisions/be/2026-01-02-missing.md does not exist",
+      "decisions: notes/x.md must match docs/decisions/<area>/<YYYY-MM-DD>-<slug>.md",
     ]);
   });
 
@@ -277,8 +296,8 @@ describe("implement", () => {
     const run = runAt("a");
     commit(main, { ".warden/history/T-9/summary.json": "{}\n", "other/team.ts": "team\n" });
     sh(wt, "merge", "-q", "--no-edit", "main");
-    write(wt, ".warden/knowledge/area.md", "fact\n");
-    expect(errorsFor(run, { ...analyzeBase, filesChanged: [".warden/knowledge/area.md"] })).toEqual([]);
+    write(wt, "docs/knowledge/area.md", "fact\n");
+    expect(errorsFor(run, { ...analyzeBase, filesChanged: ["docs/knowledge/area.md"] })).toEqual([]);
   });
 
   test("after a dirty route-back no new commit is needed", () => {

@@ -20,13 +20,13 @@ export function isGateStep(type: CatalogType): type is "check" | "review" {
 
 const TEXT: Record<string, string> = {
   "analyze/generic":
-    "Understand the problem before anything changes. Read the code and context that matter for the task. Record each finding as a fact with a `file:line` or command output. List follow-up tickets you would propose. Do not change code. You may add `.warden/knowledge/` or `.warden/decisions/` files; list every file you changed in `filesChanged`.",
+    "Understand the problem before anything changes. Read the code and context that matter for the task. Record each finding as a fact with a `file:line` or command output. List follow-up tickets you would propose. Do not change code. You may add `docs/knowledge/` or `docs/decisions/` files; list every file you changed in `filesChanged`.",
   "analyze/reproduce":
     "Reproduce the bug. Write the smallest test that fails because of the bug, and run only that test to see it fail. Do not fix the bug. Leave the test uncommitted; the implement step commits it with the fix. Record steps, expected, actual and the test path. Use `failingTest: null` only when no test is possible, and say why in `findings`.",
   "analyze/diagnose":
     "Find the root cause. Write the chain from symptom to cause, at least two links, each tied to evidence (`file:line`, a log line or command output). Keep asking why until you reach a defect or a decision. Do not fix anything yet.",
   "analyze/spike":
-    "Answer the question in the task by investigation, not by building it. Write the answer, the options you looked at and your recommendation to one note under `.warden/knowledge/` or `docs/`, and pass its path as `notePath`. No code changes.",
+    "Answer the question in the task by investigation, not by building it. Write the answer, the options you looked at and your recommendation to one note under `docs/`, usually `docs/knowledge/<area>.md`, and pass its path as `notePath`. No code changes.",
   plan:
     "Turn the task into a plan that someone else could build without asking you. Follow the warden:plan skill. Write a decision file for each real choice. When the step says brainstorm, first compare 2–3 options with trade-offs and pick one, and put them in the `brainstorm` object of the output (see the example in `output`).",
   implement:
@@ -87,7 +87,9 @@ export const FIX_FORBIDDEN_GLOBS = [
 ];
 export const LOCKFILES = ["package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock", "bun.lockb"];
 
-const NOTES = [".warden/knowledge/**", ".warden/decisions/**"];
+// What the notes-only steps may write: knowledge, decisions and archived files. Moving any file in docs/ into docs/archived/
+// is allowed as well (outputs.ts), so the old place is not listed here.
+const NOTES = ["docs/INDEX.md", "docs/knowledge/**", "docs/decisions/**", "docs/archived/**"];
 
 export function matchesAny(path: string, globs: readonly string[]): boolean {
   return globs.some((glob) => new Bun.Glob(glob).match(path));
@@ -146,7 +148,7 @@ const SCHEMA_TEXT: Record<AgentStepType, string> = {
   filesChanged: string[];                  // must equal the files you actually changed
   reproduction?: { steps: string[]; expected: string; actual: string; failingTest: string | null }; // required for variant reproduce; steps >= 1
   rootCause?: { chain: string[]; cause: string; evidence: string[] };  // required for diagnose; chain >= 2, evidence >= 1
-  notePath?: string;                       // required for spike; under .warden/knowledge/ or docs/
+  notePath?: string;                       // required for spike; under docs/
 }`,
   plan: `interface PlanTask {
   id: string;                              // /^T\\d+$/
@@ -160,7 +162,7 @@ const SCHEMA_TEXT: Record<AgentStepType, string> = {
 interface PlanOutput {
   planMarkdown: string;                    // full plan
   waves: { wave: number; tasks: PlanTask[] }[];   // wave >= 1, ascending
-  decisions: string[];                     // .warden/decisions/NNNN-*.md written in this step (may be [])
+  decisions: string[];                     // docs/decisions/<area>/<YYYY-MM-DD>-<slug>.md written in this step (may be [])
   brainstorm?: { options: { name: string; tradeoffs: string }[]; chosen: string; why: string }; // an object, required if the step says brainstorm (options >= 2; chosen is one of the option names); otherwise leave it out
 }`,
   implement: `interface ImplementOutput {
@@ -220,7 +222,7 @@ function analyzeExample(variant: AnalyzeVariant | undefined): unknown {
     };
   }
   if (variant === "spike") {
-    return { ...base, filesChanged: ["docs/spike-tax.md"], notePath: "docs/spike-tax.md" };
+    return { ...base, filesChanged: ["docs/knowledge/tax.md"], notePath: "docs/knowledge/tax.md" };
   }
   return base;
 }

@@ -1,9 +1,10 @@
 // Reads .warden/state and .warden/history into loaded runs for the site (design 2.3). Every call reads fresh; nothing is written.
 import { closeSync, existsSync, fstatSync, openSync, readdirSync, readFileSync, readSync, realpathSync, statSync } from "node:fs";
-import { join, resolve, sep } from "node:path";
+import { basename, join, resolve, sep } from "node:path";
 import { loadStepsJson } from "../config/config.ts";
 import { buildSummary } from "../engine/summary.ts";
 import { head, identity } from "../lib/git.ts";
+import { mdFiles } from "../lib/md-files.ts";
 import { tokensByStep, type TokenTotals } from "../lib/tokens.ts";
 import { historyDir, historyRoot, taskDir } from "../state/paths.ts";
 import { listTasks, readEvents, readRun, readSessionLinks, runExists } from "../state/store.ts";
@@ -29,7 +30,8 @@ export interface LoadedTask {
   tokens: Record<string, TokenTotals>;  // live: tokensByStep; history: {}
 }
 
-const DOC_DIRS = ["context", "rules", "decisions", "knowledge", "checks", "retros", "fixes"];
+const DOC_ROOTS = ["docs", ".warden"]; // the only places /api/doc reads from
+const WARDEN_DOC_DIRS = [".warden/rules", ".warden/checks", ".warden/fixes"];
 
 function readJsonFile<T>(path: string): T {
   return JSON.parse(readFileSync(path, "utf8")) as T;
@@ -209,21 +211,10 @@ function titleOf(text: string, fallback: string): string {
   return line ? line.slice(2).trim() : fallback;
 }
 
-// Paths are relative to .warden/, e.g. "context/overview.md".
+// Paths are from the project root. Everything in docs/ is listed but docs/archived/, which a link can still open.
 export function listDocs(main: string): DocEntry[] {
-  const docs: DocEntry[] = [];
-  for (const sub of DOC_DIRS) {
-    const dir = join(wardenDir(main), sub);
-    if (!existsSync(dir)) continue;
-    const names = readdirSync(dir, { withFileTypes: true })
-      .filter((e) => e.isFile() && e.name.endsWith(".md"))
-      .map((e) => e.name)
-      .sort();
-    for (const name of names) {
-      docs.push({ path: `${sub}/${name}`, title: titleOf(readFileSync(join(dir, name), "utf8"), name) });
-    }
-  }
-  return docs;
+  return [...mdFiles(main, "docs").filter((path) => !path.startsWith("docs/archived/")), ...WARDEN_DOC_DIRS.flatMap((dir) => mdFiles(main, dir))]
+    .map((path) => ({ path, title: titleOf(readFileSync(join(main, path), "utf8"), basename(path)) }));
 }
 
 export type DocResult = { ok: true; text: string } | { ok: false; status: 400 | 404 };
@@ -232,15 +223,14 @@ export function isInside(root: string, file: string): boolean {
   return file.startsWith(root + sep);
 }
 
-// 400 unless the path resolves (symlinks included) to a .md file inside <main>/.warden/.
+// 400 unless the path resolves (symlinks included) to a .md file inside <main>/docs/ or <main>/.warden/.
 export function readDoc(main: string, path: string | null): DocResult {
   if (!path || path.includes("\0") || !path.endsWith(".md")) return { ok: false, status: 400 };
-  const root = resolve(wardenDir(main));
-  const file = resolve(root, path);
-  if (!isInside(root, file)) return { ok: false, status: 400 };
+  const file = resolve(main, path);
+  const root = DOC_ROOTS.map((dir) => resolve(main, dir)).find((dir) => isInside(dir, file));
+  if (!root) return { ok: false, status: 400 };
   if (!existsSync(file) || !statSync(file).isFile()) return { ok: false, status: 404 };
-  const realRoot = realpathSync(root);
-  if (!isInside(realRoot, realpathSync(file))) return { ok: false, status: 400 };
+  if (!isInside(realpathSync(root), realpathSync(file))) return { ok: false, status: 400 };
   return { ok: true, text: readFileSync(file, "utf8") };
 }
 

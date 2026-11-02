@@ -53,7 +53,7 @@ At an agent step, run `warden ask "<question>"` (from outside the worktree: `war
 | `filesChanged is missing <path>` / `lists <path>, which did not change` | List exactly the files from `git -C <worktree> diff --name-only <step start> HEAD`. |
 | `uncommitted changes: ...` / `no new commit` | Commit all of the work for an implement step. |
 | `testsReason: required ...` | Add tests, or give `testsReason` (10 characters or more). |
-| `<path>: not allowed in <type> step` | Undo that change. Plan steps and the generic and diagnose analyze steps may only write `.warden/decisions/` and `.warden/knowledge/`; a spike may also write `docs/`. |
+| `<path>: not allowed in <type> step` | Undo that change. Plan steps and the generic and diagnose analyze steps may only write `docs/decisions/`, `docs/knowledge/`, `docs/archived/` and `docs/INDEX.md`, and move any file in `docs/` to the same path under `docs/archived/`; a spike may write all of `docs/`. |
 | `planMarkdown line N: placeholder "..."` | Write the real content in place of the placeholder. |
 | `engine work is running; run: warden wait` | Run `warden wait`. |
 | `the run record is not committed` | At ship, commit `.warden/history/<task>/` first, as step 1 of the instructions says. |

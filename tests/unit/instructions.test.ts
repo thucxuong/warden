@@ -94,12 +94,17 @@ describe("catalog", () => {
   });
 
   test("edit policy", () => {
-    expect(editAllowed("analyze", "generic", ".warden/knowledge/a.md", T)).toBe(true);
+    expect(editAllowed("analyze", "generic", "docs/knowledge/a.md", T)).toBe(true);
     expect(editAllowed("analyze", "generic", "docs/a.md", T)).toBe(false);
     expect(editAllowed("analyze", "spike", "docs/a.md", T)).toBe(true);
     expect(editAllowed("analyze", "reproduce", "tests/a.test.ts", T)).toBe(true);
     expect(editAllowed("analyze", "reproduce", ".warden/flows/x.json", T)).toBe(false);
-    expect(editAllowed("plan", undefined, ".warden/decisions/0001-x.md", T)).toBe(true);
+    expect(editAllowed("plan", undefined, "docs/decisions/be/2026-01-01-x.md", T)).toBe(true);
+    expect(editAllowed("plan", undefined, "docs/knowledge/a.md", T)).toBe(true);
+    expect(editAllowed("plan", undefined, "docs/archived/product.md", T)).toBe(true);
+    expect(editAllowed("plan", undefined, "docs/INDEX.md", T)).toBe(true);
+    expect(editAllowed("plan", undefined, "docs/product.md", T)).toBe(false);
+    expect(editAllowed("plan", undefined, ".warden/rules/a.md", T)).toBe(false);
     expect(editAllowed("plan", undefined, "src/a.ts", T)).toBe(false);
     expect(editAllowed("implement", undefined, "src/a.ts", T)).toBe(true);
     expect(editAllowed("implement", undefined, ".warden/triage-rules.json", T)).toBe(false);
@@ -129,8 +134,8 @@ describe("buildInstructions", () => {
     write(wt, ".warden/rules/b.md", "Rule B text.");
     write(wt, ".warden/rules/a.md", "Rule A text.");
     write(wt, ".warden/rules/INDEX.md", "- a.md\n- b.md\n");
-    write(wt, ".warden/context/INDEX.md", "- overview.md: what this is\n");
-    write(wt, ".warden/decisions/INDEX.md", "- 0001-x.md: chose x\n");
+    write(wt, "docs/INDEX.md", "- overview.md: what this is\n");
+    write(wt, "docs/decisions/INDEX.md", "- be/2026-01-01-x.md: chose x\n");
     write(taskDir(main, T), "plan.md", "# Plan\n");
     appendEvent(main, T, "output.accepted", { step: "plan", data: { path: "outputs/1-plan.json" } });
     appendEvent(main, T, "output.accepted", { step: "implement", data: { path: "outputs/2-implement.json" } });
@@ -152,7 +157,7 @@ describe("buildInstructions", () => {
       `## Back from check\n\nCODE: passes on clean\n\n- [blocking] src/a.ts:3 — off by one\n\n\`\`\`\nerror: boom\n\`\`\`\n\nTriage report: ${join(taskDir(main, T), "triage/1.json")}`,
     );
     expect(text).toContain("## Project rules\n\nRule A text.\n\nRule B text.");
-    expect(text).toContain(".warden/context/INDEX.md:\n- overview.md: what this is\n\n.warden/decisions/INDEX.md:\n- 0001-x.md: chose x");
+    expect(text).toContain("docs/INDEX.md:\n- overview.md: what this is\n\ndocs/decisions/INDEX.md:\n- be/2026-01-01-x.md: chose x");
     expect(text).toContain(`## Earlier outputs\n\n- plan: ${join(taskDir(main, T), "outputs/1-plan.json")}\n- plan.md: ${join(taskDir(main, T), "plan.md")}`);
     expect(text).not.toContain("2-implement.json");
     expect(text.trimEnd().endsWith('## Hand back\n\nRun: warden done --json \'<the ImplementOutput JSON on one line>\' (schema in "output"). One command; no heredoc or temp file.')).toBe(true);

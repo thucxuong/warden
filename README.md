@@ -48,7 +48,7 @@ You need [Claude Code](https://docs.anthropic.com/en/docs/claude-code), git, [Bu
    /warden:init
    ```
 
-   It scans your stack, drafts context files and check commands, asks you to confirm, then writes `.warden/`. It also sets up the ticket tool: every run starts from a ticket, and without a tracker your tickets are Markdown files in `backlog/`.
+   It scans your stack, drafts the docs you are missing and the check commands, asks you to confirm, then writes `.warden/`. It also sets up the ticket tool: every run starts from a ticket, and without a tracker your tickets are Markdown files in `backlog/`.
 
 3. Commit the result and get it onto your main branch. `warden start` reads `.warden/` from there.
 

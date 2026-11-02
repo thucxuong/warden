@@ -14,16 +14,20 @@ This page is also the map of the `.warden/` folder. Each doc folder has one job,
   reports.md             table of reports sent to the warden maintainers          (committed)
   tools/                 the project's own tools and their roles                  (committed)
   flows/                 saved flows                                              (committed)
-  context/               facts about the project                                  (committed)
   rules/                 rules every agent step must follow                       (committed)
-  decisions/             choices that were made                                   (committed)
-  knowledge/             facts learned while working on the code                  (committed)
   checks/                periodic checks                                          (committed)
-  retros/                retro notes                                              (committed)
   fixes/                 notes from the fixer                                     (committed)
   history/<task>/        the run record of each shipped task                      (committed)
   state/                 live run state                                           (gitignored)
+docs/
+  INDEX.md               the map of the project's docs                            (committed)
+  knowledge/             facts learned while working on the code                  (committed)
+  decisions/             choices that were made, by area                          (committed)
+  retros/                retro notes                                              (committed)
+  archived/              what is no longer true                                   (committed)
 ```
+
+`.warden/` holds what warden needs to run. `docs/` holds what people and agents need to know, next to the project's own docs.
 
 Each doc folder (`context`, `rules`, `decisions`, `knowledge`, `checks`, `retros`, `fixes`, `flows`) has an `INDEX.md` with one line per file.
 
@@ -40,12 +44,12 @@ Each doc folder (`context`, `rules`, `decisions`, `knowledge`, `checks`, `retros
 | `.warden/tools/replaces.json` | `warden tools --init`, then you | `warden tools --usage`, `warden tools --skill` | yes | Yes |
 | `.claude/skills/project-tools/SKILL.md` | `warden tools --skill` | Claude Code (the agent) | yes | No: run `warden tools --skill` again |
 | `.warden/flows/<name>.json` | `warden flow save` | `warden start --flow` | yes | Yes. Locked while a run is live |
-| `.warden/context/*.md` | `/warden:init`, then you | agent steps (via `INDEX.md`), site | yes | Yes |
+| `docs/INDEX.md` | `/warden:init`, then you | every agent step, site | yes | Yes |
 | `.warden/rules/*.md` | you, retros | every agent step | yes | Yes |
-| `.warden/decisions/NNNN-*.md` | plan steps, agents, you | agent steps (via `INDEX.md`) | yes | Add new ones; never edit an old one |
-| `.warden/knowledge/*.md` | agents, spikes, the fixer | agent steps (via `INDEX.md`) | yes | Yes |
+| `docs/decisions/<area>/<date>-*.md` | plan steps, agents, you | agent steps (via `INDEX.md`) | yes | Add new ones; never edit an old one |
+| `docs/knowledge/*.md` | agents, spikes, the fixer | agent steps (via `INDEX.md`) | yes | Yes |
 | `.warden/checks/*.md` | `warden init --write`, you | `warden checks`, session start | yes | Yes |
-| `.warden/retros/<date>.md` | `/warden:retro` | the retro check | yes | No |
+| `docs/retros/<date>.md` | `/warden:retro` | the retro check | yes | No |
 | `.warden/fixes/*.md` | the fixer | triage rules, the fixer | yes | No |
 | `.warden/history/<task>/` | the engine, at the ship step | site, retro | yes | Never. The hooks refuse it |
 | `.warden/state/` | the engine and hooks | every command | no (gitignored) | Never. The hooks refuse it |
@@ -150,19 +154,22 @@ Saved flows, `<name>.json`, plus `INDEX.md` with lines `- <name>.json: <descript
 
 ## Doc folders
 
-Each folder has a single purpose. Keep each file under 200 lines and give it a line in the folder's `INDEX.md`. `warden docs check` (and the built-in `warden-docs` check, once a day) checks this for `context`, `rules`, `decisions`, `knowledge`, `checks` and `retros`.
+Each folder has a single purpose. Keep each file under 200 lines and give it a line in the folder's `INDEX.md`. `warden docs check` (and the built-in `warden-docs` check, once a day) checks this for `docs/knowledge`, `docs/decisions`, `docs/retros`, `.warden/rules` and `.warden/checks`. The `/warden:docs` skill says where something goes and tidies the folder when you ask.
 
 | Folder | Holds | How agents see it |
 |---|---|---|
-| `context/` | Facts about the project: `overview`, `architecture`, `stack`, `glossary` and other topics. Facts only, no rules | Its `INDEX.md` is in every agent step's "Read as needed" section |
-| `rules/` | Rules every agent step must follow, often a mistake that kept coming back (`<topic>.md`) | The text of every file (sorted by name, at most 16 KiB in total) is in every agent step's "Project rules" section |
-| `decisions/` | One file per choice made, `NNNN-<slug>.md` with the next free four-digit number. Never edit an old one; write a new one that replaces it | Its `INDEX.md` is in "Read as needed". A plan step lists the files it wrote in `decisions` |
-| `knowledge/` | Facts about the code learned while working (`<area>.md`), spike notes | Its `INDEX.md` is in "Read as needed" |
-| `checks/` | Periodic check definitions, see below | `warden checks`, session start |
-| `retros/` | Retro notes, `<YYYY-MM-DD>.md` (a second retro on the same day adds a section) | The retro check |
-| `fixes/` | Fix notes from the fixer, `<YYYY-MM-DD>-<task>[-n].md` | The triage rule that points at the note; the fixer gets the note when the rule matches again |
+| `docs/INDEX.md` | One line for each top-level doc in `docs/` and each folder of the project's. `/warden:init` writes it. The other files in `docs/` are your own, in any shape and length | It is in every agent step's "Read as needed" section |
+| `.warden/rules/` | Rules every agent step must follow, often a mistake that kept coming back (`<topic>.md`) | The text of every file (sorted by name, at most 16 KiB in total) is in every agent step's "Project rules" section |
+| `docs/decisions/` | One file per choice made, `<area>/<YYYY-MM-DD>-<slug>.md`. An area is a short lowercase folder name, such as `be`, `fe` or `devops`. Never edit an old one; write a new one that replaces it | Its `INDEX.md` is in "Read as needed". A plan step lists the files it wrote in `decisions` |
+| `docs/knowledge/` | Facts about the code learned while working (`<area>.md`), spike notes | Its `INDEX.md` is in "Read as needed" |
+| `.warden/checks/` | Periodic check definitions, see below | `warden checks`, session start |
+| `docs/retros/` | Retro notes, `<YYYY-MM-DD>.md` (a second retro on the same day adds a section) | The retro check |
+| `docs/archived/` | Files moved out when they stopped being true, at the same path they had under `docs/`. A new decision names the one it replaces in a `Replaces:` line | In no index, so agents do not read them unless they go looking |
+| `.warden/fixes/` | Fix notes from the fixer, `<YYYY-MM-DD>-<task>[-n].md` | The triage rule that points at the note; the fixer gets the note when the rule matches again |
 
-The site (`warden site`) shows the files of `context`, `rules`, `decisions`, `knowledge`, `checks`, `retros` and `fixes`.
+The site (`warden site`) shows everything in `docs/` except `docs/archived/`, and the files of `.warden/rules`, `.warden/checks` and `.warden/fixes`.
+
+If your project publishes `docs/` as a site, leave `docs/knowledge/`, `docs/decisions/`, `docs/retros/`, `docs/archived/` and `docs/INDEX.md` out of it, or the agent's notes get published too.
 
 An `INDEX.md` line is a list item. Either a link, `- [Title](file.md)`, or a name and a description, `- file.md: description`.
 

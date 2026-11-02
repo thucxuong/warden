@@ -17,6 +17,10 @@ describe("setup", () => {
     expect(warden(cp, ["version"]).json).toEqual({ version: VERSION });
     expect(warden(cp, ["status"]).json).toEqual({ runs: [] });
   });
+
+  test("a fresh project passes warden docs check", () => {
+    expect(warden(createCp(), ["docs", "check"]).json).toMatchObject({ ok: true });
+  });
 });
 
 describe("probes", () => {

@@ -7,7 +7,7 @@ import type { FlowJson, FlowStep, NextResponse, RunJson, StepsJson } from "../ty
 import { catalogText, OUTPUT_TYPE_NAME, type AgentStepType } from "./catalog.ts";
 
 export const RULES_CAP_BYTES = 16 * 1024;
-const INDEX_FILES = [".warden/context/INDEX.md", ".warden/knowledge/INDEX.md", ".warden/decisions/INDEX.md"];
+const INDEX_FILES = ["docs/INDEX.md", "docs/knowledge/INDEX.md", "docs/decisions/INDEX.md"];
 
 export interface InstructionsInput {
   main: string;

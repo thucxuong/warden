@@ -105,7 +105,7 @@ export interface AnalyzeOutput {
   filesChanged: string[];                  // must equal actual changed files (5.3)
   reproduction?: { steps: string[]; expected: string; actual: string; failingTest: string | null }; // required for variant reproduce; steps >= 1
   rootCause?: { chain: string[]; cause: string; evidence: string[] };  // required for diagnose; chain >= 2, evidence >= 1
-  notePath?: string;                       // required for spike; under .warden/knowledge/ or docs/
+  notePath?: string;                       // required for spike; under docs/
 }
 
 export interface PlanTask {
@@ -121,7 +121,7 @@ export interface PlanTask {
 export interface PlanOutput {
   planMarkdown: string;                    // full plan; engine writes state/<task>/plan.md
   waves: { wave: number; tasks: PlanTask[] }[];   // wave >= 1, ascending
-  decisions: string[];                     // .warden/decisions/NNNN-*.md written in this step (may be [])
+  decisions: string[];                     // docs/decisions/<area>/<YYYY-MM-DD>-<slug>.md written in this step (may be [])
   brainstorm?: { options: { name: string; tradeoffs: string }[]; chosen: string; why: string }; // required if step.brainstorm; options >= 2; chosen in option names
 }
 
@@ -338,7 +338,7 @@ export interface InitScan {
 export interface InitPayload {
   warden: Omit<WardenJson, "schema" | "wardenVersion" | "lastRetro">;  // projectId, taskIdPattern, sitePort
   steps: Omit<StepsJson, "schema">;
-  context: Record<string, string>;            // topic slug -> markdown (e.g. overview, architecture, stack, glossary)
+  docs: Record<string, string>;               // topic slug -> markdown for docs/<slug>.md, written only when missing (e.g. overview, architecture, stack, glossary)
   setupScript: string;                        // body of scripts/warden-setup.sh (e.g. "set -e\npnpm install --frozen-lockfile\n")
   teamInstall: boolean;                       // merge the 10.3 block into .claude/settings.json
 }

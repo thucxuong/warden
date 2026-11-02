@@ -22,7 +22,7 @@ Every step has an `id` (lowercase, for example `implement`) and a `type`. The ty
 | Type | Done by | Must achieve | May change |
 |---|---|---|---|
 | `analyze` | agent | Understand the problem before anything changes. Has a `variant`, below. | Depends on the variant. |
-| `plan` | agent | A plan someone else could build without asking, split into waves of tasks. With `brainstorm: true`, first compare 2 or 3 options and pick one. | Only `.warden/knowledge/` and `.warden/decisions/`. |
+| `plan` | agent | A plan someone else could build without asking, split into waves of tasks. With `brainstorm: true`, first compare 2 or 3 options and pick one. | Only `docs/knowledge/`, `docs/decisions/`, `docs/archived/`, `docs/INDEX.md`. |
 | `implement` | agent | The change and its tests, all committed. Back from a gate, fix exactly what it reported. | Anything except gate files. |
 | `check` | engine | Run the commands of one check set from `.warden/steps.json`. Pass only on exit code 0. | Nothing. |
 | `review` | engine | An independent AI review of the branch diff. | Nothing. |
@@ -46,10 +46,10 @@ There is also an internal `fix` step. The engine inserts it when a check fails f
 
 | Variant | Must achieve | Extra output | May change |
 |---|---|---|---|
-| `generic` | Findings, each a fact tied to `file:line` or command output. No code change. | none | `.warden/knowledge/`, `.warden/decisions/` |
+| `generic` | Findings, each a fact tied to `file:line` or command output. No code change. | none | `docs/knowledge/`, `docs/decisions/`, `docs/archived/`, `docs/INDEX.md` |
 | `reproduce` | The smallest failing test for the bug, run once to see it fail, left uncommitted (implement commits it with the fix). | `reproduction`: steps, expected, actual, `failingTest` (or `null` with a reason) | Anything except gate files |
-| `diagnose` | The root cause, as a chain of at least two links from symptom to cause, each with evidence. | `rootCause`: `chain`, `cause`, `evidence` | `.warden/knowledge/`, `.warden/decisions/` |
-| `spike` | An answer found by investigation, not by building it, written to one note. | `notePath` under `.warden/knowledge/` or `docs/` | `.warden/knowledge/`, `.warden/decisions/`, `docs/` |
+| `diagnose` | The root cause, as a chain of at least two links from symptom to cause, each with evidence. | `rootCause`: `chain`, `cause`, `evidence` | `docs/knowledge/`, `docs/decisions/`, `docs/archived/`, `docs/INDEX.md` |
+| `spike` | An answer found by investigation, not by building it, written to one note. | `notePath` under `docs/` | `docs/` |
 
 At each agent step, the `output` field of `warden next` holds the step's output type and a filled-in example. See also [the CLI reference](../reference/cli.md).
 

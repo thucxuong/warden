@@ -149,7 +149,7 @@ See [Blocked and waiting runs](guides/blocked-and-waiting-runs.md).
 | `a run is live in the main checkout (<task>); run checks after it` (exit 4) | Command checks run in the main checkout, which a live run uses. | Run the check after that run. |
 | `check <name> is already running` (exit 4) | One run of a check at a time. | Wait for it. |
 | `command checks are run by the engine: warden checks run <name>` | `checks done` is for agent checks only. | Use `warden checks run <name>`. |
-| `write .warden/retros/<date>.md first` | The retro check is done only once its note exists. | Write the retro note, then `warden checks done retro`. |
+| `write docs/retros/<date>.md first` | The retro check is done only once its note exists. | Write the retro note, then `warden checks done retro`. |
 | `warden docs check` prints `"ok": false` | A `.warden` doc file has no `INDEX.md` line, an `INDEX.md` line names a missing file, or a file is over 200 lines. | Fix each line of `problems`. |
 | `warden site: port <n> is in use; pass --port` (exit 5) | Something else uses the port (4400 by default). | `warden site --port <other>`. |
 

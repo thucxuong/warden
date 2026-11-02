@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.12.0 — 2026-11-02
+
+What people and agents need to know now lives in `docs/`. `.warden/` keeps what warden needs to run. Before, `/warden:init` rewrote a project's `docs/` into `.warden/context/`, the two drifted apart, and agents read the older copy. The upgrade note moves existing projects.
+
+- `.warden/knowledge/` is now `docs/knowledge/`, `.warden/decisions/` is `docs/decisions/` and `.warden/retros/` is `docs/retros/`. `.warden/context/` is gone. `docs/INDEX.md` lists the project's docs, and every agent step sees it.
+- `/warden:init` keeps a project's docs as they are, and writes a doc only for a topic none of them covers. If the project publishes `docs/`, it warns that warden's notes would be published too.
+- Decisions are grouped by area and carry their own date: `docs/decisions/<area>/<YYYY-MM-DD>-<slug>.md`, replacing the `NNNN-` number. An area is any short lowercase name, such as `be`, `fe` or `devops`.
+- When something new conflicts with an old doc or decision, the old file moves to the same path under `docs/archived/`, and a new decision names it in a `Replaces:` line. Archived files stay out of the indexes. Plan steps and the generic and diagnose analyze steps may make that move for any file in `docs/`.
+- New `/warden:docs` skill: warden's opinion on `docs/`. It says where a fact, a decision or a rule goes, finds what the project knows about something, archives what is out of date, and tidies the folder when asked. It changes nothing until the user says OK. Every other file in `docs/` stays the project's own.
+- `warden docs check` follows the new layout. It looks inside subfolders, and checks `docs/INDEX.md`, dated names, `Replaces:` lines and archived files. The 200-line limit no longer applies to a project's own docs.
+- The site's Docs page shows `docs/` (without `docs/archived/`), and `.warden/rules`, `checks` and `fixes`. Decisions are grouped by area. `/api/doc` paths now start at the project root, for example `docs/overview.md`.
+- `warden init --write` takes `docs` in its payload instead of `context`. The default `fix.scope` drops `.warden/knowledge/**`, because `docs/**` covers it.
+
 ## 0.11.1 — 2026-11-02
 
 - `approve: <text>` no longer approves. Before, warden approved and dropped the text, so `approve: only if you change the schema` went through with no condition. Now the run keeps waiting and warden says `approve` takes no text. To set a condition, use `reject: <what to change>`.

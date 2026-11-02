@@ -21,7 +21,7 @@ describe("probes", () => {
     const code = editHook(cp, "S1", join(wt, "src/x.ts"));
     expect(code.denied).toBe(true);
     expect(code.reason).toContain("plan step does not change code (T-001 at plan)");
-    expect(editHook(cp, "S1", join(wt, ".warden/decisions/0001-greeting.md"), { tool: "Write" }).denied).toBe(false);
+    expect(editHook(cp, "S1", join(wt, "docs/decisions/be/2026-01-01-greeting.md"), { tool: "Write" }).denied).toBe(false);
     // The same from a session whose cwd is the main checkout.
     expect(editHook(cp, "S1", join(wt, "src/x.ts"), { cwd: cp.main }).denied).toBe(true);
     expect(editHook(cp, "S1", join(cp.main, "src/free.ts")).denied).toBe(false); // outside every run

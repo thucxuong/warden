@@ -37,14 +37,14 @@ Warden chooses the task's worktree and branch (`warden start` prints them). Use 
 
 Rules
 - Git and paths: run `git -C <dir> ...` and use absolute paths, one simple command per call. A plain `cd <dir>` on its own is fine; never chain it as `cd <dir> && ...`, because a permission rule such as `Bash(git *)` does not match that.
-- Index files: when a step adds a file under `.warden/decisions/`, `.warden/knowledge/` or `.warden/rules/`, add its one-line entry to that folder's `INDEX.md` in the same commit. When session start says warden-docs failed, run warden docs check and fix what it lists once the user agrees.
+- Index files: when a step adds a file under `docs/decisions/`, `docs/knowledge/` or `.warden/rules/`, add its one-line entry to that folder's `INDEX.md` in the same commit. A new doc elsewhere in `docs/` gets a line in `docs/INDEX.md`. When session start says warden-docs failed, run warden docs check and fix what it lists once the user agrees.
 - Never run the checks yourself to prove a step.
 - Never write files under `.warden/state` or `.warden/history`.
 - Never push, open a pull request or merge outside the ship step. The one exception: the push of new tickets in warden:compose "No task id" and "Plan an epic".
 - Never set `PROJECT_AGENT` or any other `WARDEN_*` variable on a command. Never start a nested `claude -p`.
 - When the ticket's work is already done and there is nothing to change, do not invent a change to get through the step. Run `warden ask` with what you found and whether to close the ticket. If the user agrees, archive it as the next rule says.
 - When the user decides a ticket with a live run will not be done (stale, a duplicate, no longer wanted), run `warden archive <id> --reason "<why>"` and do what its `warnings` say. Never archive on your own, and never set such a ticket to `archived` with the ticket tool alone: the run would stay live.
-- When something surprises you, add a line to `.warden/knowledge/<area>.md`.
-- When you make a choice, write `.warden/decisions/NNNN-<slug>.md`. Never edit an old decision. Write a new one that replaces it.
+- When something surprises you, add a line to `docs/knowledge/<area>.md`.
+- When you make a choice, write `docs/decisions/<area>/<YYYY-MM-DD>-<slug>.md`. Never edit an old decision. Write a new one that replaces it, and archive the old one as the warden:docs skill says.
 - The project tools skill (`project-tools`) lists this project's tools; `warden tools` lists them with their roles. Run one with `warden tools <name> <args>` (`-h` for usage), before writing your own command for the same job. If a `graph` role is listed, run `warden tools graph query "<question>"` before a broad search of the repo.
 - Use a project tool instead of the raw commands it covers. If the tool cannot do what you need, tell the user, so the tool can grow; do not write a script around it.

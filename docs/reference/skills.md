@@ -16,6 +16,7 @@ A skill is a set of instructions the plugin gives Claude Code. You start one by 
 | [`/warden:report`](#wardenreport) | none | Send a bug report or an idea about warden |
 | [`/warden:retro`](#wardenretro) | none | Look back at recent work and route what you learned |
 | [`/warden:tools`](#wardentools) | `[<name>]` | Write or change one of the project's tools |
+| [`/warden:docs`](#wardendocs) | none | Record a fact or a decision, find what the project knows, archive what is out of date, tidy `docs/` |
 | [`/warden:upgrade`](#wardenupgrade) | none | Apply upgrade notes after warden was updated |
 | [`/warden:guide`](#wardenguide) | none | Load the short rules and the loop for the agent: when unsure, after a `warden:` refusal, or when a run is blocked or waiting |
 
@@ -28,7 +29,7 @@ Sets up warden in the current project. Only a person can start it: the agent nev
 What it does:
 
 1. Runs `warden init --scan`. If the project is already set up, it stops.
-2. Reads the README, up to 10 files from `docs/`, and `AGENTS.md` / `CLAUDE.md`. Drafts the context topics `overview`, `architecture`, `stack` and `glossary` (facts only, at most 200 lines each).
+2. Reads the README, up to 10 files from `docs/`, and `AGENTS.md` / `CLAUDE.md`. Keeps your docs where they are, and drafts `overview`, `architecture`, `stack` or `glossary` (facts only, at most 200 lines each) only when no doc covers that topic. If the project publishes `docs/`, it warns you that warden's notes would be published too.
 3. Drafts `steps.json`: the check commands from the scan (or from `Makefile` targets and CI files), `setup.commands` = `["sh scripts/warden-setup.sh"]`, and the setup script body.
 4. Asks you, one question at a time: the task id format (a regex such as `^PG-\d{3}$`), the project id, a yes or no on the checks and setup script, and whether to add the team install block to `.claude/settings.json`.
 5. Writes everything with `warden init --write --file <payload>`.
@@ -118,13 +119,24 @@ It writes a Friction list and a Routing table. Each finding goes to one place:
 | A bug in warden | `/warden:report`, kind `bug` |
 | Something every project would want | `/warden:report`, kind `enhancement` |
 | A mistake that keeps coming back | `.warden/rules/<topic>.md` |
-| A fact about the code | `.warden/knowledge/<area>.md` |
+| A fact about the code | `docs/knowledge/<area>.md` |
 | A missing tool | `.warden/tools/` |
-| A choice that was made | `.warden/decisions/NNNN-<slug>.md` |
+| A choice that was made | `docs/decisions/<area>/<YYYY-MM-DD>-<slug>.md` |
+| A doc or decision that is no longer true | `docs/archived/`, as `/warden:docs` says |
 
-It shows you the retro and writes nothing until you say OK. Then it saves `.warden/retros/<YYYY-MM-DD>.md` in the main checkout, makes the agreed changes, runs `warden checks done retro` and `warden report --status --write`, and commits when the main checkout is on the main branch.
+It shows you the retro and writes nothing until you say OK. Then it saves `docs/retros/<YYYY-MM-DD>.md` in the main checkout, makes the agreed changes, runs `warden checks done retro` and `warden report --status --write`, and commits when the main checkout is on the main branch.
 
 See [checks and retro](../concepts/checks-and-retro.md).
+
+## /warden:docs
+
+Where project knowledge goes, and how to keep it in order. Use it when you want to record a fact or a decision, find what the project knows about something, retire a doc that is out of date, or tidy the folder. Agents use it too, and when the `warden-docs` check fails.
+
+It has an opinion on part of `docs/` only, and leaves the rest alone: `INDEX.md` is the map, `knowledge/<area>.md` holds facts learned while working, `decisions/<area>/<YYYY-MM-DD>-<slug>.md` holds choices, `retros/` holds retro notes, and `archived/` holds what is no longer true, at the same path it had before.
+
+When you ask it to tidy up, it runs `warden docs check`, looks for docs that repeat each other and decisions that a later one contradicts, and shows you what it would move, merge, split or archive. It changes nothing until you say OK.
+
+See [project files](project-files.md#doc-folders).
 
 ## /warden:tools
 

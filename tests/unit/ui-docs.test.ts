@@ -2,18 +2,18 @@ import { expect, test } from "bun:test";
 import { groupDocs, pickDoc } from "../../site-ui/src/lib/pure/docs.ts";
 
 const docs = [
-  { path: "knowledge/b.md", title: "B" }, { path: "decisions/0001-x.md", title: "X" },
-  { path: "context/overview.md", title: "Overview" }, { path: "zeta/z.md", title: "Z" }, { path: "context/a.md", title: "A" },
+  { path: "docs/knowledge/b.md", title: "B" }, { path: "docs/decisions/fe/2026-01-02-y.md", title: "Y" }, { path: "docs/decisions/be/2026-01-01-x.md", title: "X" },
+  { path: "docs/overview.md", title: "Overview" }, { path: ".warden/rules/z.md", title: "Z" }, { path: "docs/a.md", title: "A" },
 ];
 
-test("groupDocs: context, decisions, knowledge first; order inside a group kept", () => {
+test("groupDocs: top-level docs, decisions by area, knowledge first; order inside a group kept", () => {
   expect(groupDocs(docs).map((g) => [g.folder, g.docs.map((d) => d.title)])).toEqual([
-    ["context", ["Overview", "A"]], ["decisions", ["X"]], ["knowledge", ["B"]], ["zeta", ["Z"]],
+    ["", ["Overview", "A"]], ["decisions/be", ["X"]], ["decisions/fe", ["Y"]], ["knowledge", ["B"]], ["rules", ["Z"]],
   ]);
 });
 
-test("pickDoc: the asked path, else the first doc", () => {
-  expect(pickDoc(docs, "decisions/0001-x.md")).toBe("decisions/0001-x.md");
-  expect(pickDoc(docs, null)).toBe("knowledge/b.md");
+test("pickDoc: the asked path, else the first doc in the list on the page", () => {
+  expect(pickDoc(docs, "docs/decisions/be/2026-01-01-x.md")).toBe("docs/decisions/be/2026-01-01-x.md");
+  expect(pickDoc(docs, null)).toBe("docs/overview.md");
   expect(pickDoc([], null)).toBeNull();
 });

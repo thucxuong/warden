@@ -43,7 +43,7 @@ last: ${last}
 ---
 # Retro of recent work
 
-Run the warden:retro skill. It looks back at recent runs and this conversation, routes each finding, and saves .warden/retros/<YYYY-MM-DD>.md once the user agrees. It ends with: warden checks done retro
+Run the warden:retro skill. It looks back at recent runs and this conversation, routes each finding, and saves docs/retros/<YYYY-MM-DD>.md once the user agrees. It ends with: warden checks done retro
 `;
 }
 
@@ -517,8 +517,8 @@ function done(args: string[], ctx: Ctx): void {
   if (check.kind === "command") {
     throw new WardenError(`command checks are run by the engine: warden checks run ${name}`, EXIT.REJECTED);
   }
-  if (name === "retro" && !existsSync(join(main, ".warden", "retros", `${date}.md`))) {
-    throw new WardenError(`write .warden/retros/${date}.md first`, EXIT.REJECTED);
+  if (name === "retro" && !existsSync(join(main, "docs", "retros", `${date}.md`))) {
+    throw new WardenError(`write docs/retros/${date}.md first`, EXIT.REJECTED);
   }
 
   if (!takeLock(main, name)) throw new WardenError(`check ${name} is busy`, EXIT.BUSY);

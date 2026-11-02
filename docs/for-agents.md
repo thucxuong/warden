@@ -31,7 +31,7 @@ The short form ships with the plugin as the [`/warden:guide`](reference/skills.m
 | Use the worktree warden picked | `warden start` prints `worktree`. Work there, even if a project doc describes another layout. |
 | One simple command per Bash call | `git -C <dir> ...` and absolute paths. A plain `cd <dir>` on its own is fine; never `cd <dir> && ...`. Permission rules such as `Bash(git *)` do not match a chained command. |
 | Hand in on one line | `warden done --json '<json>'`. No heredoc, pipe or temp file. |
-| Keep notes | Something surprised you: add a line to `.warden/knowledge/<area>.md`. You made a choice: write `.warden/decisions/NNNN-<slug>.md` (never edit an old one). Add the file's line to the folder's `INDEX.md` in the same commit. |
+| Keep notes | Something surprised you: add a line to `docs/knowledge/<area>.md`. You made a choice: write `docs/decisions/<area>/<YYYY-MM-DD>-<slug>.md` (never edit an old one). Add the file's line to the folder's `INDEX.md` in the same commit. It conflicts with an old one: move the old file to the same path under `docs/archived/` and name it in `Replaces:`. The `warden:docs` skill has the layout. |
 | Look for tools first | `warden tools` lists the project's tools and roles. If a `graph` role is listed, run `warden tools graph query "<question>"` before a broad search. |
 
 ## The loop
@@ -89,11 +89,11 @@ Usually the user starts with `/warden:compose <what to do>` or `/warden:compose 
 
 | Step | What you do | What you may change in the worktree |
 |---|---|---|
-| `analyze` (generic) | Read the code, record facts with `file:line`, list follow-up tickets. | `.warden/knowledge/`, `.warden/decisions/` |
+| `analyze` (generic) | Read the code, record facts with `file:line`, list follow-up tickets. | `docs/knowledge/`, `docs/decisions/`, `docs/archived/`, `docs/INDEX.md` |
 | `analyze` (reproduce) | Write the smallest failing test. Run only that test. Leave it uncommitted; implement commits it. | Anything but gate files |
-| `analyze` (diagnose) | Write the chain from symptom to root cause, each link tied to evidence. | `.warden/knowledge/`, `.warden/decisions/` |
-| `analyze` (spike) | Answer the question in one note, pass it as `notePath`. | `.warden/knowledge/`, `.warden/decisions/`, `docs/` |
-| `plan` | Follow the plan skill. Hand in `PlanOutput`. No placeholders such as `TBD` or `TODO`. | `.warden/knowledge/`, `.warden/decisions/` |
+| `analyze` (diagnose) | Write the chain from symptom to root cause, each link tied to evidence. | `docs/knowledge/`, `docs/decisions/`, `docs/archived/`, `docs/INDEX.md` |
+| `analyze` (spike) | Answer the question in one note, pass it as `notePath`. | `docs/` |
+| `plan` | Follow the plan skill. Hand in `PlanOutput`. No placeholders such as `TBD` or `TODO`. | `docs/knowledge/`, `docs/decisions/`, `docs/archived/`, `docs/INDEX.md` |
 | `implement` | Make the change with tests. Commit all of it. When back from a gate, fix exactly what it reports. | Anything but gate files |
 | `ship` | Commit the run record, open the PR or merge as the project says, hand in `ShipOutput`, then run `warden clean` from the main checkout. Never remove the worktree before the hand-in. | `.warden/history/<task>/` |
 | `fix` | Hand the step to the `warden:fixer` agent in the foreground, wait, and pass its JSON to `warden done`. | Nothing. The fixer works in its own fix worktree. |

@@ -63,7 +63,7 @@ function payloadFile(overrides: Record<string, unknown> = {}): string {
       check: { default: { commands: [{ name: "test", run: "pnpm run test" }] } },
       fix: { scope: ["scripts/**"] },
     },
-    context: { overview: "# Overview\nA demo project.", stack: "# Stack\nTypeScript." },
+    docs: { overview: "# Overview\nA demo project.", stack: "# Stack\nTypeScript." },
     setupScript: "set -e\npnpm install --frozen-lockfile",
     teamInstall: false,
     ...overrides,
@@ -138,8 +138,9 @@ describe("init --write", () => {
     expect(out.written).toEqual(expect.arrayContaining([
       ".warden/warden.json", ".warden/steps.json", ".warden/triage-rules.json", ".warden/reports.md",
       ".warden/tools/index.ts", ".warden/tools/tool.ts", ".warden/tools/roles.json",
-      ".warden/context/overview.md", ".warden/context/stack.md", ".warden/checks/retro.md", ".warden/checks/warden-docs.md", "scripts/warden-setup.sh", ".gitignore",
-      ...["context", "rules", "decisions", "knowledge", "checks", "retros", "fixes", "flows"].map((d) => `.warden/${d}/INDEX.md`),
+      "docs/overview.md", "docs/stack.md", "docs/INDEX.md", ".warden/checks/retro.md", ".warden/checks/warden-docs.md", "scripts/warden-setup.sh", ".gitignore",
+      ...["rules", "checks", "fixes", "flows"].map((d) => `.warden/${d}/INDEX.md`),
+      ...["knowledge", "decisions", "retros"].map((d) => `docs/${d}/INDEX.md`),
     ]));
 
     const warden = JSON.parse(readFileSync(join(repo, ".warden/warden.json"), "utf8"));
@@ -158,10 +159,34 @@ describe("init --write", () => {
     expect(existsSync(join(repo, ".warden/tools.md"))).toBe(false);
     expect(JSON.parse(readFileSync(join(repo, ".warden/tools/roles.json"), "utf8"))).toEqual({});
     expect(readFileSync(join(repo, ".warden/tools/index.ts"), "utf8")).toContain("export default tools;");
-    expect(readFileSync(join(repo, ".warden/context/INDEX.md"), "utf8")).toContain("- overview.md: Overview");
+    const map = readFileSync(join(repo, "docs/INDEX.md"), "utf8");
+    for (const line of ["- overview.md: Overview", "- knowledge/INDEX.md: Knowledge", "- decisions/INDEX.md: Decisions", "- retros/INDEX.md: Retros"]) expect(map).toContain(line);
     expect(readFileSync(join(repo, "scripts/warden-setup.sh"), "utf8")).toBe("set -e\npnpm install --frozen-lockfile\n");
     expect(readFileSync(join(repo, ".gitignore"), "utf8")).toBe(".warden/state/\n.worktrees/\n");
     expect(existsSync(join(repo, ".claude/settings.json"))).toBe(false);
+  });
+
+  test("a doc that exists is kept; docs/INDEX.md lists what is in docs/ and leaves archived files out", async () => {
+    put("docs/overview.md", "# Ours\nWe wrote this.\n");
+    put("docs/guides/start.md", "# Start\n");
+    put("docs/guides/README.md", "# Guides\n");
+    put("docs/archived/old.md", "# Old\n");
+    const { out } = await call(["--write", "--file", payloadFile()]);
+    expect(out.written).not.toContain("docs/overview.md");
+    expect(out.written).toContain("docs/stack.md");
+    expect(readFileSync(join(repo, "docs/overview.md"), "utf8")).toBe("# Ours\nWe wrote this.\n");
+    const map = readFileSync(join(repo, "docs/INDEX.md"), "utf8");
+    expect(map).toContain("- overview.md: Ours\n");
+    expect(map).toContain("- guides/README.md: Guides\n");
+    expect(map).not.toContain("start.md");
+    expect(map).not.toContain("archived");
+  });
+
+  test("an INDEX.md that exists is kept", async () => {
+    put("docs/INDEX.md", "# Our map\n");
+    const { out } = await call(["--write", "--file", payloadFile()]);
+    expect(out.written).not.toContain("docs/INDEX.md");
+    expect(readFileSync(join(repo, "docs/INDEX.md"), "utf8")).toBe("# Our map\n");
   });
 
   test("the gitignore line is not added twice and keeps existing lines", async () => {
@@ -211,7 +236,7 @@ describe("init --write", () => {
     expect(out.written).toContain(".warden/steps.json");
     const steps = JSON.parse(readFileSync(join(repo, ".warden/steps.json"), "utf8"));
     expect(steps.fix.scope).toEqual([
-      "scripts/**", ".warden/tools/**", ".warden/triage-rules.json", ".warden/fixes/**", ".warden/knowledge/**", "docs/**", ".env.example",
+      "scripts/**", ".warden/tools/**", ".warden/triage-rules.json", ".warden/fixes/**", "docs/**", ".env.example",
       "docker-compose*.yml",
     ]);
   });
@@ -219,7 +244,7 @@ describe("init --write", () => {
   test("an invalid payload is rejected with exit 1 and writes nothing", async () => {
     const badSteps = payloadFile({ steps: { mainBranch: "main", setup: { commands: [] }, check: {}, fix: { scope: [] } } });
     expect((await call(["--write", "--file", badSteps])).code).toBe(1);
-    expect((await call(["--write", "--file", payloadFile({ context: { "../evil": "x" } })])).code).toBe(1);
+    expect((await call(["--write", "--file", payloadFile({ docs: { "../evil": "x" } })])).code).toBe(1);
     expect((await call(["--write", "--file", payloadFile({ setupScript: 5 })])).code).toBe(1);
     expect(existsSync(join(repo, ".warden"))).toBe(false);
   });

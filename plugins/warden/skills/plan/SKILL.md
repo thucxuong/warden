@@ -9,12 +9,12 @@ Goal: break the step's target into a sequenced chain of tasks. Each task combine
 
 Keep going until the chain is complete. Do not stop at a task that still says "blocked by X" when X is not planned in the chain.
 
-In a plan step you may only write files under `.warden/decisions/` and `.warden/knowledge/`. Do not change code.
+In a plan step you may only write files under `docs/decisions/`, `docs/knowledge/` and `docs/archived/`, and `docs/INDEX.md`. Do not change code.
 
 ## Definitions
 
 - **Target**: the outcome to achieve. It comes from the task text.
-- **Existing Factors**: what exists when you start. This is the repo code, `.warden/context`, the tools `warden tools` lists, package dependencies and framework features. Do not assume anything outside this list.
+- **Existing Factors**: what exists when you start. This is the repo code, the docs that `docs/INDEX.md` lists, the tools `warden tools` lists, package dependencies and framework features. Do not assume anything outside this list.
 - **Factor Pool**: the Existing Factors plus the Unlocks of the tasks before this one. The pool grows as the plan is carried out.
 - **Unlocks**: what a task adds to the pool. Examples are a module, a route, a config value or a data set. Name them exactly.
 - **Satisfied**: a task can be done at its place in the chain. Every input it needs is in the pool. It needs no new platform feature. Its approach is one of `reuse`, `configure`, `compose`, `adopt` or `build`.
@@ -45,7 +45,7 @@ To look: search the repo for similar code, read `package.json`, read the tool's 
 
 ## Procedure
 
-1. **Inventory.** List the Existing Factors that matter for the target. Read the `.warden/context` and `.warden/knowledge` indexes. This list is your first pool.
+1. **Inventory.** List the Existing Factors that matter for the target. Read `docs/INDEX.md` and `docs/knowledge/INDEX.md`. This list is your first pool.
 2. **Decompose.** Split the target into leaves. A leaf is one small capability, such as a function, a route, a screen, a data set or a test gate.
 3. **Assess.** For each leaf, list the inputs it needs. Ask: are all inputs in the pool, and can it be done without a new platform feature?
    - Yes: mark it satisfied. Write its approach.
@@ -95,7 +95,7 @@ Write each task so that someone else can build it without asking you.
 
 No placeholders. The engine rejects a plan that contains any of these, in any letter case: `TBD`, `TODO`, `implement later`, `fill in details`, `add appropriate error handling`, `add validation`, `handle edge cases`, `write tests for the above`, `similar to task N`. Write the real content instead.
 
-Write a decision file for each real choice, as `.warden/decisions/NNNN-<slug>.md`. Use the next free four-digit number. Never edit an old decision.
+Write a decision file for each real choice, as `docs/decisions/<area>/<YYYY-MM-DD>-<slug>.md`, dated today. Reuse an area from `docs/decisions/INDEX.md` when it fits. Never edit an old decision. When the new one conflicts with an old one, archive the old one as the warden:docs skill says.
 
 When the step says brainstorm, first compare 2 or 3 options with their trade-offs. Pick one and say why. Put this in the `brainstorm` field.
 
@@ -126,7 +126,7 @@ Example of a minimal valid output for a brainstorm step:
       { "id": "T2", "title": "Add the route", "approach": "compose",
         "leverage": "src/routes/users.ts", "unlocks": "GET /api/items", "blockedBy": ["T1"] } ] }
   ],
-  "decisions": [".warden/decisions/0003-items-pagination.md"],
+  "decisions": ["docs/decisions/be/2026-01-15-items-pagination.md"],
   "brainstorm": {
     "options": [
       { "name": "offset pages", "tradeoffs": "simple, slow on large tables" },
@@ -137,4 +137,4 @@ Example of a minimal valid output for a brainstorm step:
 }
 ```
 
-When the plan records a decision in `.warden/decisions/`, add its one-line entry to `.warden/decisions/INDEX.md` in the same commit.
+When the plan records a decision in `docs/decisions/`, add its one-line entry to `docs/decisions/INDEX.md` in the same commit.

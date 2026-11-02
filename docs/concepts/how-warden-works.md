@@ -85,7 +85,7 @@ At an agent step, `instructions` holds these sections, in this order (empty ones
 4. **Notes for this step**: the step's own `instructions` field in the flow.
 5. **Back from ...**: when a gate sent the run back, the reason, the findings or the last 80 lines of the failing log, and the triage report path. For a fix step, the fix context instead.
 6. **Project rules**: the text of `.warden/rules/*.md` (up to 16 KB).
-7. **Read as needed**: the `INDEX.md` of `.warden/context`, `.warden/knowledge` and `.warden/decisions`.
+7. **Read as needed**: `docs/INDEX.md`, `docs/knowledge/INDEX.md` and `docs/decisions/INDEX.md`.
 8. **Earlier outputs**: paths to the accepted outputs of earlier steps, and `plan.md`.
 9. **Hand back**: the exact `warden done` command to run.
 
@@ -100,7 +100,7 @@ At an agent step, `instructions` holds these sections, in this order (empty ones
    - An implement step must have a new commit and nothing uncommitted.
    - An implement step with no tests needs a `testsReason` of at least 10 characters.
    - A plan must not contain placeholders such as `TBD` or `TODO`, and every decision file it lists must exist.
-   - Each step type may change only certain files. A plan step, for example, may only write `.warden/knowledge/` and `.warden/decisions/`.
+   - Each step type may change only certain files. A plan step, for example, may only write `docs/knowledge/`, `docs/decisions/`, `docs/archived/` and `docs/INDEX.md`.
    - A ship output needs proven gates for HEAD and a committed run record.
 
 Every hand-in, accepted or not, is saved under `.warden/state/<task>/outputs/`. The errors of a rejected one are in its `output.rejected` event in `.warden/state/<task>/events.jsonl`, so you can see what went wrong.

@@ -120,8 +120,8 @@ describe("PreToolUse: Edit and Write", () => {
     await startFlow(FEATURE);
     expect(reason(await editAt(join(wt, "src/a.ts"), { cwd: main }))).toBe(`warden: plan step does not change code (${T} at plan)`);
     expect(reason(await editAt("src/a.ts", { cwd: wt }))).toBe(`warden: plan step does not change code (${T} at plan)`);
-    expect(await editAt(join(wt, ".warden/decisions/0001-choice.md"))).toBeNull();
-    expect(await hook("pre-tool-use", { tool_name: "NotebookEdit", tool_input: { notebook_path: join(wt, ".warden/knowledge/n.ipynb") } })).toBeNull();
+    expect(await editAt(join(wt, "docs/decisions/be/2026-01-01-choice.md"))).toBeNull();
+    expect(await hook("pre-tool-use", { tool_name: "NotebookEdit", tool_input: { notebook_path: join(wt, "docs/knowledge/n.ipynb") } })).toBeNull();
     await donePlan();
     expect(run().current.id).toBe("implement");
     expect(await editAt(join(wt, "src/a.ts"))).toBeNull();

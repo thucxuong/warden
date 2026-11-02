@@ -8,7 +8,7 @@ import { catFileExists, diffNames, head, isAncestor, lsTree, ownDiffNames, porce
 import { mainRef, taskDir } from "../state/paths.ts";
 import { readEvents } from "../state/store.ts";
 import { checkRuleNarrow, type NamedLog } from "../gates/triage-rules.ts";
-import type { AnalyzeStep, FlowJson, FlowStep, PlanStep, RunJson, StepsJson, TriageReport } from "../types.ts";
+import type { AnalyzeStep, AnalyzeVariant, FlowJson, FlowStep, PlanStep, RunJson, StepsJson, TriageReport } from "../types.ts";
 import { editAllowed, isFixForbidden, isIgnoredPath, matchesAny, type CatalogType } from "./catalog.ts";
 import { gatesProven } from "./proof.ts";
 
@@ -271,7 +271,7 @@ function checkEvidence(input: OutputCheckInput, type: CatalogType, step: FlowSte
   // Implement commits what was dirty at its start too (after a dirty route-back), so its commits are policed as well.
   const policed = type === "implement" ? [...new Set([...changed, ...committed])].sort() : changed;
   for (const path of policed) {
-    if (!editAllowed(type, variant, path, run.task)) errors.push(`${path}: not allowed in ${type} step`);
+    if (!editAllowed(type, variant, path, run.task) && !archivedMove(run, type, variant, path)) errors.push(`${path}: not allowed in ${type} step`);
   }
   switch (type) {
     case "analyze":
@@ -287,6 +287,13 @@ function checkEvidence(input: OutputCheckInput, type: CatalogType, step: FlowSte
   }
 }
 
+// A step that may write docs/archived/ may also take a file out of docs/, once it is at the same path under docs/archived/.
+function archivedMove(run: RunJson, type: CatalogType, variant: AnalyzeVariant | undefined, path: string): boolean {
+  if (!path.startsWith("docs/")) return false;
+  const archived = `docs/archived/${path.slice("docs/".length)}`;
+  return editAllowed(type, variant, archived, run.task) && !existsSync(join(run.worktree, path)) && existsSync(join(run.worktree, archived));
+}
+
 function evidenceAnalyze(run: RunJson, variant: string, o: Obj, changed: string[], errors: string[]): void {
   compareSets(o.filesChanged as string[], changed, "filesChanged", errors);
   if (variant === "reproduce") {
@@ -295,7 +302,7 @@ function evidenceAnalyze(run: RunJson, variant: string, o: Obj, changed: string[
   }
   if (variant === "spike") {
     const note = o.notePath as string;
-    if (!note.startsWith(".warden/knowledge/") && !note.startsWith("docs/")) errors.push("notePath: must be under .warden/knowledge/ or docs/");
+    if (!note.startsWith("docs/")) errors.push("notePath: must be under docs/");
     else if (!existsSync(join(run.worktree, note))) errors.push(`notePath: ${note} does not exist`);
   }
 }
@@ -333,7 +340,7 @@ function evidencePlan(run: RunJson, o: Obj, errors: string[]): void {
   }
 
   for (const file of o.decisions as string[]) {
-    if (!/^\.warden\/decisions\/\d{4}-[a-z0-9-]+\.md$/.test(file)) errors.push(`decisions: ${file} must match .warden/decisions/NNNN-<slug>.md`);
+    if (!/^docs\/decisions\/[a-z0-9-]+\/\d{4}-\d{2}-\d{2}-[a-z0-9-]+\.md$/.test(file)) errors.push(`decisions: ${file} must match docs/decisions/<area>/<YYYY-MM-DD>-<slug>.md`);
     else if (!existsSync(join(run.worktree, file))) errors.push(`decisions: ${file} does not exist`);
   }
 }

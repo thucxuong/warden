@@ -77,7 +77,7 @@ describe("reports", () => {
     const paths = [
       "/api/home", "/api/health", "/api/signals", "/api/tickets", "/api/docs", "/api/runs", "/api/runs?status=shipped,done",
       ...tasks.flatMap((t) => [`/api/runs/${t}`, `/api/runs/${t}/events`]),
-      "/api/runs/FX-201/log?path=checks/1/lint.log", "/api/doc?path=context/overview.md",
+      "/api/runs/FX-201/log?path=checks/1/lint.log", "/api/doc?path=docs/overview.md",
     ];
     for (const path of paths) {
       const text = await (await request(opts, path)).text();
@@ -144,5 +144,22 @@ describe("runs", () => {
     }
     expect((await request(opts, "/api/runs/FX-201/log?path=checks/9/lint.log")).status).toBe(404);
     expect((await request(opts, "/api/runs/FX-201/log?path=checks/1/lint.log&lines=x")).status).toBe(400);
+  }, 30_000);
+
+  test("docs: lists docs/ and the rules, not docs/archived/; reads only docs/ and .warden/", async () => {
+    const opts = fixtureOptions(fx);
+    const { docs } = (await getJson<{ docs: { path: string; title: string }[] }>(opts, "/api/docs")).body;
+    expect(docs).toEqual(expect.arrayContaining([
+      { path: "docs/overview.md", title: "Overview" },
+      { path: "docs/decisions/devops/2026-01-05-use-bun.md", title: "Use Bun" },
+      { path: ".warden/rules/style.md", title: "Style" },
+    ]));
+    expect(docs.some((d) => d.path.includes("archived"))).toBe(false);
+    expect((await request(opts, "/api/doc?path=docs/archived/old.md")).status).toBe(200); // a link can still open it
+    expect(await (await request(opts, "/api/doc?path=docs/overview.md&format=html")).text()).toContain('data-doc="docs/decisions/devops/2026-01-05-use-bun.md"');
+    for (const path of ["README.md", "../x.md", "docs/../README.md", ".warden/../README.md", "/etc/passwd.md", "docs/overview.txt"]) {
+      expect((await request(opts, `/api/doc?path=${encodeURIComponent(path)}`)).status).toBe(400);
+    }
+    expect((await request(opts, "/api/doc?path=docs/gone.md")).status).toBe(404);
   }, 30_000);
 });

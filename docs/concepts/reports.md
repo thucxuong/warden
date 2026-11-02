@@ -2,7 +2,7 @@
 
 A report tells the warden maintainers about a problem with warden itself, and its status comes back to your project.
 
-Reports are about **warden**, not about your code: a gate that blocked for no reason, a confusing message, a missing feature that every project would want. Problems in your own code, tools or setup belong in your own tickets, `.warden/rules/` or `.warden/knowledge/`.
+Reports are about **warden**, not about your code: a gate that blocked for no reason, a confusing message, a missing feature that every project would want. Problems in your own code, tools or setup belong in your own tickets, `.warden/rules/` or `docs/knowledge/`.
 
 ## Sending a report
 

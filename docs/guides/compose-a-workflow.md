@@ -98,7 +98,7 @@ The rest of this page shows how to do the same by hand, and what the agent does 
 
 | Type | Who does it | Extra field | What it is for |
 |---|---|---|---|
-| `analyze` | the agent | `variant`: `generic`, `reproduce`, `diagnose` or `spike` | Understand before changing. `reproduce` writes a failing test. `diagnose` finds the root cause. `spike` answers a question in a note under `.warden/knowledge/` or `docs/`. |
+| `analyze` | the agent | `variant`: `generic`, `reproduce`, `diagnose` or `spike` | Understand before changing. `reproduce` writes a failing test. `diagnose` finds the root cause. `spike` answers a question in a note under `docs/`. |
 | `plan` | the agent | `brainstorm`: `true` or `false` | Write a plan. With `brainstorm: true` the agent compares 2 or 3 options first. |
 | `implement` | the agent | none | Make the change, with tests, and commit it. |
 | `check` | the engine | `check`: a check set name from `.warden/steps.json` | Run that set of check commands on the commit. |

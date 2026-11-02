@@ -27,11 +27,12 @@ This page assumes warden is installed (see [Installation](installation.md)) and 
    | Team install | Whether to add the warden block to `.claude/settings.json`, so teammates get warden when they trust the folder. Yes is recommended. |
    | Tickets | Where your tickets live. Every warden run starts from a ticket. Without a tracker, the agent writes a small ticket tool that keeps tickets as Markdown files in `backlog/<ID>.md` (your project owns it). For Jira, Linear and others, run `/warden:tools` afterwards; see [Write a ticket tool](../guides/write-a-ticket-tool.md). |
 
-   The agent also drafts four context files that describe your project: `overview`, `architecture`, `stack` and `glossary`. They hold facts only, at most 200 lines each.
+   The agent keeps your docs where they are. It drafts a doc for `overview`, `architecture`, `stack` or `glossary` only when no doc you have covers that topic. Each holds facts only, at most 200 lines.
 
 3. The agent writes the files with `warden init --write`. It creates, among others:
    - `.warden/warden.json`, `.warden/steps.json` and `.warden/triage-rules.json`
-   - `.warden/context/*.md`, an `INDEX.md` in each `.warden` doc folder, and `.warden/tools/`
+   - `docs/INDEX.md`, the map of your docs, with `docs/knowledge/`, `docs/decisions/` and `docs/retros/`
+   - an `INDEX.md` in each doc folder, and `.warden/tools/`
    - `scripts/warden-setup.sh`
    - the line `.warden/state/` in `.gitignore`
 
@@ -132,7 +133,7 @@ The first run asks you to allow a few things, such as `warden` commands and edit
        review -. "blocking findings" .-> implement
    ```
 
-2. **plan**: the agent compares two or three options, picks one and writes a plan. A real choice also gets a decision file in `.warden/decisions/`.
+2. **plan**: the agent compares two or three options, picks one and writes a plan. A real choice also gets a decision file in `docs/decisions/<area>/`.
 
 3. **implement**: the agent builds the change with tests and commits it.
 

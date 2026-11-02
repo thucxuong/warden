@@ -75,7 +75,7 @@ Results never change the check file, so running a check never leaves the project
 
 | Check | Kind | Every | What it does |
 |---|---|---|---|
-| `warden-docs` | command, `auto: true` | 1 day | Runs `warden docs check`: every `.md` file in `.warden/context`, `rules`, `decisions`, `knowledge`, `checks` and `retros` has a line in its folder's `INDEX.md`, every `INDEX.md` line names a file that exists, and no file is over 200 lines. |
+| `warden-docs` | command, `auto: true` | 1 day | Runs `warden docs check`: `docs/INDEX.md` lists the top-level docs and folders in `docs/`, every `.md` file in `docs/knowledge`, `docs/decisions`, `docs/retros`, `.warden/rules` and `.warden/checks` has a line in its folder's `INDEX.md`, every `INDEX.md` line names a file that exists, none of those files is over 200 lines, decisions and retros have dated names, and an archived file has left its old place. |
 | `retro` | agent | 2 days | Runs the `/warden:retro` skill, below. `/warden:init` sets its `last` to the setup day, so it is not due at once. |
 
 If `.warden/checks/retro.md` is missing, warden still lists a `retro` check with these defaults.
@@ -87,7 +87,7 @@ The retro looks back at the work since the last retro and turns friction into fi
 1. The agent collects what happened: `warden status --all`, the run records in `.warden/history/*/summary.json`, the live state of runs without a ship step, the fix notes in `.warden/fixes/`, and the current conversation.
 2. It writes two parts: **Friction** (what went wrong or took too long, each item concrete) and **Routing** (where each finding goes).
 3. It shows you the retro and waits for your OK. It writes nothing before that.
-4. It saves `.warden/retros/<YYYY-MM-DD>.md` in the main checkout (a second retro on the same day is added to the same file), makes the routed changes you agreed to, and updates each folder's `INDEX.md`.
+4. It saves `docs/retros/<YYYY-MM-DD>.md` in the main checkout (a second retro on the same day is added to the same file), makes the routed changes you agreed to, and updates each folder's `INDEX.md`.
 5. It runs `warden checks done retro` (which needs the retro file for that date), then `warden report --status --write`.
 6. It commits the files on the main checkout, only when it is on the main branch. It never pushes unless you ask.
 
@@ -98,9 +98,10 @@ The retro looks back at the work since the last retro and turns friction into fi
 | A bug in warden | A report, kind `bug`. See [Reports](reports.md). |
 | Something missing that every project would want | A report, kind `enhancement`. |
 | A mistake that keeps coming back | `.warden/rules/<topic>.md`. Rules reach the agent at every step. |
-| A fact about the code | `.warden/knowledge/<area>.md` |
+| A fact about the code | `docs/knowledge/<area>.md` |
 | A missing tool | `.warden/tools/` (see `/warden:tools` and [Tools and roles](tools-and-roles.md)) |
-| A choice that was made | `.warden/decisions/NNNN-<slug>.md` |
+| A choice that was made | `docs/decisions/<area>/<YYYY-MM-DD>-<slug>.md` |
+| A doc or decision that is no longer true | `docs/archived/`, as `/warden:docs` says |
 
 `warden retro --done [--date YYYY-MM-DD]` is an older alias of `warden checks done retro`.
 

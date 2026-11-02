@@ -31,11 +31,11 @@ export function DocsPage() {
 
   return (
     <>
-      <PageHeader title="Docs" description={<>The project's <span className="font-mono">.warden</span> docs: context, decisions and knowledge.</>} />
+      <PageHeader title="Docs" description={<>The project's <span className="font-mono">docs</span> folder, and the rules, checks and fixes in <span className="font-mono">.warden</span>.</>} />
       {docs.isPending ? (
         <div className="grid grid-cols-1 gap-5 md:grid-cols-[16rem_minmax(0,1fr)]"><Card className="p-4 shadow-card"><SkeletonRows rows={5} /></Card><Card className="p-6 shadow-card"><SkeletonRows rows={8} /></Card></div>
       ) : docs.isError ? <ErrorState error={docs.error} onRetry={() => void docs.refetch()} /> : list.length === 0 ? (
-        <EmptyState text="No docs in .warden yet." icon={BookOpen} className="bg-card py-12" />
+        <EmptyState text="No docs yet." icon={BookOpen} className="bg-card py-12" />
       ) : (
         <div className="grid grid-cols-1 items-start gap-5 md:grid-cols-[16rem_minmax(0,1fr)]">
           <Card className="gap-0 py-2 shadow-card md:sticky md:top-20">
@@ -64,7 +64,7 @@ export function DocsPage() {
             </nav>
           </Card>
           <Card className="min-h-[50vh] gap-0 py-0 shadow-card">
-            {current && <div className="border-b px-6 py-2.5 font-mono text-xs text-muted-foreground">.warden/{current}</div>}
+            {current && <div className="border-b px-6 py-2.5 font-mono text-xs text-muted-foreground">{current}</div>}
             <div className="px-6 py-5">
               {doc.isPending ? (
                 <div className="space-y-3"><Skeleton className="h-7 w-1/2" /><SkeletonRows rows={6} /></div>

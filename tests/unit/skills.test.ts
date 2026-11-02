@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 const pluginRoot = resolve(import.meta.dir, "../../plugins/warden");
 const skillsDir = join(pluginRoot, "skills");
 
-const expectedSkills = ["init", "compose", "work", "plan", "retro", "report", "upgrade", "tools", "orchestrate", "guide"];
+const expectedSkills = ["init", "compose", "work", "plan", "retro", "report", "upgrade", "tools", "orchestrate", "guide", "docs"];
 
 // Frontmatter extras from spec section 8 (string values, unquoted).
 const expectedExtras: Record<string, Record<string, string>> = {
@@ -16,6 +16,7 @@ const expectedExtras: Record<string, Record<string, string>> = {
   tools: { "argument-hint": "[<name>]" },
   orchestrate: { "argument-hint": "<epic>" },
   guide: {},
+  docs: {},
 };
 
 function parseFrontmatter(text: string): Record<string, string> {
@@ -216,7 +217,7 @@ describe("git and path rule", () => {
 
   test("work and plan keep the decisions, knowledge and rules indexes up to date", () => {
     expect(read(join(skillsDir, "work", "SKILL.md"))).toContain("add its one-line entry to that folder's `INDEX.md`");
-    expect(read(join(skillsDir, "plan", "SKILL.md"))).toContain("`.warden/decisions/INDEX.md`");
+    expect(read(join(skillsDir, "plan", "SKILL.md"))).toContain("`docs/decisions/INDEX.md`");
   });
 });
 

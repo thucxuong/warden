@@ -92,7 +92,7 @@ Reads an init payload (JSON) from `--file <payload>`, or from stdin when there i
   "warden": { "projectId": "pg", "taskIdPattern": "^PG-\\d{3}$", "sitePort": 4400 },
   "steps": { "mainBranch": "main", "setup": { "commands": ["sh scripts/warden-setup.sh"] },
              "check": { "default": { "commands": [{ "name": "test", "run": "pnpm run test" }] } } },
-  "context": { "overview": "# Overview\n..." },
+  "docs": { "overview": "# Overview\n..." },
   "setupScript": "set -e\npnpm install --frozen-lockfile\n",
   "teamInstall": true
 }
@@ -232,8 +232,8 @@ Every hand-in, accepted or not, is saved as `.warden/state/<task>/outputs/<seq>-
 
 | Step | Fields | Evidence warden checks |
 |---|---|---|
-| `analyze` | `summary` (at least 20 chars), `findings` (at least 1), `followUps`, `filesChanged`. Variant `reproduce` adds `reproduction: {steps (≥1), expected, actual, failingTest (path or null)}`. Variant `diagnose` adds `rootCause: {chain (≥2), cause, evidence (≥1)}`. Variant `spike` adds `notePath` | `filesChanged` equals the files that changed since the step started. Each changed file is allowed for this step. `failingTest` exists. `notePath` is under `.warden/knowledge/` or `docs/` and exists |
-| `plan` | `planMarkdown`, `waves: [{wave, tasks: [{id, title, approach, leverage, unlocks, blockedBy, why?}]}]`, `decisions`, and `brainstorm: {options (≥2, each {name, tradeoffs}), chosen, why}` when the step says brainstorm | No placeholder words in `planMarkdown` (`TBD`, `TODO`, `implement later`, `fill in details`, `add appropriate error handling`, `add validation`, `handle edge cases`, `write tests for the above`, `similar to task N`). Waves go up from 1. Task ids `T<n>` are unique. `blockedBy` names only tasks of earlier waves. `approach` is `reuse`, `configure`, `compose`, `adopt` or `build`; `why` is required for `adopt` and `build`. Each file in `decisions` matches `.warden/decisions/NNNN-<slug>.md` and exists. `brainstorm.chosen` is one of the option names |
+| `analyze` | `summary` (at least 20 chars), `findings` (at least 1), `followUps`, `filesChanged`. Variant `reproduce` adds `reproduction: {steps (≥1), expected, actual, failingTest (path or null)}`. Variant `diagnose` adds `rootCause: {chain (≥2), cause, evidence (≥1)}`. Variant `spike` adds `notePath` | `filesChanged` equals the files that changed since the step started. Each changed file is allowed for this step. `failingTest` exists. `notePath` is under `docs/` and exists |
+| `plan` | `planMarkdown`, `waves: [{wave, tasks: [{id, title, approach, leverage, unlocks, blockedBy, why?}]}]`, `decisions`, and `brainstorm: {options (≥2, each {name, tradeoffs}), chosen, why}` when the step says brainstorm | No placeholder words in `planMarkdown` (`TBD`, `TODO`, `implement later`, `fill in details`, `add appropriate error handling`, `add validation`, `handle edge cases`, `write tests for the above`, `similar to task N`). Waves go up from 1. Task ids `T<n>` are unique. `blockedBy` names only tasks of earlier waves. `approach` is `reuse`, `configure`, `compose`, `adopt` or `build`; `why` is required for `adopt` and `build`. Each file in `decisions` matches `docs/decisions/<area>/<YYYY-MM-DD>-<slug>.md` and exists. `brainstorm.chosen` is one of the option names |
 | `implement` | `summary`, `filesChanged`, `testsAdded`, `testsReason?` | No uncommitted changes. At least one new commit (unless the run came back for a dirty tree). `filesChanged` equals the files the step's own commits changed. Every file in `testsAdded` is in `filesChanged`. When `testsAdded` is empty and files changed, `testsReason` has at least 10 chars. No gate file changed |
 | `ship` | `pr` (URL, id or null), `merged`, `mergeCommit` (sha or null), `description` | All gates proven for HEAD. `.warden/history/<task>/summary.json` is committed and the run record has no uncommitted changes. `pr` or `mergeCommit` is set. With `merged: true`, `mergeCommit` exists after a fetch. With leftovers, `description` contains `Unresolved review findings`. If the worktree is already gone, only the merge evidence is checked |
 | `fix` | `result`: `FIXED`, `CODE`, `GAVE_UP` or `WARDEN_BUG`; `reason`; `rootCauseChain` (≥2 for FIXED and CODE). FIXED adds `notePath`, `ruleId`, `branch?`, `pr?`, `mergeCommit?`, `repairCommands?`; `notePath` and `ruleId` may be left out with the `ruleId` the triage report named, or with the `mergeCommit` of a fix already on the main branch. CODE adds `codeRef` (`path:line — what in the change causes it`). WARDEN_BUG adds `report: {title, body}` | For FIXED: `branch`, when given, is the fix branch; the fix branch changes only files inside `fix.scope` and never a forbidden file; the note is `.warden/fixes/<YYYY-MM-DD>-<task>[-n].md` with the required headings; the new triage rule exists, points at the note, matches a line of the failing log and no line of any passing log. See [gates and self-healing](../concepts/gates-and-self-healing.md) |
@@ -419,7 +419,7 @@ Sends this machine's reports and fetches their status now. Always exits 0. Outpu
 warden retro --done [--date YYYY-MM-DD] [--note <text>]
 ```
 
-An older alias of `warden checks done retro`. The `/warden:retro` skill runs `warden checks done retro` after it saves `.warden/retros/<date>.md`; you only need this form in old scripts. The date defaults to today; the retro file for that date must exist.
+An older alias of `warden checks done retro`. The `/warden:retro` skill runs `warden checks done retro` after it saves `docs/retros/<date>.md`; you only need this form in old scripts. The date defaults to today; the retro file for that date must exist.
 
 ---
 
@@ -566,7 +566,7 @@ Records an agent check as done. Prints `{"name","last":"<date>"}`.
 | `--date` | `YYYY-MM-DD`, default today |
 | `--note` | One line, at most 200 characters |
 
-It refuses a command check (exit 1: `command checks are run by the engine`). For `retro`, `.warden/retros/<date>.md` must exist first.
+It refuses a command check (exit 1: `command checks are run by the engine`). For `retro`, `docs/retros/<date>.md` must exist first.
 
 ---
 
@@ -576,13 +576,21 @@ It refuses a command check (exit 1: `command checks are run by the engine`). For
 warden docs check
 ```
 
-Read-only. In `.warden/context`, `rules`, `decisions`, `knowledge`, `checks` and `retros`, it checks that:
+Read-only. In `docs/knowledge`, `docs/decisions`, `docs/retros`, `.warden/rules` and `.warden/checks`, subfolders included, it checks that:
 
 - every `.md` file (other than `INDEX.md`) has a line in its folder's `INDEX.md`,
 - every `INDEX.md` line names a file that exists inside that folder,
 - no file is over 200 lines.
 
-Output: `{"ok":true,"files":<n>}`, or `{"ok":false,"files":<n>,"problems":[...]}` with exit 1. Exit 3 when `.warden/warden.json` is missing. A missing folder is skipped.
+In the rest of `docs/`, it checks that:
+
+- `docs/INDEX.md` has a line for every top-level doc, and at least one for each other folder,
+- a decision is `docs/decisions/<area>/<YYYY-MM-DD>-<slug>.md`, and a retro is `docs/retros/<YYYY-MM-DD>.md`,
+- a `Replaces:` line in a decision names a path whose file is at the same path under `docs/archived/`,
+- no archived file is listed in an index, or still at its old place,
+- no `.warden/context`, `.warden/knowledge`, `.warden/decisions` or `.warden/retros` is left from before 0.12.
+
+Output: `{"ok":true,"files":<n>}`, or `{"ok":false,"files":<n>,"problems":[...]}` with exit 1. Exit 3 when `.warden/warden.json` is missing. A missing folder is skipped. The project's own docs have no line limit.
 
 An `INDEX.md` line is a list item: either a Markdown link `- [Title](file.md)`, or `- file.md: description`.
 

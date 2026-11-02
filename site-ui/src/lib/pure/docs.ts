@@ -4,22 +4,30 @@ import type { DocEntry } from "../../../../plugins/warden/src/site/api-types.ts"
 
 export interface DocGroup { folder: string; docs: DocEntry[] }
 
-const ORDER = ["context", "decisions", "knowledge"];
+const ORDER = ["", "decisions", "knowledge"];
 
-/** Docs grouped by their first path segment: context, decisions, knowledge first, then the rest by name. */
+/** The doc's folder under docs/ or .warden/: "" for a top-level doc, "decisions/be" for a decision. */
+function folderOf(path: string): string {
+  return path.split("/").slice(1, -1).join("/");
+}
+
+/** Docs grouped by folder: top-level docs, decisions and knowledge first, then the rest by name. */
 export function groupDocs(docs: DocEntry[]): DocGroup[] {
   const groups = new Map<string, DocEntry[]>();
   for (const d of docs) {
-    const folder = d.path.includes("/") ? d.path.slice(0, d.path.indexOf("/")) : "";
+    const folder = folderOf(d.path);
     (groups.get(folder) ?? groups.set(folder, []).get(folder)!).push(d);
   }
-  const rank = (f: string) => (ORDER.includes(f) ? ORDER.indexOf(f) : ORDER.length);
+  const rank = (f: string) => {
+    const at = ORDER.indexOf(f.split("/")[0]!);
+    return at < 0 ? ORDER.length : at;
+  };
   return [...groups.entries()]
     .sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b))
     .map(([folder, list]) => ({ folder, docs: list }));
 }
 
-/** The doc to show: the requested one, else the first listed. */
+/** The doc to show: the requested one, else the first in the list on the page. */
 export function pickDoc(docs: DocEntry[], path: string | null): string | null {
-  return path || (docs[0]?.path ?? null);
+  return path || (groupDocs(docs)[0]?.docs[0]?.path ?? null);
 }

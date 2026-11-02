@@ -6,6 +6,7 @@ import { dirname, join, relative } from "node:path";
 import { validateStepsJson, validateWardenJson } from "../config/config.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
 import { readJson, writeJsonAtomic } from "../lib/json.ts";
+import { mdFiles } from "../lib/md-files.ts";
 import { branchExists, currentBranch } from "../lib/git.ts";
 import { readPluginVersion } from "../lib/version.ts";
 import { worktreeRoot, WORKTREES_DIR_NAME } from "../state/paths.ts";
@@ -21,11 +22,11 @@ type Obj = Record<string, unknown>;
 const MARKETPLACE = "warden-marketplace";
 const PLUGIN_ID = `warden@${MARKETPLACE}`;
 const SETUP_SCRIPT = "scripts/warden-setup.sh";
-const INDEX_DIRS = ["context", "rules", "decisions", "knowledge", "checks", "retros", "fixes", "flows"];
+const INDEX_DIRS = [".warden/rules", ".warden/checks", ".warden/fixes", ".warden/flows", "docs/knowledge", "docs/decisions", "docs/retros"];
 const MAX_DOCS = 50;
 // The default fix.scope (spec 4.2), used when the payload's steps has no fix.
 export const DEFAULT_FIX_SCOPE = [
-  "scripts/**", ".warden/tools/**", ".warden/triage-rules.json", ".warden/fixes/**", ".warden/knowledge/**", "docs/**", ".env.example",
+  "scripts/**", ".warden/tools/**", ".warden/triage-rules.json", ".warden/fixes/**", "docs/**", ".env.example",
   "docker-compose*.yml",
 ];
 // Marketplace source kinds a teammate's machine can resolve. A local directory or file path cannot.
@@ -111,19 +112,9 @@ function ciFiles(root: string): string[] {
   return [...workflows, ...others];
 }
 
-function markdownUnder(root: string, dir: string): string[] {
-  const full = join(root, dir);
-  if (!existsSync(full)) return [];
-  return readdirSync(full, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name)).flatMap((entry) => {
-    const rel = `${dir}/${entry.name}`;
-    if (entry.isDirectory()) return entry.name === "node_modules" ? [] : markdownUnder(root, rel);
-    return entry.name.endsWith(".md") ? [rel] : [];
-  });
-}
-
 function docFiles(root: string): string[] {
   const readmes = listDir(root, ".").filter((f) => /^README/i.test(f));
-  return [...readmes, ...markdownUnder(root, "docs")].slice(0, MAX_DOCS);
+  return [...readmes, ...mdFiles(root, "docs")].slice(0, MAX_DOCS);
 }
 
 function detectMainBranch(root: string): string {
@@ -159,7 +150,7 @@ function scan(ctx: Ctx): InitScan {
 interface ValidPayload {
   warden: Omit<WardenJson, "lastRetro">;
   steps: StepsJson;
-  context: Record<string, string>;
+  docs: Record<string, string>;
   setupScript: string;
   teamInstall: boolean;
 }
@@ -173,15 +164,15 @@ function validatePayload(value: unknown, pluginVersion: string): ValidPayload {
   const payload = value as Partial<Record<keyof InitPayload, unknown>>;
   if (!isObject(payload.warden)) throw invalid("$.warden: must be an object");
   if (!isObject(payload.steps)) throw invalid("$.steps: must be an object");
-  if (!isObject(payload.context)) throw invalid("$.context: must be an object");
+  if (!isObject(payload.docs)) throw invalid("$.docs: must be an object");
   if (typeof payload.setupScript !== "string") throw invalid("$.setupScript: must be a string");
   if (payload.teamInstall !== undefined && typeof payload.teamInstall !== "boolean") throw invalid("$.teamInstall: must be a boolean");
 
-  const context: Record<string, string> = {};
-  for (const [slug, text] of Object.entries(payload.context)) {
-    if (!/^[a-z][a-z0-9-]{0,40}$/.test(slug)) throw invalid(`$.context.${slug}: topic slug must match /^[a-z][a-z0-9-]{0,40}$/`);
-    if (typeof text !== "string") throw invalid(`$.context.${slug}: must be a string`);
-    context[slug] = text;
+  const docs: Record<string, string> = {};
+  for (const [slug, text] of Object.entries(payload.docs)) {
+    if (!/^[a-z][a-z0-9-]{0,40}$/.test(slug)) throw invalid(`$.docs.${slug}: topic slug must match /^[a-z][a-z0-9-]{0,40}$/`);
+    if (typeof text !== "string") throw invalid(`$.docs.${slug}: must be a string`);
+    docs[slug] = text;
   }
 
   // lastRetro is legacy (spec-0.2 5.2): the retro's date lives in .warden/checks/retro.md.
@@ -189,7 +180,7 @@ function validatePayload(value: unknown, pluginVersion: string): ValidPayload {
   return {
     warden,
     steps: validateStepsJson({ fix: { scope: DEFAULT_FIX_SCOPE }, ...payload.steps, schema: 1 }, ".warden/steps.json"),
-    context,
+    docs,
     setupScript: payload.setupScript,
     teamInstall: payload.teamInstall === true,
   };
@@ -235,17 +226,32 @@ class Writer {
   }
 }
 
+// A doc's line in an index: its path from the index, then its first line of text.
+function indexLine(root: string, path: string, from: string): string {
+  const lines = readFileSync(join(root, path), "utf8").split("\n");
+  const close = lines[0]?.trim() === "---" ? lines.findIndex((l, i) => i > 0 && l.trim() === "---") : -1;
+  const firstLine = lines.slice(close + 1).find((l) => l.trim() !== "") ?? "";
+  return `- ${relative(from, path)}: ${firstLine.replace(/^#+\s*/, "").trim()}\n`;
+}
+
 function indexBody(root: string, dir: string): string {
-  const title = dir[0]!.toUpperCase() + dir.slice(1);
-  const lines = listDir(root, `.warden/${dir}`)
-    .filter((f) => f.endsWith(".md") && f !== "INDEX.md")
-    .map((f) => {
-      const lines = readFileSync(join(root, ".warden", dir, f), "utf8").split("\n");
-      const close = lines[0]?.trim() === "---" ? lines.findIndex((l, i) => i > 0 && l.trim() === "---") : -1;
-      const firstLine = lines.slice(close + 1).find((l) => l.trim() !== "") ?? "";
-      return `- ${f}: ${firstLine.replace(/^#+\s*/, "").trim()}`;
-    });
-  return `# ${title}\n\n${lines.map((l) => l + "\n").join("")}`;
+  const name = dir.split("/").pop()!;
+  const docs = listDir(root, dir).filter((f) => f.endsWith(".md") && f !== "INDEX.md");
+  return `# ${name[0]!.toUpperCase()}${name.slice(1)}\n\n${docs.map((f) => indexLine(root, `${dir}/${f}`, dir)).join("")}`;
+}
+
+// docs/INDEX.md: a line per top-level doc and a line per folder (its INDEX.md or README.md when it has one).
+function docsMap(root: string): string {
+  const all = mdFiles(root, "docs").filter((path) => path !== "docs/INDEX.md" && !path.startsWith("docs/archived/"));
+  const folders = new Set(all.map((path) => path.split("/")).filter((parts) => parts.length > 2).map((parts) => parts[1]!));
+  const lines = [
+    ...all.filter((path) => path.split("/").length === 2),
+    ...[...folders].map((folder) => {
+      const inside = all.filter((path) => path.startsWith(`docs/${folder}/`));
+      return inside.find((path) => path === `docs/${folder}/INDEX.md` || path === `docs/${folder}/README.md`) ?? inside[0]!;
+    }),
+  ];
+  return `# Docs\n\n${lines.map((path) => indexLine(root, path, "docs")).join("")}`;
 }
 
 function ensureGitignoreLine(root: string, line: string): boolean {
@@ -330,12 +336,13 @@ async function write(args: string[], ctx: Ctx): Promise<{ written: string[]; not
   out.fileIfMissing(".warden/triage-rules.json", JSON.stringify({ schema: 1, rules: [] }, null, 2) + "\n");
   out.fileIfMissing(".warden/reports.md", REPORTS_HEADER);
   out.written.push(...writeToolFiles(root, ctx.root));
-  for (const [slug, text] of Object.entries(payload.context)) {
-    out.file(`.warden/context/${slug}.md`, text.endsWith("\n") ? text : text + "\n");
+  for (const [slug, text] of Object.entries(payload.docs)) {
+    out.fileIfMissing(`docs/${slug}.md`, text.endsWith("\n") ? text : text + "\n");
   }
   out.fileIfMissing(".warden/checks/retro.md", RETRO_CHECK(localDate()));
   out.fileIfMissing(".warden/checks/warden-docs.md", DOCS_CHECK);
-  for (const dir of INDEX_DIRS) out.fileIfMissing(`.warden/${dir}/INDEX.md`, indexBody(root, dir));
+  for (const dir of INDEX_DIRS) out.fileIfMissing(`${dir}/INDEX.md`, indexBody(root, dir));
+  out.fileIfMissing("docs/INDEX.md", docsMap(root));
   out.file(SETUP_SCRIPT, payload.setupScript.endsWith("\n") ? payload.setupScript : payload.setupScript + "\n");
   const ignored = [".warden/state/", `${WORKTREES_DIR_NAME}/`].map((line) => ensureGitignoreLine(root, line));
   if (ignored.some(Boolean)) out.written.push(".gitignore");

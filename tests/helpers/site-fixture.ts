@@ -205,8 +205,10 @@ export function makeSiteFixture(): SiteFixture {
   });
   put(join(w, "steps.json"), STEPS_RAW);
   put(join(w, "flows", "broken.json"), "{ not json\n");
-  put(join(w, "context", "overview.md"), "# Overview\n\nFX bills clients. We chose Bun: see [the decision](../decisions/0001-use-bun.md).\n");
-  put(join(w, "decisions", "0001-use-bun.md"), "# 0001: Use Bun\n\nBun runs the scripts and the tests.\n");
+  put(join(main, "docs", "overview.md"), "# Overview\n\nFX bills clients. We chose Bun: see [the decision](decisions/devops/2026-01-05-use-bun.md).\n");
+  put(join(main, "docs", "decisions", "devops", "2026-01-05-use-bun.md"), "# Use Bun\n\nBun runs the scripts and the tests.\n");
+  put(join(main, "docs", "archived", "old.md"), "# Old\n");
+  put(join(w, "rules", "style.md"), "# Style\n");
   copyFileSync(join(REPO, "plugins/warden/templates/tools/tool.ts"), join(mkdirP(join(w, "tools")), "tool.ts"));
   mkdirP(join(w, "tools", "backlog"));
   copyFileSync(join(REPO, "tests/fixtures/tools/backlog-tickets.ts"), join(w, "tools", "backlog", "tickets.ts"));

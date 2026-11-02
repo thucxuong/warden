@@ -691,7 +691,7 @@ function fx101(): RunDetailResponse {
       range: { from: "1a2b3c4d", to: "4be1c0a7" },
       files: [
         { path: "src/lib/invoice.ts", source: "git" }, { path: "src/lib/invoice.test.ts", source: "git" },
-        { path: "src/pages/InvoicePage.tsx", source: "git" }, { path: ".warden/decisions/0007-integer-cents.md", source: "git" },
+        { path: "src/pages/InvoicePage.tsx", source: "git" }, { path: "docs/decisions/be/2026-10-02-integer-cents.md", source: "git" },
       ],
       claimed: ["src/lib/invoice.ts", "src/lib/invoice.test.ts", "src/pages/InvoicePage.tsx"],
       testsAdded: ["src/lib/invoice.test.ts"],
@@ -809,24 +809,24 @@ export function runLog(task: string, path: string, lines: number): LogResponse |
 
 export const docs: DocsResponse = {
   docs: [
-    { path: "context/overview.md", title: "Overview" },
-    { path: "context/glossary.md", title: "Glossary" },
-    { path: "decisions/0001-use-bun.md", title: "0001: Use Bun" },
-    { path: "knowledge/billing-rules.md", title: "Billing rules" },
+    { path: "docs/overview.md", title: "Overview" },
+    { path: "docs/glossary.md", title: "Glossary" },
+    { path: "docs/decisions/devops/2026-01-05-use-bun.md", title: "Use Bun" },
+    { path: "docs/knowledge/billing-rules.md", title: "Billing rules" },
   ],
 };
 
 export const docHtml: Record<string, string> = {
-  "context/overview.md": `<h1>Overview</h1>
+  "docs/overview.md": `<h1>Overview</h1>
 <p>FX is a small invoicing app: invoices, week totals and reports. The code lives in <code>src/</code>; tests sit next to the code as <code>*.test.ts</code>.</p>
 <h2>Stack</h2>
-<ul><li>Bun for the runtime and tests (see <a href="#" data-doc="decisions/0001-use-bun.md">0001: Use Bun</a>)</li><li>React for the pages</li><li>Amounts in integer cents</li></ul>
+<ul><li>Bun for the runtime and tests (see <a href="#" data-doc="docs/decisions/devops/2026-01-05-use-bun.md">Use Bun</a>)</li><li>React for the pages</li><li>Amounts in integer cents</li></ul>
 <h2>Commands</h2>
 <pre><code>bun install
 bun test
 bun run dev</code></pre>
 <table><thead><tr><th>Folder</th><th>What</th></tr></thead><tbody><tr><td><code>src/lib</code></td><td>pure helpers</td></tr><tr><td><code>src/pages</code></td><td>React pages</td></tr></tbody></table>`,
-  "context/glossary.md": `<h1>Glossary</h1><dl><dt>Week total</dt><dd>The sum of entries from Monday 00:00 to Sunday 24:00, local time.</dd></dl><p>See also <a href="#" data-doc="context/overview.md">Overview</a>.</p>`,
-  "decisions/0001-use-bun.md": `<h1>0001: Use Bun</h1><p><strong>Status:</strong> accepted.</p><h2>Context</h2><p>We want one tool for install, test and scripts.</p><h2>Decision</h2><p>Use Bun 1.4 for everything; no Node scripts.</p><blockquote><p>Revisit when the PDF export needs a Node-only library.</p></blockquote>`,
-  "knowledge/billing-rules.md": `<h1>Billing rules</h1><ol><li>Round each line, then sum.</li><li>VAT is computed per invoice, not per line.</li></ol>`,
+  "docs/glossary.md": `<h1>Glossary</h1><dl><dt>Week total</dt><dd>The sum of entries from Monday 00:00 to Sunday 24:00, local time.</dd></dl><p>See also <a href="#" data-doc="docs/overview.md">Overview</a>.</p>`,
+  "docs/decisions/devops/2026-01-05-use-bun.md": `<h1>Use Bun</h1><p><strong>Status:</strong> accepted.</p><h2>Context</h2><p>We want one tool for install, test and scripts.</p><h2>Decision</h2><p>Use Bun 1.4 for everything; no Node scripts.</p><blockquote><p>Revisit when the PDF export needs a Node-only library.</p></blockquote>`,
+  "docs/knowledge/billing-rules.md": `<h1>Billing rules</h1><ol><li>Round each line, then sum.</li><li>VAT is computed per invoice, not per line.</li></ol>`,
 };
