@@ -37,6 +37,7 @@ export interface StartOptions {
   worktree: string;          // absolute toplevel of the ticket worktree, already created or reused by the caller
   branch: string;
   mainRef: string;           // already fetched by the caller (3.2 start step 2)
+  base?: string;             // the branch the run starts from and ships to; the run's snapshot holds it as mainBranch
   taskText: string;          // the ticket text
   ticket?: boolean;          // started from a ticket (always since 0.9; older runs may lack it): the engine marks it done once merged (0.9.3)
   spawnWorker?: SpawnWorker;
@@ -685,6 +686,7 @@ export async function start(ctx: Ctx, task: string, flow: FlowJson, opts: StartO
 
   mkdirSync(dir, { recursive: true });
   writeJsonAtomic(join(dir, "flow.json"), flow);
+  if (opts.base !== undefined) steps.mainBranch = opts.base;
   writeJsonAtomic(join(dir, "steps.json"), steps);
   writeFileSync(join(dir, "task.md"), opts.taskText);
   await runSetup(ctx, main, task, steps, opts);

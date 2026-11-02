@@ -128,6 +128,8 @@ Starts a run for a ticket. Every run starts from a ticket (0.9): the task text i
 | `--worktree` | Make (or reuse) a separate git worktree for the task |
 | `--branch <b>` | The branch for `--worktree`. Default: the task id in lower case |
 
+With `--worktree`, warden picks the run's **base**, the branch it starts from and ships to: the branch the main checkout is on. Any branch name works. The run starts from that branch, and its review, triage, fixes, merges and `warden clean` all work against it. A ship with `merged: true` must name a `mergeCommit` that is on the base. The hooks guard both the base and `mainBranch`. The base is `mainBranch` when the main checkout is on a detached HEAD or on a run's ticket branch. Without `--worktree`, the branch you are on is the ticket branch and the base is `mainBranch`.
+
 Rules, all reported in one go (exit 2):
 
 - Pass exactly one of `--template` or `--flow`.
@@ -138,16 +140,16 @@ What it does, in order:
 
 1. Checks the task id against `taskIdPattern` (from the main checkout's `.warden/warden.json`). The id `_sessions` is reserved.
    Then reads the ticket with the `tickets` tool's `show <ticket>`. The task text is `# <id>: <title>`, a blank line and the body. Without a `tickets` role it stops (exit 3): `no tickets tool: set "tickets" in .warden/tools/roles.json. Warden runs start from a ticket: add a ticket tool with /warden:tools ...`. An unknown ticket stops it too (`ticket tool failed (exit 3): ...`).
-2. Fetches the main branch from `origin` (when there is a remote). A failed fetch prints a warning and uses the last fetched copy.
-3. Takes the run's `steps.json` **from the main branch** (`origin/<main>` when there is a remote), not from your working tree. If `.warden/warden.json` or `.warden/steps.json` is not committed there, it stops: `commit and push .warden/ to <main> first`.
+2. Fetches the base from `origin` (when there is a remote). A failed fetch prints a warning and uses the last fetched copy. A base other than `mainBranch` with commits not on `origin` prints a warning too: the run starts from `origin/<base>` without them.
+3. Takes the run's `steps.json` **from the base** (`origin/<base>` when there is a remote), not from your working tree, and sets its `mainBranch` to the base. If `.warden/warden.json` or `.warden/steps.json` is not committed there, it stops: `commit and push .warden/ to <base> first`. A base other than `mainBranch` that is not on `origin` stops it too, with the `git push -u` line to run.
 4. Lints the flow against the check sets of that `steps.json`. A bad flow stops the start.
 5. Refuses if a run for this task already exists: `a run for <task> exists (status <s>); a person can run warden reset <task>`.
-6. With `--worktree`: uses `<repo>/.worktrees/<task>` on the branch, creating the branch from the main branch when it does not exist. A branch checked out in another worktree is refused. When git does not ignore `.worktrees/`, it stops: `.worktrees/ is not ignored by git: add the line .worktrees/ to .gitignore and commit it, then run start again`.
+6. With `--worktree`: uses `<repo>/.worktrees/<task>` on the branch, creating the branch from the base when it does not exist. A branch checked out in another worktree is refused. When git does not ignore `.worktrees/`, it stops: `.worktrees/ is not ignored by git: add the line .worktrees/ to .gitignore and commit it, then run start again`.
 7. Saves the flow, the `steps.json` snapshot and the task text in `.warden/state/<task>/`.
 8. Runs `setup.commands` in the worktree. If one fails, the state folder is deleted and the log is kept in the temp folder: `setup failed: <cmd> (exit <n>); log: <path>`.
 9. Enters the first step and starts the engine if that step is engine work.
 
-Output: the same JSON as [`warden next`](#warden-next). With `--worktree` it also has `"worktree": "<absolute path>"`. The agent then runs `cd <worktree>` as its own command.
+Output: the same JSON as [`warden next`](#warden-next). With `--worktree` it also has `"worktree": "<absolute path>"` and `"base": "<branch>"`. The agent then runs `cd <worktree>` as its own command.
 
 ---
 
@@ -500,7 +502,7 @@ Used by the `/warden:orchestrate` skill. Works on the main checkout. Needs a `ti
 | `plan <epic>` | Runs the tickets tool (`dag <epic>`), builds waves, adds each ticket's run state, saves the plan in `.warden/state/_orchestrate/<epic>.json` and prints it | 1 when `errors` is not empty |
 | `status <epic>` | Prints the saved plan with run state read again. Does not ask the tickets tool | 3 when there is no saved plan |
 | `set-status <id> <status>` | Runs the tickets tool (`set-status`). Status is `backlog`, `todo`, `doing`, `review`, `done` or `archived`. Prints `{"id","status","changed":[paths]}` | 2 for a bad status |
-| `create ...` | 0.8. Runs the tickets tool's `create` (required since 0.9) in the main checkout; the tool picks the id. Passes the body file as an absolute path. Checks the new id (`^[A-Za-z0-9][A-Za-z0-9._-]*$`, and `taskIdPattern` unless `--type epic`). Prints `{"ticket":{...,"body"},"changed":[paths]}`; the caller adds and commits `changed` on the main branch. Used by `/warden:compose` for a request without an id and to plan an epic | 2 for bad usage or a missing body file; 3 with `the ticket tool has no create` when the tool answers exit 2; 1 for a bad id or result |
+| `create ...` | 0.8. Runs the tickets tool's `create` (required since 0.9) in the main checkout; the tool picks the id. Passes the body file as an absolute path. Checks the new id (`^[A-Za-z0-9][A-Za-z0-9._-]*$`, and `taskIdPattern` unless `--type epic`). Prints `{"ticket":{...,"body"},"changed":[paths],"base":"<branch>"}`; the caller adds and commits `changed` on `base`, the branch a run of the ticket starts from. Used by `/warden:compose` for a request without an id and to plan an epic | 2 for bad usage or a missing body file; 3 with `the ticket tool has no create` when the tool answers exit 2; 1 for a bad id or result |
 
 Plan output:
 

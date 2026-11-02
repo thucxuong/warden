@@ -8,9 +8,9 @@ import { lintFlow } from "../engine/flow-lint.ts";
 import { start } from "../engine/machine.ts";
 import { showTicket } from "../engine/tickets.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
-import { branchExists, currentBranch, fetchMain, isIgnored, showFile, worktreeAdd, worktreeList } from "../lib/git.ts";
+import { branchExists, commitsAhead, currentBranch, fetchMain, isIgnored, showFile, worktreeAdd, worktreeList } from "../lib/git.ts";
 import { mainRoot, SESSIONS_DIR_NAME, taskDir, worktreeRoot, WORKTREES_DIR_NAME, worktreesDir } from "../state/paths.ts";
-import { readRun, runExists } from "../state/store.ts";
+import { chooseBase, readRun, runExists } from "../state/store.ts";
 import type { Ctx, FlowJson } from "../types.ts";
 import { readFlowFile, resolveFlowPath, TEMPLATES } from "./flow.ts";
 import { parseArgs, printJson, type ParsedArgs } from "./next.ts";
@@ -63,22 +63,29 @@ function ticketText(main: string, root: string, task: string): string {
   return `# ${ticket.id}: ${ticket.title}\n\n${ticket.body}\n`;
 }
 
-// Step 2: the run's config comes from mainRef, so .warden/ must be committed there.
-function fetchRef(main: string, mainBranch: string): string {
-  const fetched = fetchMain(main, mainBranch);
-  if (!fetched.fetched && fetched.ref !== mainBranch) {
-    console.error(`warden: fetch of ${mainBranch} failed; using the last fetched ${fetched.ref}`);
+// Step 2: the run's config comes from the base's ref, so .warden/ must be committed there.
+function fetchRef(main: string, base: string, mainBranch: string): string {
+  const fetched = fetchMain(main, base);
+  const failed = !fetched.fetched && fetched.ref !== base;
+  const config = showFile(main, fetched.ref, ".warden/warden.json");
+  if (failed && config === null && base !== mainBranch) {
+    throw new WardenError(`the main checkout is on ${base}, which is not on origin: push it (git push -u origin ${base}), or switch the main checkout to the branch to start from`);
   }
-  if (showFile(main, fetched.ref, ".warden/warden.json") === null) {
-    throw new WardenError(`commit and push .warden/ to ${mainBranch} first`);
-  }
+  if (failed) console.error(`warden: fetch of ${base} failed; using the last fetched ${fetched.ref}`);
+  if (config === null) throw new WardenError(`commit and push .warden/ to ${base} first`);
   return fetched.ref;
 }
 
+// A base other than mainBranch is a branch someone is working on, so it may hold commits the run will not start from.
+function warnUnpushed(main: string, base: string, ref: string): void {
+  const ahead = commitsAhead(main, ref, base);
+  if (ahead > 0) console.error(`warden: ${ahead} commit(s) on ${base} are not on ${ref}; this run starts from ${ref}. Push them first if it needs them`);
+}
+
 // Step 4, before any worktree exists.
-function precheck(main: string, task: string, flow: FlowJson, ref: string, mainBranch: string): void {
+function precheck(main: string, task: string, flow: FlowJson, ref: string, base: string): void {
   const stepsText = showFile(main, ref, ".warden/steps.json");
-  if (stepsText === null) throw new WardenError(`commit and push .warden/ to ${mainBranch} first`);
+  if (stepsText === null) throw new WardenError(`commit and push .warden/ to ${base} first`);
   const steps = parseStepsJson(stepsText, `${ref}:.warden/steps.json`);
   const errors = lintFlow(flow, Object.keys(steps.check));
   if (errors.length > 0) {
@@ -142,14 +149,16 @@ export async function run(args: string[], ctx: Ctx): Promise<number | void> {
   const main = mainRoot(ctx.cwd);
   checkTaskId(task, loadWardenJson(join(main, ".warden", "warden.json")).taskIdPattern);
   const { mainBranch } = loadStepsJson(join(main, ".warden", "steps.json"));
-  const ref = fetchRef(main, mainBranch);
+  const base = useWorktree ? chooseBase(main, mainBranch) : mainBranch;
+  const ref = fetchRef(main, base, mainBranch);
+  if (base !== mainBranch) warnUnpushed(main, base, ref);
 
   const branch = useWorktree ? (parsed.values["--branch"] ?? task.toLowerCase()) : currentBranch(ctx.cwd);
   if (!useWorktree && (branch === mainBranch || branch === "")) throw new WardenError("start on a ticket branch, or pass --worktree");
-  precheck(main, task, flow, ref, mainBranch);
+  precheck(main, task, flow, ref, base);
   const taskText = ticketText(main, ctx.root, task); // after precheck: an existing run is reported as such
   const worktree = useWorktree ? ensureWorktree(main, task, branch, ref) : worktreeRoot(ctx.cwd);
 
-  const response = await start(ctx, task, flow, { worktree, branch, mainRef: ref, taskText, ticket: true });
-  printJson(useWorktree ? { ...response, worktree } : response);
+  const response = await start(ctx, task, flow, { worktree, branch, mainRef: ref, base, taskText, ticket: true });
+  printJson(useWorktree ? { ...response, worktree, base } : response);
 }

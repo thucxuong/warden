@@ -24,7 +24,7 @@
 
 - No pager and no editor: pass the body from a file, set `GH_PAGER=cat`.
 - `create` twice must not open two PRs.
-- The base branch comes from `.warden/steps.json` (`mainBranch`) unless `--base` is given.
+- The base branch comes from `.warden/steps.json` (`mainBranch`) unless `--base` is given. A run can have another base: the ship step names it, so `create` must take `--base`.
 
 ## Prove it
 

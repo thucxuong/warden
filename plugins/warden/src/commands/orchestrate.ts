@@ -1,9 +1,11 @@
 // warden orchestrate plan <epic> | status <epic> | set-status <id> <status> | create ... (0.3 spec 5, 0.8).
 // Works on the main checkout.
 import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
+import { loadStepsJson } from "../config/config.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
 import { mainRoot } from "../state/paths.ts";
+import { chooseBase } from "../state/store.ts";
 import { createPlan, createTicket, ID_PATTERN, setTicketStatus, statusPlan, TICKET_STATUSES, ticketsTool } from "../engine/tickets.ts";
 import type { Ctx, TicketStatus } from "../types.ts";
 import { parseArgs, printJson } from "./next.ts";
@@ -19,7 +21,8 @@ function checkStatus(status: string): void {
   if (!TICKET_STATUSES.includes(status as TicketStatus)) throw new WardenError(`status must be one of ${TICKET_STATUSES.join(", ")}`, EXIT.USAGE);
 }
 
-// `create`: the ticket tool makes the ticket and picks its id; prints { ticket, changed }.
+// `create`: the ticket tool makes the ticket and picks its id; prints { ticket, changed, base }, base being the
+// branch a run of it starts from, so the ticket is committed there.
 function create(args: string[], ctx: Ctx): number {
   const { positional, values } = parseArgs(args, ["--title", "--type", "--body-file", "--epic", "--blocked-by"]);
   const title = values["--title"];
@@ -32,7 +35,8 @@ function create(args: string[], ctx: Ctx): number {
   const body = resolve(ctx.cwd, bodyFile);
   if (!existsSync(body)) throw new WardenError(`cannot read ${bodyFile}`, EXIT.USAGE);
   const main = mainRoot(ctx.cwd);
-  printJson(createTicket(main, ctx.root, { title, type, bodyFile: body, epic, blockedBy }));
+  const base = chooseBase(main, loadStepsJson(join(main, ".warden", "steps.json")).mainBranch);
+  printJson({ ...createTicket(main, ctx.root, { title, type, bodyFile: body, epic, blockedBy }), base });
   return EXIT.OK;
 }
 

@@ -10,7 +10,7 @@ Run this only when the user asked for it. You are the orchestrator. Each ticket 
 
 `<epic>` is the ARGUMENTS given with this skill when it is an epic id. If it is a request instead, plan it with the warden:compose "Plan an epic" section, steps 1 to 5, and stop there if planning stops. Then `<epic>` is the new epic id in every step below, never the request text.
 
-1. Work from the main checkout. If the project has a remote, run `git -C <main> pull --ff-only`. If it fails, tell the user and stop.
+1. Work from the main checkout. If the project has a remote, run `git -C <main> pull --ff-only origin <branch>`, with `<branch>` from `git -C <main> branch --show-current`. If it fails, tell the user and stop.
 2. Run `warden orchestrate plan <epic>`. If `errors` is not empty, show them and stop. If `complete` is true, go to step 9. Mention the `held` tickets and the parked ones in `backlog`.
 3. On the first plan of this conversation, show a table (wave, id, title, template, phase) and ask the user to go ahead. Ask one question and wait.
 4. For each ticket in `next`, go by its phase:
@@ -41,7 +41,7 @@ Run this only when the user asked for it. You are the orchestrator. Each ticket 
    Note: <only when the user answered a question for this ticket>
    ```
    Start it in the foreground and wait for it. If it replied `SHIPPED <id>: <warnings>`, keep the warnings for the report. Then run `warden orchestrate status <epic>`. If the ticket did not end `merged`, ship no more tickets: go to step 7.
-7. If the project has a remote, run `git -C <main> pull --ff-only` first, so the merged PRs are in the main checkout. If it fails, tell the user and stop. For each `merged` ticket, run `warden orchestrate set-status <id> done`. If `changed` is not empty and the main checkout is on `<mainBranch>`, run `git -C <main> commit -m "chore(<id>): done" -- <changed paths>`. Otherwise tell the user which files to commit. Never push main in this step.
+7. If the project has a remote, run `git -C <main> pull --ff-only origin <branch>` first, so the merged PRs are in the main checkout. If it fails, tell the user and stop. For each `merged` ticket, run `warden orchestrate set-status <id> done`. If `changed` is not empty and the main checkout is on `<mainBranch>`, run `git -C <main> commit -m "chore(<id>): done" -- <changed paths>`. Otherwise tell the user which files to commit. Never push main in this step.
 8. Show the user any warnings kept in step 6. If any ticket of the wave is `blocked`, `waiting`, `pr-open`, `no-ship`, still `running`, or asked a question: stop. Show a table with the id, the phase, the reason or question, and what the user does (type `retry <id>`, type `approve <id>`, merge the PR, or answer). Then say `Run /warden:orchestrate <epic> again to go on.` and end your turn. Otherwise go back to step 1 for the next wave. When no wave is left but `backlog` is not empty, say which tickets are parked and that the user moves them to `todo` (in the ticket system) to have them worked; the epic is not complete until they are `done` or `archived`.
 9. When complete, run `warden orchestrate set-status <epic> done` and commit `changed` as in step 7. Then run `warden clean` from the main checkout: it removes each shipped ticket's worktree and branch once merged, and prints why it kept any other. Show a final table: id, title, template, result, and the PR or merge commit.
 

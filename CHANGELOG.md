@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.11.0 — 2026-11-02
+
+A run in its own worktree now starts from the branch the main checkout is on, and ships back to it. Any branch name works, and warden chooses by itself: there is no flag and no new setting.
+
+- `warden start --worktree` and `warden orchestrate plan` use the main checkout's branch as the run's base. Review, triage, fixes, merges, `warden clean` and the site all work against it. The base stays `mainBranch` when the main checkout is on `mainBranch`, on a detached HEAD, or on a run's ticket branch. A run started without `--worktree` works as before.
+- With a remote, the run starts from `origin/<base>`. A base that is not on origin is refused, with the command to push it. Commits on the base that are not pushed yet print a warning.
+- `warden start --worktree` and `warden orchestrate create` print `base`. `/warden:compose` commits the ticket there and tells the user when the base is not the main branch.
+- During a run on another base, the project's main branch keeps its guard: pushing or merging into it follows the same rules as the base.
+- One epic has one base: `warden orchestrate plan` refuses when a ticket of the epic already ran against another branch.
+- At the ship step, `merged: true` now needs a `mergeCommit` that is on the base. This also applies to ordinary runs on the main branch.
+- `warden clean` removes a branch merged into its base or into the main branch, so it does not stay stuck after the base itself was merged and deleted.
+- Fetching a branch now also works in clones made with `--single-branch` or `--depth`.
+- The `pr` recipe says `create` must take `--base`. The upgrade note covers existing `pr` tools.
+
 ## 0.10.1 — 2026-10-21
 
 - `/warden:init set up the tools too` runs the normal setup, then goes through the common tools one at a time (verify, dev, db, e2e, pr, ci). For each one it says what it found in the repo, asks whether the project needs it and what it needs to know, then writes and proves the tools you agree to. A tracker ticket tool is written in the same session and tested with saved tracker answers only. The quick start page has the line to copy.

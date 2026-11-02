@@ -2,6 +2,7 @@
 import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeSync } from "node:fs";
 import { join } from "node:path";
 import { EXIT, WardenError } from "../lib/exit.ts";
+import { currentBranch } from "../lib/git.ts";
 import { appendJsonl, readJson, writeJsonAtomic } from "../lib/json.ts";
 import type { EventLine, EventType, RunJson, SessionLink, SessionRecord } from "../types.ts";
 import { sessionsDir, stateRoot, taskDir } from "./paths.ts";
@@ -31,6 +32,21 @@ export function readRun(main: string, task: string): RunJson {
 export function writeRun(main: string, run: RunJson): void {
   run.updatedAt = new Date().toISOString();
   writeJsonAtomic(runFile(main, run.task), run);
+}
+
+// The branch a run in its own worktree starts from and ships to: the one the main checkout is on. mainBranch when the
+// checkout is on a detached HEAD or on a run's ticket branch, which is never a base.
+export function chooseBase(main: string, mainBranch: string): string {
+  const branch = currentBranch(main);
+  if (branch === "" || branch === mainBranch) return mainBranch;
+  const ticketBranch = listTasks(main).some((task) => {
+    try {
+      return runExists(main, task) && readRun(main, task).branch === branch;
+    } catch {
+      return false;
+    }
+  });
+  return ticketBranch ? mainBranch : branch;
 }
 
 // Every task that has a state dir, in name order. Dirs starting with "_" (sessions, checks) are not tasks.

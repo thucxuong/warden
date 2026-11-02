@@ -226,7 +226,7 @@ export function waitingView(loaded: LoadedTask, mainBranch: string | null): Wait
   const kind: WaitKind = run.waiting?.kind ?? "human";
   const message = run.waiting?.reason ?? "blocked";
   const since = run.waiting?.since ?? run.updatedAt;
-  const B = mainBranch ?? "main";
+  const B = loaded.steps?.mainBranch ?? mainBranch ?? "main";
   switch (kind) {
     case "approve":
       return {

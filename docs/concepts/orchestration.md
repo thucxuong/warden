@@ -80,7 +80,7 @@ flowchart TD
 
 `/warden:orchestrate <epic>` runs this loop:
 
-1. From the main checkout, pulls the main branch (`git pull --ff-only`). If that fails, it stops.
+1. From the main checkout, pulls the branch it is on (`git pull --ff-only origin <branch>`). If that fails, it stops. When the main checkout is on another branch than the main branch, that branch takes the main branch's place for the whole epic. `warden orchestrate plan` refuses to go on when a ticket of the epic already ran against another branch.
 2. Plans the epic. It stops on `errors`. On the first plan of the conversation it shows a table (wave, id, title, template, phase) and asks you to go ahead.
 3. **Starts runs** for the `todo` tickets of the first wave, one at a time: `warden start <id> --template <template> --worktree`. Each ticket gets its own worktree, branch and run.
 4. **Works in parallel.** It starts one `warden:ticket` agent per `todo` or `running` ticket, up to 4 at a time, always in the foreground (a background agent cannot ask for permissions, so its commands would be denied). Each agent drives its run until it reaches the ship step, a fix step, or something a person must do, then replies with one line such as `READY PG-012` or `BLOCKED PG-013: <message>`.

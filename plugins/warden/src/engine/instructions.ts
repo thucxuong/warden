@@ -47,6 +47,7 @@ function stepBody(input: InstructionsInput, step: FlowStep | null): string {
       : "This step does not say brainstorm: leave `brainstorm` out of the output.");
   }
   if (run.current.type === "implement") lines.push("", `Step start: ${run.current.startSha}`);
+  if (run.current.type === "ship") lines.push("", `Base branch: ${input.steps.mainBranch}. Open the PR against it, or merge into it.`);
   if (run.current.type === "ship" && run.leftovers) {
     lines.push("", `Leftovers to put in the description: ${join(taskDir(main, run.task), run.leftovers)}`);
   }
@@ -110,6 +111,7 @@ function fixContext(input: InstructionsInput): string {
     `- scope: ${fix.scope.join(", ")}`,
     `- fixNote: ${fix.fixNote ?? "none"}`,
     `- mayMerge: ${fix.mayMerge}`,
+    `- base branch: ${input.steps.mainBranch}`,
   ];
   if (input.fixNoteText) lines.push("", `Fix note of the matched triage rule (${fix.fixNote}):`, "", input.fixNoteText.trim());
   lines.push("", fixExamples(input.run.task));

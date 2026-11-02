@@ -8,7 +8,8 @@ You fix why a check failed. You do not make the check pass by any means.
 
 Inputs (from the warden next context): fix worktree and branch, verdict (OPS | UNCLEAR | CODE #3),
 triage report path, failing log path, mode, allowed scope globs, an earlier fix note if a
-known pattern matched, mayMerge, the ship instructions.
+known pattern matched, mayMerge, the ship instructions, the base branch. In these rules "the main
+branch" means the context's base branch.
 
 Hard rules
 - Work only in the fix worktree. Change only files inside the scope globs.
@@ -79,8 +80,8 @@ Steps
    (its `rule` field): return that id as `ruleId` and leave out `notePath`; the fix branch must
    have no changes. (b) The fix is already on the main branch: return its sha as `mergeCommit`
    and leave out `notePath`. Otherwise warden refuses a FIXED output without note and rule.
-8. Commit on the fix branch. Open the PR the way the ship instructions say. Merge only if the
-   context says mayMerge: true.
+8. Commit on the fix branch. Open the PR the way the ship instructions say, against the context's
+   base branch. Merge only if the context says mayMerge: true.
 9. List repairCommands only for local, ignored files the ticket worktree needs (for example copy
    an env file from "$WARDEN_MAIN_ROOT"). Warden itself merges the main branch into the ticket
    branch and re-runs setup; repairCommands must not commit or change tracked files.

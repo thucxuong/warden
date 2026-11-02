@@ -1,7 +1,8 @@
 // PreToolUse (spec 7.4): Edit/Write and Bash tripwires, plus the session-to-task link (7.1).
 // These rules catch the common shortcut; they are not a sandbox (1.3).
 import { spawnSync } from "node:child_process";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
+import { loadStepsJson } from "../config/config.ts";
 import { editAllowed, isFixForbidden, isGateFile, matchesAny } from "../engine/catalog.ts";
 import { readRoles } from "../commands/tools.ts";
 import { gatesProven } from "../engine/proof.ts";
@@ -283,9 +284,20 @@ function runForDirs(main: string, dirs: string[]): RunJson | null {
   return null;
 }
 
-// `git merge` into mainBranch: the command switches to it, or the merge runs in a checkout that is on it.
-function mergesIntoMain(cmd: string, mainBranch: string, cwd: string): boolean {
-  const switches = new RegExp(GIT_PREFIX + String.raw`(?:checkout|switch)\s+(?:-\S+\s+)*` + escapeRegex(mainBranch) + String.raw`(?![\w./-])`);
+// The branches a run reaches only by its rules: its base (the snapshot's mainBranch) and the project's main branch.
+function guardedBranches(main: string, run: RunJson): string[] {
+  const base = runSteps(main, run).mainBranch;
+  try {
+    return [...new Set([base, loadStepsJson(join(main, ".warden", "steps.json")).mainBranch])];
+  } catch {
+    return [base];
+  }
+}
+
+// `git merge` into a guarded branch: the command switches to it, or the merge runs in a checkout that is on it.
+function mergesIntoMain(cmd: string, branches: string[], cwd: string): boolean {
+  const names = branches.map(escapeRegex).join("|");
+  const switches = new RegExp(GIT_PREFIX + String.raw`(?:checkout|switch)\s+(?:-\S+\s+)*(?:` + names + String.raw`)(?![\w./-])`);
   let here = cwd;
   for (const part of splitCommands(cmd)) {
     here = cdTarget(part, here) ?? here;
@@ -293,20 +305,20 @@ function mergesIntoMain(cmd: string, mainBranch: string, cwd: string): boolean {
       if (switches.test(cmd)) return true;
       const dashC = /\s-C\s+(\S+)/.exec(merge[0]);
       const dir = dashC ? resolve(here, unquote(dashC[1]!)) : here;
-      if (branchAt(dir) === mainBranch) return true;
+      if (branches.includes(branchAt(dir))) return true;
     }
   }
   return false;
 }
 
-// A `git push` whose refspec lands on mainBranch: `<src>:main`, `HEAD:refs/heads/main`, or `main` itself.
-function pushesToMain(cmd: string, mainBranch: string): boolean {
+// A `git push` whose refspec lands on a guarded branch: `<src>:main`, `HEAD:refs/heads/main`, or `main` itself.
+function pushesToMain(cmd: string, branches: string[]): boolean {
   const push = new RegExp(GIT_PREFIX + String.raw`push\b(.*)$`);
   for (const part of splitCommands(cmd)) {
     const args = push.exec(part)?.[1]?.trim().split(/\s+/) ?? [];
     for (const arg of args.filter((a) => a !== "" && !a.startsWith("-")).map(unquote)) {
       const dst = arg.replace(/^\+/, "").split(":").pop();
-      if (dst === mainBranch || dst === `refs/heads/${mainBranch}`) return true;
+      if (dst !== undefined && branches.includes(dst.replace(/^refs\/heads\//, ""))) return true;
     }
   }
   return false;
@@ -327,13 +339,13 @@ function prToolCommand(main: string, subs: string): RegExp {
   return new RegExp(String.raw`(?:^|[;&|(\s])(?:[\w./-]*\/)?(?:warden|cli\.ts)\s+tools\s+(?:${[...names].map(escapeRegex).join("|")})\s+(?:${subs})\b`);
 }
 
-function isPushPrOrMerge(cmd: string, mainBranch: string, cwd: string, main: string): boolean {
+function isPushPrOrMerge(cmd: string, branches: string[], cwd: string, main: string): boolean {
   return GIT_PUSH.test(cmd) || PR_COMMANDS.some((re) => re.test(cmd)) || prToolCommand(main, "create|merge").test(cmd)
-    || mergesIntoMain(cmd, mainBranch, cwd);
+    || mergesIntoMain(cmd, branches, cwd);
 }
 
-function isMerge(cmd: string, mainBranch: string, cwd: string, main: string): boolean {
-  return MERGE_COMMANDS.some((re) => re.test(cmd)) || prToolCommand(main, "merge").test(cmd) || mergesIntoMain(cmd, mainBranch, cwd);
+function isMerge(cmd: string, branches: string[], cwd: string, main: string): boolean {
+  return MERGE_COMMANDS.some((re) => re.test(cmd)) || prToolCommand(main, "merge").test(cmd) || mergesIntoMain(cmd, branches, cwd);
 }
 
 // B3: a pipeline that writes and names state, history or (while a run is live) gate config.
@@ -438,12 +450,12 @@ function bashDecision(call: HookCall, cmd: string, run: RunJson | null): string 
   }
 
   if (!run) return null;
-  const mainBranch = runSteps(main, run).mainBranch;
-  if (!isPushPrOrMerge(cmd, mainBranch, ctx.cwd, main)) return null;
+  const branches = guardedBranches(main, run);
+  if (!isPushPrOrMerge(cmd, branches, ctx.cwd, main)) return null;
 
   if (run.current.type === "fix") {
     const branch = run.fix?.branch;
-    const merging = isMerge(cmd, mainBranch, ctx.cwd, main) || pushesToMain(cmd, mainBranch);
+    const merging = isMerge(cmd, branches, ctx.cwd, main) || pushesToMain(cmd, branches);
     const allowed = fixer && branch !== undefined && cmd.includes(branch) && (!merging || ctx.env.PROJECT_AGENT === "1");
     return allowed ? null : "only the warden:fixer subagent pushes the fix branch";
   }

@@ -83,6 +83,7 @@ describe("orchestrate", () => {
     const made = warden(cp, ["orchestrate", "create", "--title", "Seventh: last", "--type", "chore", "--body-file", join(cp.base, "body.md"), "--epic", "T-100", "--blocked-by", "T-006"]);
     expect(made.code, made.err).toBe(0);
     expect(made.json).toEqual({
+      base: "main",
       ticket: { id: "T-101", title: "Seventh: last", status: "todo", blocked_by: ["T-006"], type: "chore", epic: "T-100", body: "Add a seventh step." },
       changed: ["backlog/T-101.md"],
     });

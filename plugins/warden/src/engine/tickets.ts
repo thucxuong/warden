@@ -8,7 +8,7 @@ import { EXIT, WardenError } from "../lib/exit.ts";
 import { readJson, writeJsonAtomic } from "../lib/json.ts";
 import { killGroup, pathWithBin } from "../lib/proc.ts";
 import { historyDir, mainRef, stateRoot, taskDir } from "../state/paths.ts";
-import { readEvents, readRun, runExists } from "../state/store.ts";
+import { chooseBase, readEvents, readRun, runExists } from "../state/store.ts";
 import type {
   DagTicket, FlowJson, OrchestratePlan, OrchestrateTicket, RunJson, ShipOutput, TicketDetail, TicketPhase,
   TicketRun, TicketStatus, TicketTemplate,
@@ -383,17 +383,30 @@ export function cacheFile(main: string, epic: string): string {
   return join(cacheDir(main), `${epic}.json`);
 }
 
+// A ticket of an epic that already ran against another base: the rest of the epic would miss its work.
+function refuseOtherBase(main: string, id: string, base: string): void {
+  let other: string;
+  try {
+    other = loadStepsJson(join(taskDir(main, id), "steps.json")).mainBranch;
+  } catch {
+    return; // no run, or a run without a snapshot
+  }
+  if (other !== base) throw new WardenError(`${id} works against ${other}, but the main checkout is on ${base}: switch it back to ${other}, so one epic has one base`);
+}
+
 // `warden orchestrate plan <epic>`: ask the tool, build, overlay, write the cache.
 export function createPlan(main: string, root: string, epic: string): OrchestratePlan {
   const tool = ticketsTool(main);
   const children = runTicketTool(main, root, ["dag", epic], DAG_TIMEOUT_SEC);
-  const mainBranch = loadStepsJson(join(main, ".warden", "steps.json")).mainBranch;
-  const plan = refreshPlan(main, buildPlan({
-    epic, tool, mainBranch, mainRef: mainRef(main, mainBranch),
+  const base = chooseBase(main, loadStepsJson(join(main, ".warden", "steps.json")).mainBranch);
+  const built = buildPlan({
+    epic, tool, mainBranch: base, mainRef: mainRef(main, base),
     taskIdPattern: loadWardenJson(join(main, ".warden", "warden.json")).taskIdPattern,
     children,
     allTickets: () => runTicketTool(main, root, ["dag"], DAG_TIMEOUT_SEC),
-  }));
+  });
+  for (const { id } of built.tickets) refuseOtherBase(main, id, base);
+  const plan = refreshPlan(main, built);
   writeJsonAtomic(cacheFile(main, epic), plan);
   return plan;
 }

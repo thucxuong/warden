@@ -6,7 +6,7 @@ Every field of `.warden/steps.json`: what it does, its default and how warden ch
 
 ## When warden reads it
 
-- `warden start` takes a copy (a snapshot) from the main branch (`origin/<mainBranch>` when there is a remote) and keeps it in `.warden/state/<task>/steps.json`. The run uses that copy until it ends. Changing `steps.json` later does not change a running task.
+- `warden start` takes a copy (a snapshot) from the run's base branch (`origin/<base>` when there is a remote; see [`warden start`](cli.md#warden-start)) and keeps it in `.warden/state/<task>/steps.json`, with `mainBranch` set to the base. The run uses that copy until it ends. Changing `steps.json` later does not change a running task.
 - While any run is live, the hooks refuse edits to `.warden/steps.json` (see [hooks](hooks.md)).
 - `warden flow check` reads the main checkout's copy to know the check set names.
 
@@ -50,7 +50,7 @@ Every field of `.warden/steps.json`: what it does, its default and how warden ch
 | Field | Type | Required | Default | Rule |
 |---|---|---|---|---|
 | `schema` | number | yes | — | Must be `1` |
-| `mainBranch` | string | yes | — | Not empty. The branch that holds the truth, for example `main`. warden compares with `origin/<mainBranch>` when a remote named `origin` exists, else with the local branch |
+| `mainBranch` | string | yes | — | Not empty. The branch that holds the truth, for example `main`. warden compares with `origin/<mainBranch>` when a remote named `origin` exists, else with the local branch. A run in its own worktree uses the branch the main checkout is on instead, when that is another branch (see [`warden start`](cli.md#warden-start)) |
 | `setup` | object | yes | — | See [setup](#setup) |
 | `check` | object | yes | — | See [check](#check) |
 | `agent` | object | no | `{}` | See [agent](#agent) |

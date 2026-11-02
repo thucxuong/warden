@@ -355,6 +355,17 @@ function evidenceImplement(run: RunJson, o: Obj, committed: string[], errors: st
   }
 }
 
+// On the fetched base, or on the local one when the merge is not pushed yet. A ref that does not resolve holds nothing.
+function onBase(input: OutputCheckInput, sha: string, ref: string): boolean {
+  return [ref, input.steps.mainBranch].some((rev) => {
+    try {
+      return isAncestor(input.main, sha, rev);
+    } catch {
+      return false;
+    }
+  });
+}
+
 function evidenceShip(input: OutputCheckInput, o: Obj, errors: string[]): void {
   const { run, flow } = input;
   // The agent may have merged and removed the worktree before handing in; then only the merge evidence is checked.
@@ -372,8 +383,9 @@ function evidenceShip(input: OutputCheckInput, o: Obj, errors: string[]): void {
   if (o.merged === true) {
     if (typeof o.mergeCommit !== "string") errors.push("mergeCommit: required when merged");
     else {
-      input.fetchMainRef();
+      const ref = input.fetchMainRef();
       if (!catFileExists(input.main, o.mergeCommit)) errors.push(`mergeCommit: ${o.mergeCommit} not found`);
+      else if (!onBase(input, o.mergeCommit, ref)) errors.push(`mergeCommit: ${o.mergeCommit} is not on ${input.steps.mainBranch}`);
     }
   }
   if (run.leftovers && !(o.description as string).includes("Unresolved review findings")) {

@@ -105,7 +105,7 @@ Then run `/warden:orchestrate PG-100` again. See [Blocked and waiting runs](bloc
 ## Good to know
 
 - Run it only when you ask for it. A new session reminds you when an orchestration stopped with tickets left: `warden: orchestration of PG-100 stopped with 2 tickets left. ...`
-- If the project has a remote, the agent runs `git pull --ff-only` on the main checkout before each wave and after merges. If that fails, it stops and tells you.
+- If the project has a remote, the agent runs `git pull --ff-only origin <branch>` on the main checkout before each wave and after merges. If that fails, it stops and tells you.
 - It never pushes your main branch (except the new tickets, when you give it a request instead of an epic id and it plans the epic first), never edits files in a ticket worktree and never does a ticket's steps itself.
 - A ticket held by an open ticket outside the epic stays in `held` until that ticket is done.
 - Each ticket's worktree is `<your repo>/.worktrees/<id>` and its branch is the id in lower case, for example `pg-102`.

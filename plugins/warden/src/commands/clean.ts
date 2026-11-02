@@ -7,7 +7,7 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 import { loadStepsJson } from "../config/config.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
 import { deleteBranch, fetchMain, isAncestor, porcelain, worktreeList, worktreeRemoveClean, type WorktreeInfo } from "../lib/git.ts";
-import { legacyWorktreesDir, mainRef, mainRoot, worktreesDir } from "../state/paths.ts";
+import { legacyWorktreesDir, mainRef, mainRoot, taskDir, worktreesDir } from "../state/paths.ts";
 import { listTasks, readRun, runExists } from "../state/store.ts";
 import type { Ctx, RunJson } from "../types.ts";
 import { parseArgs } from "./next.ts";
@@ -68,6 +68,15 @@ function leftovers(main: string): { found: Leftover[]; worktrees: WorktreeInfo[]
   return { found: candidates.filter((l) => worktrees.some((w) => real(w.path) === real(l.worktree))), worktrees };
 }
 
+// The branch a task ships to, from its run's snapshot; the project's main branch when that does not load.
+function baseOf(main: string, task: string, mainBranch: string): string {
+  try {
+    return loadStepsJson(join(taskDir(main, task), "steps.json")).mainBranch;
+  } catch {
+    return mainBranch;
+  }
+}
+
 // Full refs, so a tag with the same name as the branch never decides the merge check.
 function fullRef(ref: string): string {
   return ref.startsWith("origin/") ? `refs/remotes/${ref}` : `refs/heads/${ref}`;
@@ -83,13 +92,13 @@ function merged(main: string, branch: string, ref: string): boolean {
 
 // Why a leftover stays, or null when it can go. cwd null: do not check where the caller is. The cheap checks come
 // first, so session start runs git status only in worktrees that are already merged.
-function why(leftover: Leftover, worktrees: WorktreeInfo[], ref: string, main: string, cwd: string | null): string | null {
+function why(leftover: Leftover, worktrees: WorktreeInfo[], ref: string, mainBranchRef: string, main: string, cwd: string | null): string | null {
   const { worktree, branch } = leftover;
   const info = worktrees.find((w) => real(w.path) === real(worktree));
   const checkedOut = info?.branch ?? null;
   if (checkedOut !== branch) return `it is on ${checkedOut ?? "a detached HEAD"}, not on ${branch}`;
   if (info?.locked) return `it is locked (git worktree unlock ${worktree} to allow removal)`;
-  if (!leftover.archived && !merged(main, branch, ref)) return `${branch} is not merged into ${ref} (a pull request still open?)`;
+  if (!leftover.archived && !merged(main, branch, ref) && !merged(main, branch, mainBranchRef)) return `${branch} is not merged into ${ref} (a pull request still open?)`;
   if (cwd !== null && isInside(worktree, cwd)) return "the current directory is inside it; run warden clean from the main checkout";
   const dirty = porcelain(worktree);
   if (dirty.length > 0) return `uncommitted changes (${dirty.length} file${dirty.length === 1 ? "" : "s"}, first ${dirty[0]})`;
@@ -101,8 +110,8 @@ function why(leftover: Leftover, worktrees: WorktreeInfo[], ref: string, main: s
 export function removable(main: string): Leftover[] {
   const { found, worktrees } = leftovers(main);
   if (found.length === 0) return [];
-  const ref = mainRef(main, loadStepsJson(join(main, ".warden", "steps.json")).mainBranch);
-  return found.filter((l) => why(l, worktrees, ref, main, null) === null);
+  const { mainBranch } = loadStepsJson(join(main, ".warden", "steps.json"));
+  return found.filter((l) => why(l, worktrees, mainRef(main, baseOf(main, l.task, mainBranch)), mainRef(main, mainBranch), main, null) === null);
 }
 
 export function leftoverLine(main: string): string | null {
@@ -137,10 +146,17 @@ export async function run(args: string[], ctx: Ctx): Promise<number> {
     return EXIT.OK;
   }
   const { mainBranch } = loadStepsJson(join(main, ".warden", "steps.json"));
-  const fetched = fetchMain(main, mainBranch);
-  if (!fetched.fetched && fetched.ref !== mainBranch) console.error(`warden: fetch of ${mainBranch} failed; using the last fetched ${fetched.ref}`);
+  const refs = new Map<string, string>();
+  const refOf = (base: string): string => {
+    const known = refs.get(base);
+    if (known !== undefined) return known;
+    const fetched = fetchMain(main, base);
+    if (!fetched.fetched && fetched.ref !== base) console.error(`warden: fetch of ${base} failed; using the last fetched ${fetched.ref}`);
+    refs.set(base, fetched.ref);
+    return fetched.ref;
+  };
   for (const leftover of found) {
-    const keep = why(leftover, worktrees, fetched.ref, main, ctx.cwd);
+    const keep = why(leftover, worktrees, refOf(baseOf(main, leftover.task, mainBranch)), refOf(mainBranch), main, ctx.cwd);
     if (keep !== null) console.log(`${leftover.task}: kept ${leftover.worktree}: ${keep}`);
     else if (dryRun) console.log(`${leftover.task}: would remove ${leftover.worktree} and branch ${leftover.branch}`);
     else console.log(`${leftover.task}: ${remove(main, leftover)}`);

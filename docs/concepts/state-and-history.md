@@ -21,6 +21,7 @@ A worktree is a second working folder for the same git repo, on its own branch. 
 - `warden start <task> --worktree` creates `<repo>/.worktrees/<task>`, inside the main checkout. Git must ignore that folder: `/warden:init` adds `.worktrees/` to `.gitignore`, and `warden start --worktree` refuses while git does not ignore the folder (add the line and commit it).
 - The branch is the task id in lowercase (`PG-012` becomes `pg-012`), or the name given with `--branch`.
 - An existing worktree for the task on the same branch is reused.
+- A run with `--worktree` starts from the branch the main checkout is on, and ships to it. See [`warden start`](../reference/cli.md#warden-start).
 - Without `--worktree`, the run uses the folder and branch you are on. That branch must not be the main branch.
 - Fix branches get their own worktree, `<task>-fix-<n>`, in the same folder. Triage's clean copies, `<task>-clean-<n>`, go there too and are removed after each use.
 - After a task ships, `warden clean` removes its worktree and branch (see [below](#removing-finished-worktrees)).
@@ -39,7 +40,7 @@ One folder per task, plus a few shared folders that start with `_`.
 |---|---|
 | `<task>/run.json` | The run: status, current step, counters, limits, proofs, what it waits for, the running gate, the open fix. |
 | `<task>/events.jsonl` | Every event, one JSON line each, numbered: `step.started`, `output.accepted`, `gate.passed`, `triage.verdict`, `hook.denied` and more. |
-| `<task>/flow.json`, `<task>/steps.json` | The copies of the flow and `steps.json` the run uses. `steps.json` is read from the main branch at start. |
+| `<task>/flow.json`, `<task>/steps.json` | The copies of the flow and `steps.json` the run uses. `steps.json` is read from the run's base branch at start. |
 | `<task>/task.md`, `<task>/plan.md` | The task text, and the plan once the plan step is accepted. |
 | `<task>/outputs/<n>-<step>.json` | Every hand-in, accepted or not. |
 | `<task>/checks/<n>/<name>.log` | The log of each check command, per check run. |
@@ -119,7 +120,7 @@ The task's own worktree and branch stay, so a later `warden start` reuses them. 
 
 ## Removing finished worktrees
 
-`warden clean` looks at each shipped or archived task that still has its worktree, in `.worktrees/` or next to the repo from before 0.8. It removes the worktree and deletes the branch when the worktree has no uncommitted changes and, for a shipped task, the branch is merged into the main branch. An archived task's branch goes unmerged. Otherwise it keeps them and prints why. It never touches a live run, a run in the main checkout, or a worktree warden did not make. `--dry-run` only lists. See [CLI](../reference/cli.md#warden-clean).
+`warden clean` looks at each shipped or archived task that still has its worktree, in `.worktrees/` or next to the repo from before 0.8. It removes the worktree and deletes the branch when the worktree has no uncommitted changes and, for a shipped task, the branch is merged into the run's base branch (the main branch, unless the run started from another one). An archived task's branch goes unmerged. Otherwise it keeps them and prints why. It never touches a live run, a run in the main checkout, or a worktree warden did not make. `--dry-run` only lists. See [CLI](../reference/cli.md#warden-clean).
 
 ## See also
 

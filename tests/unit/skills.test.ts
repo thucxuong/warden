@@ -105,6 +105,13 @@ describe("skills", () => {
     for (const agent of ["fixer", "ticket"]) expect(read(join(pluginRoot, "agents", `${agent}.md`))).not.toMatch(/--text\b|--ticket\b/);
   });
 
+  test("0.11: orchestrate pulls the branch by name, since a base branch may have no upstream; compose takes the base from create", () => {
+    const orchestrate = read(join(skillsDir, "orchestrate", "SKILL.md"));
+    expect(orchestrate).not.toMatch(/pull --ff-only`/);
+    expect(orchestrate).toContain("git -C <main> pull --ff-only origin <branch>");
+    expect(read(join(skillsDir, "compose", "SKILL.md"))).toContain("It prints `{ ticket, changed, base }`");
+  });
+
   test("the plan skill keeps the key parts of the breakdown", () => {
     const text = read(join(skillsDir, "plan", "SKILL.md"));
     for (const part of ["Factor Pool", "Existing Factors", "Reuse ladder", "Completion gate", "PlanOutput"]) {

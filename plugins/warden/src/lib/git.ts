@@ -149,6 +149,12 @@ export function identity(cwd: string): { name: string; email: string } {
   return { name: read("user.name"), email: read("user.email") };
 }
 
+// How many commits branch has that ref lacks. 0 when either does not resolve.
+export function commitsAhead(cwd: string, ref: string, branch: string): number {
+  const result = git(cwd, ["rev-list", "--count", `${ref}..${branch}`]);
+  return result.code === 0 ? Number(result.stdout.trim()) : 0;
+}
+
 export function branchExists(cwd: string, branch: string): boolean {
   return git(cwd, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]).code === 0;
 }
@@ -199,11 +205,12 @@ export function worktreeList(main: string): WorktreeInfo[] {
 
 // Fetches origin/<mainBranch> (30 s timeout) when an origin remote exists. On a fetch failure
 // the ref is still origin/<mainBranch>, i.e. the last fetched state, and fetched is false.
+// The full refspec updates origin/<mainBranch> also in a clone made with --single-branch or --depth.
 export function fetchMain(main: string, mainBranch: string): { ref: string; fetched: boolean } {
   if (git(main, ["remote", "get-url", "origin"]).code !== 0) {
     return { ref: mainBranch, fetched: false };
   }
-  const result = git(main, ["fetch", "origin", mainBranch], FETCH_TIMEOUT_MS);
+  const result = git(main, ["fetch", "origin", `+refs/heads/${mainBranch}:refs/remotes/origin/${mainBranch}`], FETCH_TIMEOUT_MS);
   return { ref: `origin/${mainBranch}`, fetched: result.code === 0 };
 }
 

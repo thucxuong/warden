@@ -123,7 +123,7 @@ Rules, in order. The first match decides. warden reads the command text; a hered
 | B2 | Mentions `PROJECT_AGENT`, `WARDEN_ROLE`, `WARDEN_CLAUDE_BIN`, `WARDEN_DATA`, `WARDEN_ROOT`, `WARDEN_TEST_MODE`, `CLAUDE_PLUGIN_ROOT` or `CLAUDE_PLUGIN_DATA`; or runs `claude -p` / `claude --print`; or runs `script` together with `warden` | Deny: `this command changes how warden itself runs; ask the user to do it` |
 | B3 | Writes (with `>`, `tee`, `rm`, `mv`, `cp`, `sed -i`, `git rm`, `git checkout`, `git restore` and similar) and names `.warden/state` or `.warden/history`; or, while a run is live, names a gate config file (`steps.json`, `warden.json`, `triage-rules.json`, `flows`, `tools/roles.json` under `.warden/`). The fixer may write config files inside its own fix worktree | Deny: `state, history and gate files are written by the engine only` |
 | B4 | A subagent runs `warden ask` | Deny: `a subagent cannot ask the user; stop and give the question back to the caller (a ticket agent replies ASK <Task>: <question>)` |
-| B5 | Push, PR or merge (list below) while the run is at a fix step | Allowed only for the `warden:fixer` agent, and only when the command names the fix branch. A merge (or a push to the main branch) also needs `PROJECT_AGENT=1` in Claude Code's environment. Else deny: `only the warden:fixer subagent pushes the fix branch` |
+| B5 | Push, PR or merge (list below) while the run is at a fix step | Allowed only for the `warden:fixer` agent, and only when the command names the fix branch. A merge (or a push to the main branch or the run's base branch) also needs `PROJECT_AGENT=1` in Claude Code's environment. Else deny: `only the warden:fixer subagent pushes the fix branch` |
 | B6 | Push, PR or merge at any other step | Allowed only at the ship step (or after the run shipped or is done) when all gates are proven for HEAD. Else deny: `push/PR/merge is allowed only in the ship step after all gates pass for HEAD (<task> at <step>)` |
 
 B5 and B6 apply only when the call is about a run (the session's run, or the run of a folder the command `cd`s into or names with `git -C`). Outside any run, push and merge are not checked.
@@ -136,7 +136,7 @@ What counts as push, PR or merge:
 - `glab mr create`, `glab mr merge`
 - `<path>/pr.ts create|merge`
 - `warden tools <name> create|merge`, where `<name>` is `pr`, the tool the `pr` role names, or another role that names that tool
-- `git merge` into the main branch: the command switches to the main branch, or runs in a checkout that is on it
+- `git merge` into the main branch or the run's base branch: the command switches to it, or runs in a checkout that is on it
 
 ### Session links
 

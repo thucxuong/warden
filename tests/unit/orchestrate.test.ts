@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { sh as git } from "../helpers/repo.ts";
 import { base, cli, installCommandsFixture, main, wt } from "../helpers/commands-fixture.ts";
 import { barrel, writeRoles, writeTools } from "../helpers/tools-fixture.ts";
 
@@ -46,6 +47,25 @@ function setTickets(on: boolean): void {
 }
 
 describe("orchestrate plan", () => {
+  test("an epic with a run on another base is refused, so one epic never mixes bases", () => {
+    git(main, "checkout", "-q", "-b", "f2");
+    expect(cli(["start", "T-1", "--template", "do", "--worktree"]).code).toBe(0);
+    git(main, "checkout", "-q", "main");
+    const r = cli(["orchestrate", "plan", "E-1"]);
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("T-1 works against f2, but the main checkout is on main: switch it back to f2");
+    git(main, "checkout", "-q", "f2");
+    expect(cli(["orchestrate", "plan", "E-1"]).code).toBe(0);
+  });
+
+  test("the plan's branch is the one the main checkout is on", () => {
+    git(main, "checkout", "-q", "-b", "f2");
+    const r = cli(["orchestrate", "plan", "E-1"]);
+    expect(r.code).toBe(0);
+    expect(r.json.mainBranch).toBe("f2");
+    expect(r.json.mainRef).toBe("f2");
+  });
+
   test("writes the cache, prints the plan, one dag call, exit 0", () => {
     const r = cli(["orchestrate", "plan", "E-1"]);
     expect(r.code).toBe(0);
@@ -155,7 +175,7 @@ describe("orchestrate create (0.8)", () => {
     put("create.json", created("T-7"));
     const r = cli(["orchestrate", "create", "--title", "Dark mode", "--type", "feature", "--body-file", body(), "--epic", "E-1", "--blocked-by", "T-1, T-2"]);
     expect(r.code).toBe(0);
-    expect(r.json).toEqual(created("T-7"));
+    expect(r.json).toEqual({ ...created("T-7"), base: "main" });
     expect(calls()).toEqual([`create --title Dark mode --type feature --body-file ${body()} --epic E-1 --blocked-by T-1,T-2`]);
   });
 
