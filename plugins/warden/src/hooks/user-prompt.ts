@@ -39,6 +39,16 @@ function contextJson(text: string): string {
   return JSON.stringify({ hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: text } });
 }
 
+// A message that is no answer, while the session's run (or the only live run) waits at an approve step: say so, so
+// nobody takes it for one.
+function stillWaiting(call: HookCall, resolved: RunJson | null, prompt: string): string | null {
+  if (prompt.trimStart().startsWith("/")) return null;
+  const live = resolved ? [resolved] : liveRuns(call.main);
+  const run = live.length === 1 ? live[0]! : null;
+  if (run?.waiting?.kind !== "approve") return null;
+  return contextJson(`warden: ${run.task} is still waiting at ${run.current.id}: this message did not approve or reject it. Answer anything else it asks, then tell the user to type "approve" alone, or "reject: <why>".`);
+}
+
 export async function userPrompt(call: HookCall): Promise<string | null> {
   recordSession(call);
   const resolved = runForSession(call);
@@ -50,7 +60,7 @@ export async function userPrompt(call: HookCall): Promise<string | null> {
   const action = parsePrompt(prompt, taskIdPattern);
   const asked = await answerQuestion(call, resolved, prompt, taskIdPattern, action);
   if (asked) return asked;
-  if (!action) return null;
+  if (!action) return stillWaiting(call, resolved, prompt);
   // Step 3: a new session in the main checkout has no link and no worktree cwd. With exactly one live
   // run, that run is the one SessionStart told the user about. Step 4: with several, the only one in
   // the state the action needs.
@@ -138,6 +148,7 @@ async function act(call: HookCall, action: PromptAction, run: RunJson): Promise<
   switch (action.word) {
     case "approve":
       if (!waitingForApprove) return `warden: ${task} is not waiting for approve (status ${run.status}).`;
+      if (action.text !== null) return `warden: ${task} is still waiting at ${at}: "approve" takes no text, so this did not approve it. Tell the user to type "approve" alone, or "reject: <why>".`;
       await approve(ctx, task, call.spawnWorker);
       return `warden: the user approved ${task} at ${at}. ${RUN_NEXT}`;
     case "reject":

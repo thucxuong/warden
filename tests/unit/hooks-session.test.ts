@@ -326,6 +326,32 @@ describe("UserPromptSubmit", () => {
     expect(r.routeBack).toMatchObject({ kind: "rejected", reason: "the plan misses the API" });
   });
 
+  test("approve with text is not an approval: the run waits and warden says so", async () => {
+    for (const text of ["approve: no wait, I do not approve", `approve ${ID}: only if you change the API`]) {
+      expect(context(await prompt(text))).toBe(
+        `warden: ${ID} is still waiting at approve: "approve" takes no text, so this did not approve it. Tell the user to type "approve" alone, or "reject: <why>".`,
+      );
+    }
+    expect(run(ID).status).toBe("waiting");
+    expect(readEvents(main, ID).map((e) => e.type)).not.toContain("approve.granted");
+  });
+
+  test("a message that is no answer leaves the approve step waiting, and warden says so", async () => {
+    for (const text of ["yes", "approved", "approve but change the API", "reject because of the API", "I would approve, but then I would not"]) {
+      expect(context(await prompt(text))).toBe(
+        `warden: ${ID} is still waiting at approve: this message did not approve or reject it. Answer anything else it asks, then tell the user to type "approve" alone, or "reject: <why>".`,
+      );
+    }
+    expect(run(ID).status).toBe("waiting");
+    expect(await prompt("/warden:guide")).toBeNull();
+  });
+
+  test("no such line once no approve step waits", async () => {
+    await prompt("approve");
+    expect(run(ID).status).not.toBe("waiting");
+    expect(await prompt("yes")).toBeNull();
+  });
+
   test("retry clears a block; retry in another state is refused", async () => {
     expect(context(await prompt("retry"))).toBe(`warden: ${ID} is not blocked or waiting for a fix merge (status waiting).`);
     patchRun((r) => {
@@ -361,8 +387,9 @@ describe("UserPromptSubmit", () => {
     expect(readSessionRecord(main, "S8")?.task).toBe(ID);
   });
 
-  test("other prompts pass through untouched, and the session is linked", async () => {
-    expect(await prompt("please continue")).toBeNull();
+  test("other prompts are not blocked or taken for an answer, and the session is linked", async () => {
+    expect(context(await prompt("please continue"))).toContain("this message did not approve or reject it");
+    expect(run(ID).status).toBe("waiting");
     expect(readSessionLinks(main, ID).map((l) => l.sessionId)).toEqual(["S1"]);
     expect(readSessionRecord(main, "S1")?.transcriptPath).toBe("/tmp/S1.jsonl");
   });

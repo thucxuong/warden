@@ -68,7 +68,7 @@ The prompt must be one of these forms (case does not matter):
 
 | You type | What happens |
 |---|---|
-| `approve` | Approves the run waiting at an approve step |
+| `approve` | Approves the run waiting at an approve step. It must stand alone: `approve: <text>` does not approve. To set a condition, use `reject: <what to change>` |
 | `approve PG-012` | The same, for that task |
 | `reject: <why>` or `reject PG-012: <why>` | Sends the run back to the latest implement step before the approve step (or the step just before it), with your reason |
 | `retry` or `retry PG-012` | Same as `warden retry`: goes on after a block or a fix merge |
@@ -83,6 +83,8 @@ The agent then gets one of these lines in its context:
 | Rejected | `warden: the user rejected <task> at <step>: <why>. Run: warden next. ...` |
 | Retried | `warden: the user retried <task> at <step>. Run: warden next. ...` |
 | `reject` without a reason | `warden: reject needs a reason; the user should type "reject: <why>".` |
+| `approve` with text | `warden: <task> is still waiting at <step>: "approve" takes no text, so this did not approve it. ...` |
+| Any other message while the session's run, or the only live run, waits at an approve step (not a slash command) | `warden: <task> is still waiting at <step>: this message did not approve or reject it. ...` |
 | Wrong state | `warden: <task> is not waiting for approve (status <s>).` or `warden: <task> is not blocked or waiting for a fix merge (status <s>).` |
 
 ### Answers to `warden ask`

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.1 — 2026-11-02
+
+- `approve: <text>` no longer approves. Before, warden approved and dropped the text, so `approve: only if you change the schema` went through with no condition. Now the run keeps waiting and warden says `approve` takes no text. To set a condition, use `reject: <what to change>`.
+- While a run waits at an approve step, any other message that is not a slash command gets a line saying it did not approve or reject the run, so `yes` or `approved` is not taken for an answer.
+- A ticket whose work is already done no longer gets an invented change just to pass the step. The work skill has the agent ask the user and archive the ticket if they agree. A ticket agent stops with `ASK`.
+
 ## 0.11.0 — 2026-11-02
 
 A run in its own worktree now starts from the branch the main checkout is on, and ships back to it. Any branch name works, and warden chooses by itself: there is no flag and no new setting.

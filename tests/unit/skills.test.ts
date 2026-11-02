@@ -112,6 +112,11 @@ describe("skills", () => {
     expect(read(join(skillsDir, "compose", "SKILL.md"))).toContain("It prints `{ ticket, changed, base }`");
   });
 
+  test("0.11.1: a ticket with nothing left to do goes to a person, with no invented change", () => {
+    expect(read(join(skillsDir, "work", "SKILL.md"))).toContain("do not invent a change");
+    expect(read(join(pluginRoot, "agents", "ticket.md"))).toContain("do not invent a change");
+  });
+
   test("the plan skill keeps the key parts of the breakdown", () => {
     const text = read(join(skillsDir, "plan", "SKILL.md"));
     for (const part of ["Factor Pool", "Existing Factors", "Reuse ladder", "Completion gate", "PlanOutput"]) {

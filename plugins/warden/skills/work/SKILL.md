@@ -42,6 +42,7 @@ Rules
 - Never write files under `.warden/state` or `.warden/history`.
 - Never push, open a pull request or merge outside the ship step. The one exception: the push of new tickets in warden:compose "No task id" and "Plan an epic".
 - Never set `PROJECT_AGENT` or any other `WARDEN_*` variable on a command. Never start a nested `claude -p`.
+- When the ticket's work is already done and there is nothing to change, do not invent a change to get through the step. Run `warden ask` with what you found and whether to close the ticket. If the user agrees, archive it as the next rule says.
 - When the user decides a ticket with a live run will not be done (stale, a duplicate, no longer wanted), run `warden archive <id> --reason "<why>"` and do what its `warnings` say. Never archive on your own, and never set such a ticket to `archived` with the ticket tool alone: the run would stay live.
 - When something surprises you, add a line to `.warden/knowledge/<area>.md`.
 - When you make a choice, write `.warden/decisions/NNNN-<slug>.md`. Never edit an old decision. Write a new one that replaces it.

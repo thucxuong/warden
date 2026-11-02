@@ -50,6 +50,8 @@ warden: PG-104 is waiting for you: <the step's prompt>. Type "approve" or "rejec
 1. Read what the agent did so far (the plan is in the agent's message, and in `.warden/state/PG-104/plan.md`).
 2. Type `approve` to go on, or `reject: <what to change>` to send it back.
 
+Only those exact forms count. `yes`, `approved` and `approve: only if you change the schema` do not approve anything: the run keeps waiting, and the agent is told to say so. If you have any condition, use `reject:` with what you want changed.
+
 A session started with `PROJECT_AGENT=1` skips approve steps. See [Team setup](team-setup.md).
 
 ## Questions from the agent

@@ -37,6 +37,7 @@ Rules
 - Never write files under `.warden/state` or `.warden/history`.
 - Never push, open a pull request or merge outside the ship step.
 - Never set `PROJECT_AGENT` or any other `WARDEN_*` variable on a command. Never start a nested `claude -p`.
+- When the ticket's work is already done and there is nothing to change, do not invent a change to get through the step. Stop and reply `ASK <Task>: <what you found>. Close this ticket?`
 - When something surprises you, add a line to `.warden/knowledge/<area>.md`. When you make a choice, write `.warden/decisions/NNNN-<slug>.md`.
 - Run `warden tools` to see this project's tools and roles. Run one with `warden tools <name> <args>` (`-h` for usage). If a `graph` role is listed, run `warden tools graph query "<question>"` before a broad search of the repo.
 
