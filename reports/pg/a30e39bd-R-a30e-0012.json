@@ -6,9 +6,9 @@
   "title": "package.json warden script still points at the 0.9.2 plugin cache after upgrade to 0.11.0",
   "body": "What happened: after /warden:upgrade to 0.11.0 (notes: no layout changes for 0.10.1, one tool note for 0.11.0), package.json still has a script named warden whose value is an absolute path into the plugin cache under version 0.9.2. The installed version is 0.11.0 and the project is now on wardenVersion 0.11.0. Expected: either the upgrade notes mention this script, or it does not hardcode a version. Steps: read package.json scripts after the upgrade. Evidence: the script value ends in warden/0.9.2/bin/warden. I did not check which tool wrote that line, so it may be project-owned.",
   "createdAt": "2026-11-02T09:58:44.262Z",
-  "status": "sent",
+  "status": "wontfix",
   "fixedIn": null,
-  "note": null,
+  "note": "This script line is the project's own: warden has no code that writes it, and it came in with one of the project's commits. Remove the script, or point it at the warden command.",
   "projectDir": "/Users/cluu/Documents/Work/warden-playground",
   "machineId": "a30e39bd"
 }
