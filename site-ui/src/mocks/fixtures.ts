@@ -515,7 +515,7 @@ function detail(task: string, steps: TimelineStep[], loops: TimelineLoop[], mark
   return {
     generatedAt, run: header(task), timeline, gates, review: emptyReview, plan: noPlan,
     task: { markdown: `# ${task}: ${s.title}\n`, html: `<h1>${task}: ${s.title}</h1>` },
-    changes: noChanges, usage: { total: s.usage, steps: stepUsage(steps) }, signals: s.signals,
+    changes: noChanges, usage: { total: s.usage, steps: stepUsage(steps), pricing: "Estimate using prices from 2026-11-05. $0.75 of the review cost is reported by the reviewer." }, signals: s.signals,
     limitations: [
       ...(s.source === "history" ? ["From the committed history: no logs, no outputs, no ship step; tokens from summary.json."] : []),
       ...(running ? ["Tokens of the running step are what is recorded so far."] : []),
@@ -722,6 +722,7 @@ function fx090(): RunDetailResponse {
     }, start - 4, start - 4.5)],
     usage: {
       total: s.usage,
+      pricing: "Estimate using prices from 2026-11-05. $0.75 of the review cost is reported by the reviewer.",
       steps: [
         { stepId: "implement", kind: "implement", attempts: 1, durationMs: 4 * MIN, usage: usage(40_000, 7_800, 260_000, 18_000, 0.1) },
         { stepId: "check", kind: "check", attempts: 1, durationMs: 30_000, usage: NA },

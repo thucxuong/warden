@@ -102,7 +102,7 @@ git -C <worktree> commit -m 'chore(<task>): run record'
 | `durationMs` (step) | The time between the step's `step.started` and `step.ended` events, summed over every time the step was entered. |
 | `durationMs` (task) | Wall-clock time from the run's start to its last event, waiting time included. It is not the sum of the step times. |
 | `tokens` (`input`, `output`, `cacheRead`, `cacheWrite`) | Read from the Claude Code transcripts linked to the task. Each message counts toward the step whose time window it falls in. |
-| `costUsd` | An estimate from the price of each exact model, downloaded once a day (see [`warden prices`](../reference/cli.md#warden-prices)). The reviewer's own reported cost and tokens are added to the review step. |
+| `costUsd` | An estimate from the price of each exact model, checked when a ticket starts (see [`warden prices`](../reference/cli.md#warden-prices)). The info icon beside the cost on the site says which price date it uses. The reviewer's own reported cost and tokens are added to the review step. |
 | `rounds` | Review rounds, fixer rounds, check runs, CODE verdicts. |
 | `verdicts`, `findings` | Each triage verdict with its rule, and counts of blocking, minor, dropped and leftover findings. |
 

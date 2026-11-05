@@ -642,7 +642,7 @@ warden prices [--update | --file <path> | --auto on|off]
 
 Shows or sets the token prices behind the estimated cost of a run. With no option it prints where the prices came from and whether warden downloads them on its own.
 
-`warden start` and `warden site` download [LiteLLM's public price list](https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json) when the saved copy (`<data dir>/prices.json`) is over a day old. The request sends nothing about your project. If it fails, warden keeps the prices it has, prints what to do, and tries again the next day. A run is never stopped by this. A model with no price shows as unpriced.
+`warden start` downloads [LiteLLM's public price list](https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json) every time a ticket starts, and `warden site` when the saved copy (`<data dir>/prices.json`) is over a day old. The request sends nothing about your project. If it fails, warden keeps the prices it has and prints what to do. That can add up to 5 seconds to a start, and a run is never stopped by this. A model with no price shows as unpriced.
 
 When downloading does not work where you are, go down this list:
 

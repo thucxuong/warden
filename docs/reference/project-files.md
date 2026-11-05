@@ -253,6 +253,7 @@ Logs, raw reviewer output and the `steps.json` copy are not copied. The engine r
   verdicts: { verdict: "CODE" | "OPS" | "UNCLEAR"; rule: string | null; at }[];
   findings: { blocking, minor, dropped, leftovers };
   tokens: { input, output, cacheRead, cacheWrite }; costUsd;   // costUsd is an estimate
+  pricesDate;                  // the date of the prices it used; null: those that came with warden; absent on older runs
   author: { name, email }; commit; pr: null; branch;
 }
 ```

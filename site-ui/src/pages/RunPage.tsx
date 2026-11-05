@@ -3,6 +3,7 @@ import { ArrowLeft, Clock, GitBranch, Info, SearchX, Workflow } from "lucide-rea
 import type { ReactNode } from "react";
 import { Link, useSearchParams } from "wouter";
 import { CommandBlock } from "@/components/app/CommandBlock";
+import { PricingInfo } from "@/components/app/PricingInfo";
 import { PrLink } from "@/components/app/PrLink";
 import { SignalCallout } from "@/components/app/SignalBadge";
 import { StatusBadge } from "@/components/app/StatusBadge";
@@ -107,6 +108,7 @@ function RunHeaderCard({ d }: { d: RunDetailResponse }) {
           <div className="text-right">
             <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Tokens · cost</div>
             <UsageCell usage={d.usage.total} className="text-lg font-semibold" />
+            {d.usage.total.known && <PricingInfo text={d.usage.pricing} testId="total-pricing" />}
           </div>
         </div>
         <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-6">

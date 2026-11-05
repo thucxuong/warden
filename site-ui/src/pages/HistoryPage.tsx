@@ -85,7 +85,7 @@ function Totals({ data }: { data: NonNullable<ReturnType<typeof useRuns>["data"]
     { label: "Runs", value: String(t.count), icon: Hash, testid: "total-runs" },
     { label: "Total time", value: formatDuration(t.durationMs), icon: Clock, testid: "total-time" },
     { label: "Tokens", value: formatUsageTokens(t.usage), icon: Layers, testid: "total-tokens" },
-    { label: "Cost", value: formatCost(t.usage), icon: Coins, testid: "total-cost" },
+    { label: "Estimated cost", value: formatCost(t.usage), icon: Coins, testid: "total-cost" },
   ];
   return (
     <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4" data-testid="history-totals">

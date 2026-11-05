@@ -198,7 +198,7 @@ export interface RunDetailResponse {
   plan: PlanView;
   task: { markdown: string; html: string } | null;
   changes: ChangesView;
-  usage: { total: Usage; steps: StepUsage[] };
+  usage: { total: Usage; steps: StepUsage[]; pricing: string }; // which prices the cost uses, and what was reported
   signals: Signal[];
   limitations: string[];      // plain lines, e.g. "From the committed history: no logs, no ship step, tokens from summary.json."
 }

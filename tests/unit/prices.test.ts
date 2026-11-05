@@ -3,7 +3,8 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { run as pricesCommand } from "../../plugins/warden/src/commands/prices.ts";
-import { parseRates, rateFor, refreshPrices, resetPrices } from "../../plugins/warden/src/lib/prices.ts";
+import { parseRates, pricesDate, rateFor, refreshPrices, resetPrices, savePriceList } from "../../plugins/warden/src/lib/prices.ts";
+import { pricingNote } from "../../plugins/warden/src/site/text.ts";
 import { tokensByStep } from "../../plugins/warden/src/lib/tokens.ts";
 import type { Ctx, EventLine, SessionLink } from "../../plugins/warden/src/types.ts";
 
@@ -92,6 +93,22 @@ describe("refreshPrices", () => {
     await refreshPrices();
     await refreshPrices();
     expect(calls).toBe(1);
+  });
+
+  test("a new ticket checks every time; a price changed an hour ago is seen", async () => {
+    serve({ "claude-opus-5-5": entry() });
+    await refreshPrices(0);
+    serve({ "claude-opus-5-5": entry({ input_cost_per_token: 3e-6 }) });
+    await refreshPrices(0);
+    expect(calls).toBe(2);
+    expect(rateFor("claude-opus-5-5")?.input).toBe(3);
+  });
+
+  test("a new ticket still respects --auto off", async () => {
+    await pricesCommand(["--auto", "off"], {} as Ctx);
+    serve({ "claude-next-1": entry() });
+    await refreshPrices(0);
+    expect(calls).toBe(0);
   });
 
   test("downloads again when the saved copy is over a day old", async () => {
@@ -288,4 +305,23 @@ describe("cost", () => {
     expect(costOf("claude-opus-5-5", { output_tokens: 1000, speed: "fast" })).toBeCloseTo(0.04, 9);
     expect(costOf("claude-opus-5-5", { output_tokens: 1000, speed: "standard" })).toBeCloseTo(0.02, 9);
   });
+});
+
+describe("pricingNote", () => {
+  test("says which prices the estimate used", () => {
+    expect(pricingNote({ pricesDate: "2026-11-05" }, [])).toBe("Estimate using prices from 2026-11-05.");
+    expect(pricingNote({ pricesDate: null }, [])).toBe("Estimate using the prices that came with warden.");
+    expect(pricingNote({}, [])).toBe("Estimate saved when the run shipped; the price date is unknown.");
+  });
+
+  test("separates what the reviewer reported", () => {
+    expect(pricingNote({ pricesDate: "2026-11-05" }, [{ costUsd: 0.5 }, { costUsd: null }, { costUsd: 0.25 }]))
+      .toBe("Estimate using prices from 2026-11-05. $0.75 of the review cost is reported by the reviewer.");
+  });
+});
+
+test("the price date is the day the prices arrived, null before any have", () => {
+  expect(pricesDate()).toBeNull();
+  savePriceList({ "claude-next-1": entry() });
+  expect(pricesDate()).toBe(new Date().toISOString().slice(0, 10));
 });

@@ -4,7 +4,7 @@ import { readJson, writeJsonAtomic } from "./json.ts";
 import bundled from "./prices.json";
 
 // What tokens cost. Prices change and warden ships as files, so a copy in the plugin goes stale: current prices come
-// from LiteLLM's public list, at most once a day, and are saved in the data dir. prices.json is only the fallback for
+// from LiteLLM's public list, checked when a ticket starts and daily by the site, and saved in the data dir. prices.json is only the fallback for
 // a machine with no saved prices; a model in neither has no price and is flagged, never guessed.
 //
 // Where downloads do not work, each step needs more from the person (`warden prices`): warden says what to do, they
@@ -45,6 +45,12 @@ export function readSaved(): SavedPrices | null {
   } catch {
     return null; // not downloaded yet, or a broken file: the next refresh replaces it
   }
+}
+
+// The date of the saved prices, null for the ones that came with warden.
+export function pricesDate(): string | null {
+  const updatedAt = readSaved()?.updatedAt;
+  return updatedAt ? new Date(updatedAt).toISOString().slice(0, 10) : null;
 }
 
 const perMillion = (perToken: number): number => Math.round(perToken * 1e12) / 1e6;
@@ -118,8 +124,8 @@ function curlList(): unknown {
 
 // What the person can do, most convenient first.
 export function pricesHelp(afterRetry = false): string {
-  const updatedAt = readSaved()?.updatedAt;
-  const current = updatedAt ? `prices from ${new Date(updatedAt).toISOString().slice(0, 10)}` : "the prices that came with warden";
+  const date = pricesDate();
+  const current = date ? `prices from ${date}` : "the prices that came with warden";
   return [
     `warden: could not download prices, so costs use ${current}. To fix it:`,
     ...(afterRetry ? [] : ["  warden prices --update"]),
@@ -140,14 +146,13 @@ export async function updatePrices(): Promise<boolean> {
   return false;
 }
 
-// Downloads the prices when the saved copy is over a day old. Never throws, and a failed download never stops the
-// caller: it keeps the prices there are, says what to do, and waits for the next day, so being offline costs one
-// timeout and one message a day. Tests never reach the network.
-export async function refreshPrices(): Promise<void> {
+// Downloads the prices when the saved copy is older than maxAgeMs: 0 always checks. Never throws, and a failed download
+// never stops the caller: it keeps the prices there are and says what to do. Tests never reach the network.
+export async function refreshPrices(maxAgeMs = DAY_MS): Promise<void> {
   if (process.env.NODE_ENV === "test") return;
   const saved = readSaved();
   if (saved?.auto === false) return;
-  if (saved && Date.now() - saved.checkedAt < DAY_MS) return;
+  if (saved && Date.now() - saved.checkedAt < maxAgeMs) return;
   try {
     if (savePriceList(await fetchList())) return;
   } catch {

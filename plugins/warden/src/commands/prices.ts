@@ -1,7 +1,7 @@
 // warden prices [--update | --file <path> | --auto on|off]: the token prices behind a run's estimated cost (lib/prices.ts).
 import { EXIT, WardenError } from "../lib/exit.ts";
 import { readJson } from "../lib/json.ts";
-import { pricesHelp, readSaved, savePriceList, setAutoDownload, updatePrices } from "../lib/prices.ts";
+import { pricesDate, pricesHelp, readSaved, savePriceList, setAutoDownload, updatePrices } from "../lib/prices.ts";
 import type { Ctx } from "../types.ts";
 import { parseArgs } from "./next.ts";
 
@@ -17,7 +17,7 @@ function readList(path: string): unknown {
 
 function status(): string {
   const saved = readSaved();
-  const when = saved?.updatedAt ? new Date(saved.updatedAt).toISOString().slice(0, 10) : null;
+  const when = pricesDate();
   return [
     `prices: ${when ? `saved ${when}, ${Object.keys(saved!.models).length} models` : "the ones that came with warden"}`,
     `automatic download: ${saved?.auto === false ? "off" : "on"}`,

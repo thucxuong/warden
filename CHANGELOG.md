@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.13.0 — 2026-11-05
+
+Costs now use current prices. Before, prices shipped inside the plugin and went stale until the next update.
+
+- `warden start` checks for new prices every time a ticket starts, and `warden site` checks once a day. Prices come from LiteLLM's public price list. The request sends nothing about your project. This is the first time warden goes online on its own.
+- If the download fails, the run goes on with the prices warden has, and warden prints what to do. That can add up to 5 seconds to a start.
+- New `warden prices` command for places where downloads do not work: `--update` tries again, also with `curl`; `--file <path>` uses a list you got yourself; `--auto off` stops downloading. With no option it shows where the prices came from.
+- Costs use the price of the exact model, not one price per family. They split cache writes into 5-minute and 1-hour, and apply the Haiku 5.5 price for prompts over 100,000 tokens and the fast mode price. Estimates go up: 1-hour cache writes were priced too low before.
+- A new model has no price until the list has it. Its cost shows as a lower bound, as before.
+- On the site, an info icon beside a run's total cost says the date of the prices the estimate uses and how much of the review cost the reviewer reported. The History total is now labelled "Estimated cost".
+- `summary.json` saves `pricesDate`. Runs from before this version have none, and show that the price date is unknown.
+- New `doctor` tool recipe: one command that says whether a project's setup is healthy and how to fix what is not. `/warden:init` offers it after the other tools, and the retro adds a check when a setup failure can come back.
+
 ## 0.12.0 — 2026-11-02
 
 What people and agents need to know now lives in `docs/`. `.warden/` keeps what warden needs to run. Before, `/warden:init` rewrote a project's `docs/` into `.warden/context/`, the two drifted apart, and agents read the older copy. The upgrade note moves existing projects.

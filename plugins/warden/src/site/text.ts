@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { loadStepsJson } from "../config/config.ts";
-import type { EventLine, FlowJson, RunJson } from "../types.ts";
+import type { EventLine, FlowJson, HistorySummary, ReviewRound, RunJson } from "../types.ts";
 import type { ISO, Person, StepKind, StepRef, Usage, WaitKind } from "./api-types.ts";
 import { lazyAuthor, loadAll, readText, type Author, type LoadedTask } from "./data.ts";
 
@@ -157,6 +157,17 @@ export function usageOf(loaded: LoadedTask): Usage {
   if (loaded.source === "history") return toUsage(summary.tokens, summary.costUsd, false, true);
   const unpriced = Object.values(loaded.tokens).some((t) => t.unpriced);
   return toUsage(summary.tokens, summary.costUsd, unpriced, usageKnown(loaded));
+}
+
+// Where a run's cost came from: an estimate from dated prices, and what the reviewer reported.
+export function pricingNote(summary: Pick<HistorySummary, "pricesDate">, review: Pick<ReviewRound, "costUsd">[]): string {
+  const { pricesDate } = summary;
+  const estimate =
+    pricesDate === undefined ? "Estimate saved when the run shipped; the price date is unknown."
+    : pricesDate === null ? "Estimate using the prices that came with warden."
+    : `Estimate using prices from ${pricesDate}.`;
+  const reported = review.reduce((sum, r) => sum + (r.costUsd ?? 0), 0);
+  return reported > 0 ? `${estimate} $${reported.toFixed(2)} of the review cost is reported by the reviewer.` : estimate;
 }
 
 // ---- times ----

@@ -1,9 +1,10 @@
 import type { RunDetailResponse, Usage } from "@api";
+import { PricingInfo } from "@/components/app/PricingInfo";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatCost, formatDuration, formatTokens } from "@/lib/pure/format";
 
-function Nums({ u }: { u: Usage | null }) {
+function Nums({ u, pricing }: { u: Usage | null; pricing?: string }) {
   if (!u || !u.known) {
     return <>{[0, 1, 2, 3, 4].map((i) => <TableCell key={i} className="text-right text-muted-foreground">n/a</TableCell>)}</>;
   }
@@ -13,7 +14,7 @@ function Nums({ u }: { u: Usage | null }) {
       <TableCell className="text-right font-mono tabular-nums">{formatTokens(u.output)}</TableCell>
       <TableCell className="text-right font-mono tabular-nums">{formatTokens(u.cacheRead)}</TableCell>
       <TableCell className="text-right font-mono tabular-nums">{formatTokens(u.cacheWrite)}</TableCell>
-      <TableCell className="pr-4 text-right font-mono font-medium tabular-nums">{formatCost(u)}</TableCell>
+      <TableCell className="pr-4 text-right font-mono font-medium tabular-nums">{formatCost(u)}{pricing && <PricingInfo text={pricing} testId="tokens-pricing" />}</TableCell>
     </>
   );
 }
@@ -29,7 +30,7 @@ const Heads = () => (
 );
 
 export function TokensTab({ d }: { d: RunDetailResponse }) {
-  const { total, steps } = d.usage;
+  const { total, steps, pricing } = d.usage;
   const attempts = d.timeline.steps;
   return (
     <div className="space-y-4">
@@ -57,7 +58,7 @@ export function TokensTab({ d }: { d: RunDetailResponse }) {
             <TableRow data-testid="tokens-total">
               <TableCell className="pl-4 font-semibold" colSpan={3}>Total <span className="font-normal text-muted-foreground">({formatTokens(total.known ? total.total : 0)} tokens)</span></TableCell>
               <TableCell className="text-right font-mono tabular-nums">{formatDuration(d.run.durationMs)}</TableCell>
-              <Nums u={total} />
+              <Nums u={total} pricing={pricing} />
             </TableRow>
           </TableFooter>
         </Table>

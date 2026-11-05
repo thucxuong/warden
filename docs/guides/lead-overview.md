@@ -88,6 +88,8 @@ Click a run anywhere to open it. The header has the status, flow, branch, pull r
 - **Tokens**: input, output, cache read, cache write and estimated cost per step and per attempt, with the total.
 - **Events**: the raw event log.
 
+Hover over the info icon beside a run's total cost, in the header or on the Tokens tab, to see the date of the prices the estimate uses and how much of the review cost the reviewer reported. See [`warden prices`](../reference/cli.md#warden-prices).
+
 A run that is only in the committed history has no logs, no step outputs and no ship step; the page says so.
 
 ### Tickets

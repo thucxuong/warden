@@ -160,7 +160,7 @@ export async function run(args: string[], ctx: Ctx): Promise<number | void> {
   const taskText = ticketText(main, ctx.root, task); // after precheck: an existing run is reported as such
   const worktree = useWorktree ? ensureWorktree(main, task, branch, ref) : worktreeRoot(ctx.cwd);
 
-  await refreshPrices(); // the run's cost is saved when it ships
+  await refreshPrices(0); // a new ticket always checks for new prices
   const response = await start(ctx, task, flow, { worktree, branch, mainRef: ref, base, taskText, ticket: true });
   printJson(useWorktree ? { ...response, worktree, base } : response);
 }

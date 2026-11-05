@@ -376,6 +376,7 @@ export interface HistorySummary {
   verdicts: { verdict: Verdict; rule: string | null; at: string }[];
   findings: { blocking: number; minor: number; dropped: number; leftovers: number };
   tokens: StepSummary["tokens"]; costUsd: number;  // costUsd is an estimate
+  pricesDate?: string | null;  // the prices it used: their date, null for those that came with warden; absent on older runs
   author: { name: string; email: string }; commit: string; pr: string | null; branch: string;
 }
 

@@ -1456,7 +1456,7 @@ Cost = Σ tokens × the rate for the exact model name (`lib/prices.ts`), with ca
 
 The reviewer's `claude -p` runs with `--no-session-persistence`, so it has no transcript. Its cost comes from `ReviewRound.costUsd` (6.3) and is added to the review step's `costUsd` and to the run total. Its tokens come from `ReviewRound.tokens` (6.3) and are added to the review step's `tokens` and to the run total.
 
-Prices are USD per million tokens and an estimate. `warden start` and `warden site` download LiteLLM's public price list when the saved copy (`<data dir>/prices.json`) is over a day old. A failed download keeps the prices there are. `src/lib/prices.json` is only the fallback for a machine with no saved copy.
+Prices are USD per million tokens and an estimate. `warden start` downloads LiteLLM's public price list every time, and `warden site` when the saved copy (`<data dir>/prices.json`) is over a day old. A failed download keeps the prices there are. `src/lib/prices.json` is only the fallback for a machine with no saved copy.
 
 ---
 

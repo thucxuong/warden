@@ -1,6 +1,7 @@
 import type {
   EventLine, FlowJson, HistorySummary, ReviewRound, RunJson, SessionLink, StepSummary, StepType, TriageReport,
 } from "../types.ts";
+import { pricesDate } from "../lib/prices.ts";
 import { emptyTotals, roundUsd, stepWindows, tokensByStep } from "../lib/tokens.ts";
 import type { TokenTotals } from "../lib/tokens.ts";
 
@@ -135,6 +136,7 @@ export function buildSummary(input: SummaryInput): HistorySummary {
     findings: buildFindings(input.reviewRounds, run.leftovers),
     tokens,
     costUsd: roundUsd(costUsd),
+    pricesDate: pricesDate(),
     author: input.author,
     commit: input.commit,
     pr: input.pr,

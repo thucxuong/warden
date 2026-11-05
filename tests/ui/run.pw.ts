@@ -32,6 +32,11 @@ test("FX-201: the log tail is visible and Show more loads /log", async ({ page }
 
 test("FX-101: PR, plan waves, files, commits and token totals", async ({ page }) => {
   await page.goto("/runs/FX-101?tab=plan");
+  await page.getByTestId("total-pricing").hover();
+  await expect(page.getByRole("tooltip")).toContainText("Estimate using");
+  await expect(page.getByRole("tooltip")).toContainText("reported by the reviewer");
+  await page.mouse.move(0, 0);
+  await expect(page.getByRole("tooltip")).toHaveCount(0);
   await expect(page.getByRole("link", { name: /#7/ }).first()).toHaveAttribute("href", "https://github.com/acme/fx/pull/7");
   await expect(page.getByTestId("plan-waves")).toContainText("Wave 2");
   await expect(page.getByTestId("changed-files")).toContainText("src/fx-101.ts");
@@ -39,6 +44,8 @@ test("FX-101: PR, plan waves, files, commits and token totals", async ({ page })
   await page.getByRole("tab", { name: "Tokens" }).click();
   await expect(page).toHaveURL(/tab=tokens/);
   await expect(page.getByTestId("tokens-total")).toContainText("Total");
+  await page.getByTestId("tokens-pricing").hover();
+  await expect(page.getByRole("tooltip")).toContainText("Estimate using");
 });
 
 test("FX-090: a history run says where its data comes from", async ({ page }) => {

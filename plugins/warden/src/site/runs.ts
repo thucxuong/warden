@@ -13,8 +13,7 @@ import { resolvePr } from "./pr.ts";
 import { buildReview } from "./review.ts";
 import { runSignals } from "./signals.ts";
 import {
-  durationOf, isGoing, person, shippedAtOf, stepKind, stepRef, sumUsage, taskTitle, toUsage, usageKnown, usageOf, waitingView,
-  type SiteCtx,
+  durationOf, isGoing, person, shippedAtOf, stepKind, stepRef, sumUsage, taskTitle, toUsage, usageKnown, usageOf, waitingView, type SiteCtx, pricingNote,
 } from "./text.ts";
 import { buildGates, buildTimeline, windowsOf } from "./timeline.ts";
 
@@ -213,7 +212,7 @@ export function runDetail(ctx: SiteCtx, task: string): RunDetailResponse {
     plan: planView(loaded, run.waiting?.kind ?? null),
     task: taskMd === null ? null : { markdown: taskMd, html: renderMarkdown(taskMd, { docPath: "task.md" }) },
     changes: buildChanges(ctx.main, loaded, pr),
-    usage: { total: usage, steps },
+    usage: { total: usage, steps, pricing: pricingNote(loaded.summary, loaded.review) },
     signals: runSignals(ctx, loaded),
     limitations,
   };
