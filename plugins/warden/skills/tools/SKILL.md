@@ -126,6 +126,7 @@ Warden reads only the roles above. When a project needs one of these jobs, write
 | `e2e` | `recipes/e2e.md` | end-to-end tests against this worktree's app | `npx playwright` |
 | `pr` | `recipes/pr.md` | open, show and merge pull requests (the `pr` role) | `gh pr`, `az repos pr`, `glab mr` |
 | `ci` | `recipes/ci.md` | CI runs of a branch, with the failing step's log | `gh run`, `az pipelines` |
+| `doctor` | `recipes/doctor.md` | is the project's setup healthy, and how to fix what is not | none |
 | `tickets` | `ticket-tool-recipe.md` | the `tickets` role | `az boards`, `jira` |
 
 ## Raw commands a tool covers

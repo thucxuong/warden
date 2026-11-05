@@ -23,6 +23,7 @@ Run this only when the user asked for a retro or agreed to one you offered (sess
 | A bug in warden | The report skill, kind `bug` |
 | Something missing that every project would want | The report skill, kind `enhancement` |
 | A mistake that keeps coming back | `.warden/rules/<topic>.md` |
+| A setup failure that can come back | A new check in the project's `doctor` tool (see `/warden:tools`); offer to write the tool if there is none |
 | A fact about the code | `docs/knowledge/<area>.md` |
 | A missing tool, or a command in `commands` that keeps coming back | `.warden/tools/` (see `/warden:tools`): a new tool or subcommand, and its raw commands in `replaces.json` |
 | A tool that fails often, or a raw command in `raw` | That tool in `.warden/tools/`: fix it, add the missing command, or make its usage text say how; then `warden tools --skill`. A rule in `.warden/rules/` when the tool was fine and the agent skipped it |

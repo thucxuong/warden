@@ -57,7 +57,7 @@ The ARGUMENTS given with this skill, if any, are the user's extra instructions f
 
 ## Set up the tools too
 
-Go through these tools in this order, one at a time, with the warden:tools skill (`../tools/SKILL.md` from this skill's base directory) and its recipes in `../tools/recipes/`: verify, dev, db, e2e, pr, ci. For each one:
+Go through these tools in this order, one at a time, with the warden:tools skill (`../tools/SKILL.md` from this skill's base directory) and its recipes in `../tools/recipes/`: verify, dev, db, e2e, pr, ci, doctor. For each one:
 - Tell the user in one or two lines what you found in the repo for it (scripts, config files, CI files, docs).
 - Ask whether the project needs it. Skip it when the user says no.
 - If yes, ask what its recipe needs to know, one question per message:
@@ -67,6 +67,7 @@ Go through these tools in this order, one at a time, with the warden:tools skill
   - e2e: which test runner, and which parts of the app it needs running
   - pr: which Git host, pull request or direct merge, and which merge method
   - ci: which CI system, and how to read a run and its logs
+  - doctor: what in the setup has broken before, and what the project depends on that can break without a code change
 - Write the tool as its recipe says. Add it to `index.ts`, to `roles.json` when it has a role, and to `replaces.json`. Prove it as the recipe's "Prove it" says. Each task worktree gets its own ports and its own database (`recipes/dev.md`).
 
 For a tracker in step 6, write the ticket tool now instead of sending the user to `/warden:tools`. Test it only with saved tracker answers, as `ticket-tool-recipe.md` says; never create or change real tickets.

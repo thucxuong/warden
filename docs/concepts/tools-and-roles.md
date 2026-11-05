@@ -80,7 +80,7 @@ Every tool follows the same rules, so warden and the agent can use any tool the 
 - One environment per worktree: a tool that starts the app or touches data uses this checkout's own ports and database, never another task's.
 - Remote systems (a tracker, a CI, a cloud) only through the org, project or resources named in a config file.
 
-For the common jobs, the skill has a **recipe** each: what to build, its subcommands and JSON output, the raw commands it owns, its traps, and how to prove it. Recipes have no code; the agent writes the tool for your stack. They cover `verify` (types, lint, unit tests, build, with the same commands as the `check` step), `dev` (this worktree's app on its own ports, and its `.dev-env.json`), `db` (this worktree's own database, and `prune` for removed worktrees), `e2e`, `pr`, `ci` and `tickets`. Warden ships none of the tools.
+For the common jobs, the skill has a **recipe** each: what to build, its subcommands and JSON output, the raw commands it owns, its traps, and how to prove it. Recipes have no code; the agent writes the tool for your stack. They cover `verify` (types, lint, unit tests, build, with the same commands as the `check` step), `dev` (this worktree's app on its own ports, and its `.dev-env.json`), `db` (this worktree's own database, and `prune` for removed worktrees), `e2e`, `pr`, `ci`, `doctor` (is the project's setup healthy, and how to fix what is not) and `tickets`. Warden ships none of the tools.
 
 ## How warden runs a tool
 

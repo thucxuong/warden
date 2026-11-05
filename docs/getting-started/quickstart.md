@@ -77,6 +77,7 @@ After the normal questions and the ticket tool, the agent goes through each comm
 | `e2e` | Which test runner, and which parts of the app it needs running |
 | `pr` | Which Git host, pull request or direct merge, and which merge method |
 | `ci` | Which CI system, and how to read a run and its logs |
+| `doctor` | What in the setup has broken before, and what the project depends on that can break without a code change |
 
 It writes each tool you agree to, tests it, and gives each task worktree its own ports and database. A tracker tool is tested with saved tracker answers only, so no real ticket changes. At the end it shows a table of the tools and whether each check passed. You can add what you skip later with `/warden:tools <name>`, and you can add your own wishes after the command, for example `/warden:init set up the tools too. Tickets are in Jira project APP.`
 

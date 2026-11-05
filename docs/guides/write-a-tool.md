@@ -58,7 +58,7 @@ export interface Tool {
 
 ## Steps
 
-1. **Write the tool.** This small example shows the shape: it wraps Playwright end-to-end tests and has a probe that checks what the tool needs. Save it as `.warden/tools/e2e.ts`. For a full tool for a common job (`verify`, `dev`, `db`, `e2e`, `pr`, `ci`, `tickets`), have the agent follow its recipe instead: `/warden:tools <name>`.
+1. **Write the tool.** This small example shows the shape: it wraps Playwright end-to-end tests and has a probe that checks what the tool needs. Save it as `.warden/tools/e2e.ts`. For a full tool for a common job (`verify`, `dev`, `db`, `e2e`, `pr`, `ci`, `doctor`, `tickets`), have the agent follow its recipe instead: `/warden:tools <name>`.
 
    ```ts
    // End-to-end tests with Playwright.

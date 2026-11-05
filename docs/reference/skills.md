@@ -24,7 +24,7 @@ A skill is a set of instructions the plugin gives Claude Code. You start one by 
 
 ## /warden:init
 
-Sets up warden in the current project. Only a person can start it: the agent never runs it by itself. Text after the command is extra instructions the agent follows as well, such as `set up the tools too`, which also walks you through the common tools (verify, dev, db, e2e, pr, ci); see [Set up the tools too](../getting-started/quickstart.md#set-up-the-tools-too).
+Sets up warden in the current project. Only a person can start it: the agent never runs it by itself. Text after the command is extra instructions the agent follows as well, such as `set up the tools too`, which also walks you through the common tools (verify, dev, db, e2e, pr, ci, doctor); see [Set up the tools too](../getting-started/quickstart.md#set-up-the-tools-too).
 
 What it does:
 
