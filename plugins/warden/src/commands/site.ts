@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type { Ctx } from "../types.ts";
 import { DEFAULT_SITE_PORT, loadWardenJson } from "../config/config.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
+import { refreshPrices } from "../lib/prices.ts";
 import { mainRoot } from "../state/paths.ts";
 import { readRawWardenJson } from "../site/data.ts";
 import { startServer } from "../site/server.ts";
@@ -84,6 +85,8 @@ export async function run(args: string[], ctx: Ctx): Promise<number> {
     console.error(`warden site: port ${port} is in use; pass --port`);
     return EXIT.PORT_IN_USE;
   }
+  void refreshPrices();
+  setInterval(() => void refreshPrices(), 60 * 60 * 1000); // the site can stay up for days; a fresh copy returns at once
   const url = `http://127.0.0.1:${port}`;
   console.log(`warden site: ${url}`);
   if (shouldOpen(args, ctx.env, process.stdout.isTTY === true)) openBrowser(url);

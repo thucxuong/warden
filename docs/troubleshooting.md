@@ -173,6 +173,13 @@ Node, Bun, Vite and TypeScript look for a package in `node_modules` of every par
 
 Add a dependency check to the project's checks, for example ESLint's `import/no-extraneous-dependencies` or `knip`, so an import of a package that is not in `package.json` fails the gate.
 
+## Costs
+
+| Message | Cause | Fix |
+|---|---|---|
+| `warden: could not download prices` | The network, a proxy or a firewall blocks the download. The run goes on, using the prices warden has. | Follow the printed steps. See [`warden prices`](reference/cli.md#warden-prices). |
+| A cost is marked unpriced | The model is not in the prices yet. | Run `warden prices --update`. If it is still missing, set the price yourself with `warden prices --file`. |
+
 ## Reports
 
 | Message | Cause | Fix |

@@ -1,6 +1,6 @@
 import { readFileSync, statSync } from "node:fs";
 import type { EventLine, SessionLink } from "../types.ts";
-import prices from "./prices.json";
+import { rateFor } from "./prices.ts";
 
 // Token attribution from Claude Code transcripts (spec 7.6).
 
@@ -10,13 +10,10 @@ export interface TokenTotals {
   cacheRead: number;
   cacheWrite: number;
   costUsd: number;
-  unpriced: boolean; // true when some tokens used a model family with no price
+  unpriced: boolean; // true when some tokens used a model with no price
 }
 
-interface Rate { input: number; output: number; cacheWrite: number; cacheRead: number }
 export interface StepWindow { step: string; start: number; end: number; order: number }
-
-const FAMILIES = ["opus", "sonnet", "haiku"] as const;
 
 export function emptyTotals(): TokenTotals {
   return { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, costUsd: 0, unpriced: false };
@@ -24,12 +21,6 @@ export function emptyTotals(): TokenTotals {
 
 export function roundUsd(value: number): number {
   return Math.round(value * 1e6) / 1e6;
-}
-
-function rateFor(model: string): Rate | null {
-  const name = model.toLowerCase();
-  const family = FAMILIES.find((f) => name.includes(f));
-  return family ? prices[family] : null;
 }
 
 // One window per step.started; it ends at the next step.ended for the same step id.
@@ -147,8 +138,17 @@ function addMessage(totals: TokenTotals, message: AssistantMessage): void {
 
   const rate = rateFor(message.model);
   if (rate) {
+    const breakdown = message.usage.cache_creation as Record<string, unknown> | undefined;
+    const cacheWrite1h = count(breakdown?.ephemeral_1h_input_tokens);
+    const scale = (input + cacheRead + cacheWrite > 100_000 ? rate.over100k : 1) * (message.usage.speed === "fast" ? rate.fast : 1);
     totals.costUsd +=
-      (input * rate.input + output * rate.output + cacheWrite * rate.cacheWrite + cacheRead * rate.cacheRead) / 1e6;
+      (scale *
+        (input * rate.input +
+          output * rate.output +
+          (cacheWrite - cacheWrite1h) * rate.cacheWrite5m +
+          cacheWrite1h * rate.cacheWrite1h +
+          cacheRead * rate.cacheRead)) /
+      1e6;
   } else if (input + output + cacheRead + cacheWrite > 0) {
     totals.unpriced = true;
   }

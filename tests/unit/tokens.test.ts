@@ -40,7 +40,7 @@ describe("tokensByStep", () => {
     expect(result.check).toMatchObject({ input: 10, output: 5 });
   });
 
-  test("costs use the family rate per million tokens", () => {
+  test("costs use the rate of the exact model, per million tokens", () => {
     expect(result.implement!.costUsd).toBeCloseTo(0.0013, 9); // sonnet 100*2 + 50*10 + 200*2.5 + 1000*0.1
     expect(result["fix-1"]!.costUsd).toBeCloseTo(0.00037, 9);  // haiku
     expect(result.implement!.unpriced).toBe(false);
@@ -57,7 +57,7 @@ describe("tokensByStep", () => {
     expect(twice).toEqual(result);
   });
 
-  test("an unknown model family costs 0 and is flagged unpriced", () => {
+  test("an unknown model costs 0 and is flagged unpriced", () => {
     const r = tokensByStep([link("unknown-model.jsonl")], events);
     expect(r.implement).toMatchObject({ input: 7, output: 3, costUsd: 0, unpriced: true });
   });

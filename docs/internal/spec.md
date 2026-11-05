@@ -108,7 +108,7 @@ warden/
 │   │   │   ├── git.ts         # git helpers (rev-parse, diff, porcelain -z, worktree, merge-base, fetch, hunks)
 │   │   │   ├── proc.ts        # run shell command with log file, timeout, process-group kill; pid start time
 │   │   │   ├── tokens.ts      # transcript parsing and per-step token attribution
-│   │   │   ├── prices.json    # USD per million tokens per model family (estimate)
+│   │   │   ├── prices.json    # fallback USD per million tokens per model (estimate); see 7.6
 │   │   │   └── version.ts     # reads plugin version from <plugin root>/.claude-plugin/plugin.json; semver compare
 │   │   ├── config/
 │   │   │   └── config.ts      # load and validate warden.json, steps.json, triage-rules.json
@@ -1452,17 +1452,11 @@ Token attribution (`lib/tokens.ts`, verified format):
 - Attribute each to the step whose window `[step.started, step.ended)` from `events.jsonl` contains the timestamp. When windows nest (a `fix-<n>` window inside its check step's window), the latest-started window wins. Lines outside the run window are ignored.
 - Subagent transcripts are separate files and are not in the main transcript, so there is no double count.
 
-Cost = Σ tokens × `prices.json` rate for the model family (`/opus/`, `/sonnet/`, `/haiku/`). An unknown family costs 0 and is flagged `"unpriced"`.
+Cost = Σ tokens × the rate for the exact model name (`lib/prices.ts`), with cache writes split into 5-minute and 1-hour, and the over-100,000-token and fast mode multipliers. An unknown model costs 0 and is flagged `"unpriced"`.
 
 The reviewer's `claude -p` runs with `--no-session-persistence`, so it has no transcript. Its cost comes from `ReviewRound.costUsd` (6.3) and is added to the review step's `costUsd` and to the run total. Its tokens come from `ReviewRound.tokens` (6.3) and are added to the review step's `tokens` and to the run total.
 
-`src/lib/prices.json`, USD per million tokens, an estimate **[U-7]**:
-
-```json
-{ "opus":   { "input": 5, "output": 25, "cacheWrite": 6.25, "cacheRead": 0.5 },
-  "sonnet": { "input": 3, "output": 15, "cacheWrite": 3.75, "cacheRead": 0.3 },
-  "haiku":  { "input": 1, "output": 5,  "cacheWrite": 1.25, "cacheRead": 0.1 } }
-```
+Prices are USD per million tokens and an estimate. `warden start` and `warden site` download LiteLLM's public price list when the saved copy (`<data dir>/prices.json`) is over a day old. A failed download keeps the prices there are. `src/lib/prices.json` is only the fallback for a machine with no saved copy.
 
 ---
 
@@ -1981,7 +1975,7 @@ File-conflict check: `src/cli.ts`, `src/types.ts` and `hooks/hooks.json` are wri
 | U-4 | Docs: plugin agents are addressed as `<plugin>:<name>`, so `warden:fixer`. Verified from the docs; one live check remains | The CPA cannot delegate. Fallback: the instructions include the fixer body text for the main agent to follow | WD-0017 live session | PASS (2026-10-18, Claude Code 2.1.302, `--plugin-dir`). The init message lists `warden:fixer`. An Agent call with `subagent_type: "warden:fixer"` ran. A haiku CPA that ran `warden next` on a fix step delegated to `warden:fixer` by itself (the fixer ran on opus). |
 | U-5 | UserPromptSubmit `prompt` contains the raw typed text, and hook `additionalContext` reaches the model | Approve via prompt fails. Fallback: a human runs `warden approve` in a terminal | WD-0017 live session | PASS. `claude -p "approve"`: hook `prompt` was exactly `approve`. With cwd = the ticket worktree, or a resumed session that ran `warden start`, the run left `waiting` (`approve.granted`, then `implement`). The transcript holds a `hook_additional_context` attachment with the text, and the model's first call was `warden next`. Limit: a fresh session with cwd = main checkout does not resolve the run: the hook does nothing and the run stays `waiting`, although SessionStart told the user to type `approve`. |
 | U-6 | Stop-hook `stop_hook_active` semantics, and that `systemMessage` shows to the user | Loop guard misbehaves | WD-0017 live session | PASS. Stop gave `stop_hook_active` false on the first stop and true on every re-prompt. Three `stop.blocked` events re-prompted the model ("Stop hook feedback: warden: ..."); the 4th stop was allowed. The `systemMessage` shows in `-p` stream-json as a `system/informational` event: `Stop says: warden: stopping although DM-002 is active; ...`. Not checked in the interactive UI. |
-| U-7 | Prices in `prices.json` | Wrong cost estimate only | WD-0008 | not checked in WD-0017 |
+| U-7 | Prices | Wrong cost estimate only | WD-0008 | downloaded daily from LiteLLM; six Claude models matched Anthropic's page on 2026-11-05 |
 | U-8 | `--scope project` on `marketplace add` and `install` writes `.claude/settings.json`; option B with `"ref"` in a github source auto-installs after trust, and needs one `/reload-plugins` in the first session | Team install needs the 2 manual commands | WD-0001 step 6, WD-0018 | not checked in WD-0017 |
 | U-9 | `claude -p … --json-schema` fills `structured_output` and `total_cost_usd` in JSON output; `Bash(git diff *)` rule syntax; `--setting-sources user` and `--strict-mcp-config --mcp-config '{"mcpServers":{}}'` are accepted; a nested `claude -p` started from inside a Claude Code session works | Review falls back to the fenced JSON block, or fails as `error` | WD-0012 | not checked in WD-0017 |
 | U-10 | Docs: PreToolUse fires for tool calls inside subagents, with `agent_id` and `agent_type` in the input. Verified from the docs; one live check remains | Fixer scope is enforced only at `done` (5.3 / 6.4 evidence checks still apply) | WD-0017 live session | PASS. `PreToolUse` inside the subagent carries `agent_id` and `agent_type: "warden:fixer"` (Read, Write, Bash); the main agent's calls carry neither. Live fix step: fixer Write in `scripts/` allowed; fixer Write to `README` in the fix worktree denied `outside the fixer scope`; fixer Write to the ticket worktree denied (E5); the main agent's Write to the fix worktree denied (E2). |

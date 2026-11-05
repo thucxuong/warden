@@ -634,6 +634,38 @@ Output: `{"archived":"PG-005","warnings":[...]}`. `warnings` appears when the ti
 
 ---
 
+## warden prices
+
+```
+warden prices [--update | --file <path> | --auto on|off]
+```
+
+Shows or sets the token prices behind the estimated cost of a run. With no option it prints where the prices came from and whether warden downloads them on its own.
+
+`warden start` and `warden site` download [LiteLLM's public price list](https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json) when the saved copy (`<data dir>/prices.json`) is over a day old. The request sends nothing about your project. If it fails, warden keeps the prices it has, prints what to do, and tries again the next day. A run is never stopped by this. A model with no price shows as unpriced.
+
+When downloading does not work where you are, go down this list:
+
+| Command | What it does |
+|---|---|
+| `warden prices --update` | Tries the download now, then again with `curl`, which can use a proxy or certificates that warden cannot. |
+| `warden prices --file <path>` | Uses a copy of the list you got yourself: `curl -fsSL <url> -o prices-list.json`, or any way you can fetch it. Automatic downloads still replace it the next day, unless you turn them off. |
+| `warden prices --auto off` | Never downloads on its own. Costs stay on the prices you have. `--auto on` turns it back on. |
+
+To set your own prices, turn downloads off and hand over a file with the same fields as the list, for example:
+
+```json
+{ "claude-opus-5-5": {
+    "litellm_provider": "anthropic",
+    "input_cost_per_token": 0.000004,
+    "output_cost_per_token": 0.00002,
+    "cache_creation_input_token_cost": 0.000005,
+    "cache_creation_input_token_cost_above_1hr": 0.000008,
+    "cache_read_input_token_cost": 0.0000002 } }
+```
+
+Exit code 2 for a wrong option or a file with no usable model; 1 when `--update` could not download.
+
 ## Internal commands
 
 `warden hook <event>` is what the plugin's hooks call. `warden gate <task>` is the detached engine worker. Neither is meant to be run by hand.

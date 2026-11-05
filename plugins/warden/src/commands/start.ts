@@ -8,6 +8,7 @@ import { lintFlow } from "../engine/flow-lint.ts";
 import { start } from "../engine/machine.ts";
 import { showTicket } from "../engine/tickets.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
+import { refreshPrices } from "../lib/prices.ts";
 import { branchExists, commitsAhead, currentBranch, fetchMain, isIgnored, showFile, worktreeAdd, worktreeList } from "../lib/git.ts";
 import { mainRoot, SESSIONS_DIR_NAME, taskDir, worktreeRoot, WORKTREES_DIR_NAME, worktreesDir } from "../state/paths.ts";
 import { chooseBase, readRun, runExists } from "../state/store.ts";
@@ -159,6 +160,7 @@ export async function run(args: string[], ctx: Ctx): Promise<number | void> {
   const taskText = ticketText(main, ctx.root, task); // after precheck: an existing run is reported as such
   const worktree = useWorktree ? ensureWorktree(main, task, branch, ref) : worktreeRoot(ctx.cwd);
 
+  await refreshPrices(); // the run's cost is saved when it ships
   const response = await start(ctx, task, flow, { worktree, branch, mainRef: ref, base, taskText, ticket: true });
   printJson(useWorktree ? { ...response, worktree, base } : response);
 }
