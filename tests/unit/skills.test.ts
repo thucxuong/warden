@@ -128,6 +128,7 @@ describe("skills", () => {
     expect(orchestrate).toContain("the warden:intent skill");
     expect(orchestrate).toContain("Only on their OK");
     expect(orchestrate).toContain("a title that starts with `Close:`");
+    expect(orchestrate).toContain("show `closure` as the template");
     expect(read(join(pluginRoot, "agents", "ticket.md"))).toContain("Possible new ticket");
     const compose = read(join(skillsDir, "compose", "SKILL.md"));
     expect(compose).toContain("use the warden:intent skill and stop here");

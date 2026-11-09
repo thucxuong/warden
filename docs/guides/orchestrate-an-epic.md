@@ -4,6 +4,10 @@ Have the project's agent work through every ticket of an epic: in waves, one run
 
 An **epic** is a ticket that groups other tickets. Its children can block each other (`blocked_by`). Warden sorts them into **waves**: wave 1 holds tickets that wait on nothing, wave 2 holds tickets that wait only on wave 1, and so on. Tickets in one wave are worked on in parallel. They ship one at a time, in order, so each ticket's checks run on the code it really lands on.
 
+## Plan the epic
+
+For a new idea, start with `/warden:intent <the idea>`. It interviews you, analyses the project, and after you agree creates the epic, its stories and tasks, and a closure ticket. Merging any of these tickets must not stop the app from deploying to production. See [`/warden:intent`](../reference/skills.md#wardenintent). You can also create the tickets yourself and skip to the steps below.
+
 ## Before you start
 
 - A `tickets` tool is set up and `warden tools --check` passes. See [Write a ticket tool](write-a-ticket-tool.md).
@@ -94,6 +98,18 @@ The page also splits the epic's cost into the orchestrator's own session, the ti
 | `pr-open` | shipped, but the pull request is not merged | merge it yourself |
 | `no-ship` | the run finished without a ship step | look at it yourself |
 
+## The closure ticket
+
+A ticket whose title starts with `Close:` is the epic's closure ticket. The agent shows `closure` as its template, and starts it only when every other child is `done` or `archived`. It runs a fixed flow: write the closure report, check, review, sign-off, ship.
+
+The report goes to `docs/knowledge/rollout.md`. It says whether each acceptance criterion is met, the state of every rollout item (infrastructure, environment variables, feature flags, migrations) in each environment, and which temporary flags are still in the code. The run then waits for you: do what is left, read the report, and type `approve <id>` or `reject <id>: <why>`.
+
+If the report finds missing code, the ticket does not fix it. The agent asks you, so it can become a new ticket.
+
+## New work found during a run
+
+The first breakdown is not a fixed scope. When a ticket agent finds work outside its ticket, it notes it and does nothing more. The next time the orchestration stops for you, or before the epic closes, the agent asks you about each note, one at a time. It creates a ticket only if you say yes, with the content you give or agree to. The next plan picks it up, and the closure ticket waits for it.
+
 ## What you type when it stops
 
 | The table says | You do |
@@ -110,7 +126,7 @@ Then run `/warden:orchestrate PG-100` again. See [Blocked and waiting runs](bloc
 
 - Run it only when you ask for it. A new session reminds you when an orchestration stopped with tickets left: `warden: orchestration of PG-100 stopped with 2 tickets left. ...`
 - If the project has a remote, the agent runs `git pull --ff-only origin <branch>` on the main checkout before each wave and after merges. If that fails, it stops and tells you.
-- It never pushes your main branch (except the new tickets, when you give it a request instead of an epic id and it plans the epic first), never edits files in a ticket worktree and never does a ticket's steps itself.
+- It never pushes your main branch (except new tickets: when you give it a request instead of an epic id and it plans the epic first, or when you agree to a new ticket during the run), never edits files in a ticket worktree and never does a ticket's steps itself.
 - A ticket held by an open ticket outside the epic stays in `held` until that ticket is done.
 - Each ticket's worktree is `<your repo>/.worktrees/<id>` and its branch is the id in lower case, for example `pg-102`.
 

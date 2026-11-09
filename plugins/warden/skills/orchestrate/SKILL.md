@@ -12,7 +12,7 @@ Run this only when the user asked for it. You are the orchestrator. Each ticket 
 
 1. Work from the main checkout. If the project has a remote, run `git -C <main> pull --ff-only origin <branch>`, with `<branch>` from `git -C <main> branch --show-current`. If it fails, tell the user and stop.
 2. Run `warden orchestrate plan <epic>`. If `errors` is not empty, show them and stop. If `complete` is true, go to step 9. Mention the `held` tickets and the parked ones in `backlog`.
-3. On the first plan of this conversation, show a table (wave, id, title, template, phase) and ask the user to go ahead. Ask one question and wait.
+3. On the first plan of this conversation, show a table (wave, id, title, template, phase) and ask the user to go ahead. For a ticket whose title starts with `Close:`, show `closure` as the template. Ask one question and wait.
 4. For each ticket in `next`, go by its phase:
    - `todo`: start it, one at a time, with Bash timeout 600000: `warden start <id> --template <template> --worktree`. For `compose`, write a flow first (compose skill, steps 3 and 4) that ends with a ship step. Then run `warden start <id> --flow <file> --worktree`. Note the `worktree` it prints.
    - `todo` with a title that starts with `Close:`: start it only when every other child of the epic is `done` or `archived`. Until then skip it, and if nothing else in `next` can go on, stop as in step 8 and say which children are open. Do not compose its flow: write this to a file and run `warden start <id> --flow <file> --worktree`:

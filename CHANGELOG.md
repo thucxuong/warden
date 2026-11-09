@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.15.0 — 2026-11-09
+
+A big ticket used to mean waiting for all its parts and releasing them at once, and an epic counted as finished when its tickets were, with no check of the whole. Planning an epic now has its own skill, every ticket can merge on its own, and an epic ends with a proper closure.
+
+- New `/warden:intent`: turns an idea into a planned epic. It reads the project, interviews you one question at a time (why, acceptance criteria, limits, rollout), analyses what exists, and after you agree creates the epic, its stories and tasks, and a closure ticket. It starts no run.
+- Each ticket it plans must keep the main branch deployable, and lists its own acceptance check and what its rollout needs. Tickets can depend on each other and form a DAG.
+- `/warden:compose` no longer plans epics: a request bigger than one ticket goes to `/warden:intent`. So does a plain request given to `/warden:orchestrate`.
+- Closure ticket: a ticket whose title starts with `Close:` starts only when every other child is `done` or `archived`. It runs a fixed flow (closure report in `docs/knowledge/rollout.md`, check, review, a person's sign-off, ship) and shows `closure` in the plan table.
+- A ticket agent that finds work outside its ticket notes it instead of doing it. `/warden:orchestrate` asks the engineer about each note when it stops for a person, or before the epic closes, and creates a ticket only on their OK.
+
 ## 0.14.0 — 2026-11-09
 
 The site could not show how an epic went as a whole, and an epic's cost left out the session that orchestrated it. On a real epic that session cost more than the tickets.

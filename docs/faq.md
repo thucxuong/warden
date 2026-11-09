@@ -45,7 +45,7 @@ Run `warden clean` from the main checkout. For each shipped task it removes the 
 
 ### Can I run several tasks at once?
 
-Yes. Each run has its own worktree and branch. With several live runs, add the task id to what you type: `approve APP-12`, `retry APP-12`. For a set of tickets with dependencies, use `/warden:orchestrate <epic>`. See [Orchestration](concepts/orchestration.md).
+Yes. Each run has its own worktree and branch. With several live runs, add the task id to what you type: `approve APP-12`, `retry APP-12`. For an idea bigger than one ticket, use `/warden:intent` to plan the epic. For a set of tickets with dependencies, use `/warden:orchestrate <epic>`. See [Orchestration](concepts/orchestration.md).
 
 ### Do I need a remote?
 

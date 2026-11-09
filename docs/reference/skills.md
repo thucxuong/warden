@@ -191,7 +191,7 @@ The plugin also has two agents (subagents). The skills start them; you do not.
 | Agent | Started by | What it does |
 |---|---|---|
 | `warden:fixer` | `/warden:work` and `/warden:orchestrate` at a fix step | Finds the root cause of a check failure that triage says is not (only) the change. Fixes it at the source in its own worktree and branch, within `fix.scope`, adds a fix note and a narrow triage rule, and returns `FIXED`. Or returns `CODE` (the change is at fault), `GAVE_UP` (the run is blocked), or `WARDEN_BUG` (warden files a report and blocks the run). Runs on the `opus` model |
-| `warden:ticket` | `/warden:orchestrate` | Drives one ticket's run in its own worktree. In `work` mode it stops at the ship step, a fix step, or when a person must act. In `ship` mode it merges the main branch in, then ships |
+| `warden:ticket` | `/warden:orchestrate` | Drives one ticket's run in its own worktree. In `work` mode it stops at the ship step, a fix step, or when a person must act. In `ship` mode it merges the main branch in, then ships It never creates a ticket: work it finds outside its ticket goes in its reply as `Possible new ticket`, and the orchestrator asks you. |
 
 Both run in the foreground, never in the background: a background agent cannot ask for permissions.
 
