@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.14.0 — unreleased
 
 The session that orchestrates an epic was not shown anywhere, so an epic's cost on the site left out the orchestrator's own work. On a real epic that was more than the tickets cost.
 
