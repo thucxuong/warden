@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "id": "R-a30e-0013",
+  "projectId": "staffing",
+  "kind": "enhancement",
+  "title": "A flow step that calls a named agent, under a condition, and keeps its answer in the run record",
+  "body": "Case: a project (ticket ADO-1309) needs a required review by a project agent named database-engineer, only on tickets that change the database, once before a person approves the plan and once before the pull request. In 0.13.0 a flow step has only id, type, title, instructions and its type's own field, so a step cannot name an agent or run under a condition. The review step always runs its own fixed reviewer. Workaround in the project: rules in the rules folder tell the agent to call the reviewer, and a check command proves it from sessions.jsonl (agentType) and events.jsonl. Limits of that workaround: it reads warden's internal files; the answer of the end review cannot go in the run record, because outputs are not copied there and agents cannot write there; question.answered carries no text, so a person's reason cannot be proven; warden:ticket agents have no Agent tool, so orchestrated runs cannot do the review. Ask: a step option such as a review step with a named agent and a condition on paths in the plan or diff, whose answer and verdict are saved in the run record, and that a person can skip with a written reason.",
+  "createdAt": "2026-11-09T08:50:16.825Z",
+  "status": "sent",
+  "fixedIn": null,
+  "note": null,
+  "projectDir": "/Users/cluu/Documents/Work/staffing-warden",
+  "machineId": "a30e39bd"
+}
