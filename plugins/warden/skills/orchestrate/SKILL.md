@@ -8,13 +8,17 @@ argument-hint: "<epic>"
 
 Run this only when the user asked for it. You are the orchestrator. Each ticket has its own run and worktree. Runs are started one at a time. Work runs in parallel. Ship runs one at a time, in wave order, so every ticket is gated on the code it lands on.
 
-`<epic>` is the ARGUMENTS given with this skill when it is an epic id. If it is a request instead, plan it with the warden:compose "Plan an epic" section, steps 1 to 5, and stop there if planning stops. Then `<epic>` is the new epic id in every step below, never the request text.
+`<epic>` is the ARGUMENTS given with this skill when it is an epic id. If it is a request instead, plan it with the warden:intent skill, and stop there if planning stops. Then `<epic>` is the new epic id in every step below, never the request text.
 
 1. Work from the main checkout. If the project has a remote, run `git -C <main> pull --ff-only origin <branch>`, with `<branch>` from `git -C <main> branch --show-current`. If it fails, tell the user and stop.
 2. Run `warden orchestrate plan <epic>`. If `errors` is not empty, show them and stop. If `complete` is true, go to step 9. Mention the `held` tickets and the parked ones in `backlog`.
 3. On the first plan of this conversation, show a table (wave, id, title, template, phase) and ask the user to go ahead. Ask one question and wait.
 4. For each ticket in `next`, go by its phase:
    - `todo`: start it, one at a time, with Bash timeout 600000: `warden start <id> --template <template> --worktree`. For `compose`, write a flow first (compose skill, steps 3 and 4) that ends with a ship step. Then run `warden start <id> --flow <file> --worktree`. Note the `worktree` it prints.
+   - `todo` with a title that starts with `Close:`: start it only when every other child of the epic is `done` or `archived`. Until then skip it, and if nothing else in `next` can go on, stop as in step 8 and say which children are open. Do not compose its flow: write this to a file and run `warden start <id> --flow <file> --worktree`:
+     ```json
+     { "schema": 1, "name": "closure", "description": "Write the closure report, check, review, get a person's sign-off, ship.", "steps": [ { "id": "report", "type": "implement" }, { "id": "check", "type": "check", "check": "default" }, { "id": "review", "type": "review" }, { "id": "signoff", "type": "approve", "prompt": "Confirm the closure report is right and the rollout is finished." }, { "id": "ship", "type": "ship" } ] }
+     ```
    - `running`: it needs a ticket agent.
    - `fix`: go to step 5b.
    - `ready`: wait for step 6.
@@ -51,4 +55,5 @@ Rules
 - Never start a ticket agent or the fixer with `run_in_background`. Foreground only.
 - Never edit files in a ticket worktree.
 - Never run checks to prove anything.
+- New work found during a run: keep every `Possible new ticket` a ticket agent names. Whenever you stop for a person (step 8) or reach step 9, ask the engineer about each one, one question at a time. Only on their OK, write the ticket with the content they give or agree to, in the form of section 4 of the warden:intent skill, and run `warden orchestrate create --title '<title>' --type <type> --body-file <file> --epic <epic> [--blocked-by <id,id>]`. Commit and push its `changed` paths as in section 7 of that skill, with the message `chore(<ticket id>): add ticket`. If you created one at step 9, go back to step 1.
 - The `warden next`, `done` and `wait` rules of the work skill apply.

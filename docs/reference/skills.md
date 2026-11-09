@@ -12,6 +12,7 @@ A skill is a set of instructions the plugin gives Claude Code. You start one by 
 | [`/warden:compose`](#wardencompose) | `[ticket-id] [what to do]` | Pick a flow for a task and start the run from its ticket (created first for a plain request) |
 | [`/warden:work`](#wardenwork) | `[task-id]` | Drive a run step by step until it ships, waits or blocks |
 | [`/warden:plan`](#wardenplan) | none | Write the plan in a plan step |
+| [`/warden:intent`](#wardenintent) | `[the idea]` | Turn an idea into an epic with stories, tasks and a closure ticket |
 | [`/warden:orchestrate`](#wardenorchestrate) | `<epic>` | Work through all tickets of an epic |
 | [`/warden:report`](#wardenreport) | none | Send a bug report or an idea about warden |
 | [`/warden:retro`](#wardenretro) | none | Look back at recent work and route what you learned |
@@ -59,7 +60,7 @@ Picks a flow for the task and starts the run from its ticket. With only text, it
 
 It reuses a saved flow from `.warden/flows/` when one fits. A custom flow is written to a scratch file, linted with `warden flow check`, and saved with `warden flow save` when the shape will come up again. It then runs `warden start <id> --template <t>` (or `--flow`), which reads the ticket, adding `--worktree` unless you say the branch you are on is this ticket's own, and goes on with `/warden:work`. With `--worktree`, the run starts from and ships to the branch the main checkout is on. Every run starts from a ticket; without a `tickets` role it tells you to add a ticket tool (`/warden:tools`) and stops.
 
-Without a task id, it creates the ticket first: `warden orchestrate create` with your request as the body. The tool picks the id. It commits the changed ticket files on the branch runs start from, pushes that branch when the project has a remote (runs branch from its `origin` copy; if the push is refused, it commits the ticket on the run's branch instead, so it goes with the run's pull request), and starts the run from it. When the request is bigger than one ticket, it proposes an epic and its child tickets, and after you agree creates them all, commits and pushes them the same way, and points you to the Tickets page of `warden site` and to `/warden:orchestrate <epic>`. When the tool has no `create`, it tells you to add it and stops.
+Without a task id, it creates the ticket first: `warden orchestrate create` with your request as the body. The tool picks the id. It commits the changed ticket files on the branch runs start from, pushes that branch when the project has a remote (runs branch from its `origin` copy; if the push is refused, it commits the ticket on the run's branch instead, so it goes with the run's pull request), and starts the run from it. When the request is bigger than one ticket, it hands it to [`/warden:intent`](#wardenintent). When the tool has no `create`, it tells you to add it and stops.
 
 See [compose a workflow](../guides/compose-a-workflow.md).
 
@@ -89,6 +90,18 @@ Used in every plan step. You do not start it yourself; `/warden:work` does.
 It breaks the target into a chain of small tasks, reusing what exists before building anything new. Each task has an approach: `reuse`, `configure`, `compose`, `adopt` (a vetted package) or `build` (new code, with a one-line reason). Tasks are grouped in waves; a task may depend only on tasks of earlier waves. A real choice gets a decision file `.warden/decisions/NNNN-<slug>.md`. When the step says brainstorm, it compares 2 or 3 options first.
 
 The engine rejects a plan that holds placeholder words such as `TBD` or `TODO`. The full list is in the [CLI reference](cli.md#output-shapes).
+
+## /warden:intent
+
+```
+/warden:intent let customers export their invoices
+```
+
+Turns an idea into a planned epic. It reads the project, interviews you one question at a time (why, acceptance criteria, limits, rollout), analyses what exists, and proposes a ticket DAG. After you agree, it creates the epic, its stories and tasks as direct children, and a closure ticket last. It starts no run.
+
+Merging any ticket to the main branch must not stop the app from deploying to production. Each ticket lists what its rollout needs. The closure ticket waits for every other ticket, reports on the acceptance criteria and the rollout (infrastructure, environment variables, flags), and needs a person's sign-off.
+
+See [orchestration](../concepts/orchestration.md).
 
 ## /warden:orchestrate
 

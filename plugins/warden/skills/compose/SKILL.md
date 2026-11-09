@@ -37,7 +37,7 @@ argument-hint: "[ticket-id] [what to do]"
 
 Never make up an id: the ticket tool picks it. Write a single quote in a title as `’`. `<main>` is the main checkout.
 
-1. If the request is bigger than one ticket (several features, or parts that must land in a set order), go to "Plan an epic".
+1. If the request is bigger than one ticket (several features, or parts that must land in a set order), use the warden:intent skill and stop here.
 2. Write the request (the user's words and what they said in the chat) to a scratch file. Run `warden orchestrate create --title '<short title>' --type <feature|bug|chore|docs> --body-file <file>`.
 3. If it exits 3 (no tickets tool, or `the ticket tool has no create`), tell the user warden needs a ticket tool with `create` (`/warden:tools`) and stop. On any other error, show it and stop.
 4. It prints `{ ticket, changed, base }`. `<base>` is `base`, the branch a run of this ticket starts from. If `changed` is empty, go to step 5. Otherwise commit the ticket on `<base>` before a run starts:
@@ -46,12 +46,3 @@ Never make up an id: the ticket tool picks it. Write a single quote in a title a
    - If the project has a remote (runs branch from `origin/<base>`), run `git -C <main> push origin HEAD:<base>`.
    - If the push is refused (for example a protected branch), the ticket goes with the run's pull request instead. Undo the commit, keeping the files: `git -C <main> reset --soft HEAD~1`, then `git -C <main> restore --staged -- <changed paths>` (`warden start` reads the ticket from the main checkout). After step 7 above, copy each changed path from `<main>` into the worktree, commit them there with the message `chore(<ticket.id>): add ticket`, and delete them from `<main>`.
 5. The task id is `ticket.id`. Go on with step 2 above.
-
-## Plan an epic
-
-1. Propose a breakdown: one epic (title, one-paragraph goal) and its child tickets. For each child give a title, a type (`feature`, `bug`, `chore` or `docs`), what to do, and which earlier children it waits for (`blocked_by`). Keep each child small enough for one run. Show it as a table and ask the user to agree or change it. Ask one question and wait.
-2. After the user agrees, create the epic: write its goal to a scratch file and run `warden orchestrate create --title '<title>' --type epic --body-file <file>`. Keep its `ticket.id`.
-3. Create the children in order, one command each: `warden orchestrate create --title '<title>' --type <type> --body-file <file> --epic <epic id> [--blocked-by <id,id>]` (comma-separated, no spaces). Use only ids printed by earlier creates in `--blocked-by`.
-4. If the first create exits 3, tell the user the ticket tool cannot create tickets, show the breakdown to add by hand, and stop. If a later create fails, show the error and the tickets created so far, and stop.
-5. Commit and push every `changed` path as in "No task id" step 4, in one commit with the message `chore(<epic id>): plan epic`. If the push is refused, stop and tell the user the tickets must reach `<base>` first (through a pull request).
-6. Tell the user: the Tickets page of `warden site` shows the epic as a DAG, and `/warden:orchestrate <epic id>` runs it. Do not start any run.

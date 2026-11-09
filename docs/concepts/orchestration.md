@@ -6,7 +6,11 @@ It needs a ticket tool: a project tool set as the `tickets` role in `.warden/too
 
 ## Planning an epic from one request
 
-With the ticket tool's `create` (required since 0.9), you can ask for something bigger than one ticket in plain words, with `/warden:compose` or `/warden:orchestrate`. The agent proposes a breakdown: an epic and its child tickets, each with a type and the earlier tickets it waits for. Once you agree, it creates the epic and then the children with `warden orchestrate create` (children get `--epic` and `--blocked-by` with the ids the tool returned before), commits the changed ticket files on the main branch (with a remote, it pushes the main branch, because runs branch from `origin/<mainBranch>`; if the push is refused, it stops and tells you the tickets must reach the main branch first), and points you to the Tickets page of `warden site` (the DAG view) and to `/warden:orchestrate <epic>`. The ticket tool picks every id. Without `create`, the agent shows the breakdown for you to add by hand.
+Use `/warden:intent` for an idea bigger than one ticket; `/warden:compose` and `/warden:orchestrate` hand a plain request of that size to it. It needs the ticket tool's `create`. It interviews you, analyses the project, and after you agree creates the epic, its stories and tasks, and a closure ticket (its title starts with `Close:`), then commits the changed ticket files on the main branch (with a remote, it pushes the main branch, because runs branch from `origin/<mainBranch>`; if the push is refused, it stops and tells you the tickets must reach the main branch first). The ticket tool picks every id. Without `create`, the agent shows the breakdown for you to add by hand.
+
+`/warden:orchestrate` starts the closure ticket only when every other child is `done` or `archived`. Its fixed flow writes a closure report on the acceptance criteria and the rollout, runs the checks and the review, waits for a person's sign-off, and ships the report.
+
+The first breakdown is not a fixed scope. When a ticket agent finds work outside its ticket, the orchestrator asks the engineer about it the next time it stops for a person, and creates a new ticket only on their OK.
 
 ## Words
 

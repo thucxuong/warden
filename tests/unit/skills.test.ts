@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { lintFlow } from "../../plugins/warden/src/engine/flow-lint.ts";
 
 const pluginRoot = resolve(import.meta.dir, "../../plugins/warden");
 const skillsDir = join(pluginRoot, "skills");
 
-const expectedSkills = ["init", "compose", "work", "plan", "retro", "report", "upgrade", "tools", "orchestrate", "guide", "docs"];
+const expectedSkills = ["init", "compose", "work", "plan", "retro", "report", "upgrade", "tools", "orchestrate", "guide", "docs", "intent"];
 
 // Frontmatter extras from spec section 8 (string values, unquoted).
 const expectedExtras: Record<string, Record<string, string>> = {
@@ -15,6 +16,7 @@ const expectedExtras: Record<string, Record<string, string>> = {
   upgrade: {},
   tools: { "argument-hint": "[<name>]" },
   orchestrate: { "argument-hint": "<epic>" },
+  intent: { "argument-hint": "[the idea]" },
   guide: {},
   docs: {},
 };
@@ -116,6 +118,23 @@ describe("skills", () => {
   test("0.11.1: a ticket with nothing left to do goes to a person, with no invented change", () => {
     expect(read(join(skillsDir, "work", "SKILL.md"))).toContain("do not invent a change");
     expect(read(join(pluginRoot, "agents", "ticket.md"))).toContain("do not invent a change");
+  });
+
+  test("intent plans an epic that ends in a closure ticket, and orchestrate's closure flow passes the lint", () => {
+    const text = read(join(skillsDir, "intent", "SKILL.md"));
+    for (const part of ["does not stop the app from deploying to production", "direct child of the epic", "## 5. Closure ticket", "title must start with `Close:`"]) expect(text).toContain(part);
+    expect(text).not.toMatch(/^##+ (Why|What to do|Acceptance|Rollout)\n[^\n]/m); // a project's Markdown format check must pass on the new tickets
+    const orchestrate = read(join(skillsDir, "orchestrate", "SKILL.md"));
+    expect(orchestrate).toContain("the warden:intent skill");
+    expect(orchestrate).toContain("Only on their OK");
+    expect(orchestrate).toContain("a title that starts with `Close:`");
+    expect(read(join(pluginRoot, "agents", "ticket.md"))).toContain("Possible new ticket");
+    const compose = read(join(skillsDir, "compose", "SKILL.md"));
+    expect(compose).toContain("use the warden:intent skill and stop here");
+    expect(compose).not.toContain("## Plan an epic");
+    const flow = JSON.parse(/```json\n\s*(\{.*\})\n\s*```/.exec(orchestrate)![1]!);
+    expect(flow.name).toBe("closure");
+    expect(lintFlow(flow)).toEqual([]);
   });
 
   test("the plan skill keeps the key parts of the breakdown", () => {
