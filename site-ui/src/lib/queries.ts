@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import type {
-  DocsResponse, EventsResponse, HealthResponse, HomeResponse, LogResponse, RunDetailResponse, RunsResponse,
+  DocsResponse, EpicResponse, EventsResponse, HealthResponse, HomeResponse, LogResponse, RunDetailResponse, RunsResponse,
   SignalsResponse, TicketsResponse,
 } from "@api";
 import { getJson, getText } from "@/lib/api";
@@ -12,6 +12,8 @@ const enc = encodeURIComponent;
 export const useHome = () => useQuery({ queryKey: ["home"], queryFn: () => getJson<HomeResponse>("/api/home") });
 export const useHealth = () => useQuery({ queryKey: ["health"], queryFn: () => getJson<HealthResponse>("/api/health") });
 export const useTickets = () => useQuery({ queryKey: ["tickets"], queryFn: () => getJson<TicketsResponse>("/api/tickets") });
+export const useEpic = (epic: string) =>
+  useQuery({ queryKey: ["epic", epic], queryFn: () => getJson<EpicResponse>(`/api/epics/${enc(epic)}`) });
 export const useSignals = () => useQuery({ queryKey: ["signals"], queryFn: () => getJson<SignalsResponse>("/api/signals") });
 
 /** `params` is the /api/runs query string without "?". */

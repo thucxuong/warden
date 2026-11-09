@@ -501,7 +501,7 @@ Used by the `/warden:orchestrate` skill. Works on the main checkout. Needs a `ti
 |---|---|---|
 | `plan <epic>` | Runs the tickets tool (`dag <epic>`), builds waves, adds each ticket's run state, saves the plan in `.warden/state/_orchestrate/<epic>.json` and prints it | 1 when `errors` is not empty |
 | `status <epic>` | Prints the saved plan with run state read again. Does not ask the tickets tool | 3 when there is no saved plan |
-| `set-status <id> <status>` | Runs the tickets tool (`set-status`). Status is `backlog`, `todo`, `doing`, `review`, `done` or `archived`. Prints `{"id","status","changed":[paths]}` | 2 for a bad status |
+| `set-status <id> <status>` | Runs the tickets tool (`set-status`). Status is `backlog`, `todo`, `doing`, `review`, `done` or `archived`. Prints `{"id","status","changed":[paths]}`. For an epic with a saved plan set `done`, it also saves what the orchestrator did to `.warden/history/<epic>/epic.json` and adds that path to `changed` | 2 for a bad status |
 | `create ...` | 0.8. Runs the tickets tool's `create` (required since 0.9) in the main checkout; the tool picks the id. Passes the body file as an absolute path. Checks the new id (`^[A-Za-z0-9][A-Za-z0-9._-]*$`, and `taskIdPattern` unless `--type epic`). Prints `{"ticket":{...,"body"},"changed":[paths],"base":"<branch>"}`; the caller adds and commits `changed` on `base`, the branch a run of the ticket starts from. Used by `/warden:compose` for a request without an id and to plan an epic | 2 for bad usage or a missing body file; 3 with `the ticket tool has no create` when the tool answers exit 2; 1 for a bad id or result |
 
 Plan output:

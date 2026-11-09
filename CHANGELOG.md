@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+The session that orchestrates an epic was not shown anywhere, so an epic's cost on the site left out the orchestrator's own work. On a real epic that was more than the tickets cost.
+
+- New epic page on the site (`/epics/<id>`): what the orchestrator did, step by step (planned, started, ticket agents, fixer, shipped, marked done), what you wrote, where it stopped with its message, and the cost of each step.
+- The epic card on Home shows the orchestrator's cost, the tickets' cost and the total, and links to the epic page. The Tickets page links to it when an epic is picked.
+- Warden reads this from the transcripts of the sessions that ran `warden orchestrate`. It records nothing new while the orchestrator works, so epics run with earlier versions show too.
+- `warden orchestrate set-status <epic> done` saves the steps to `.warden/history/<epic>/epic.json` and lists it in `changed`. `/warden:orchestrate` adds and commits it with the epic's ticket file.
+- New `/api/epics/<id>`; `/api/tickets` epics have a `usage` with `orchestrator`, `tickets` and `total`.
+
 ## 0.13.0 — 2026-11-05
 
 Costs now use current prices. Before, prices shipped inside the plugin and went stale until the next update.

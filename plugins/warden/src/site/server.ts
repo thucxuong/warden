@@ -2,6 +2,7 @@
 import { join } from "node:path";
 import type { ApiError, SignalsResponse } from "./api-types.ts";
 import { listDocs, readDoc } from "./data.ts";
+import { buildEpic } from "./epics.ts";
 import { buildHealth } from "./health.ts";
 import { buildHome } from "./home.ts";
 import { renderMarkdown } from "./markdown.ts";
@@ -68,6 +69,11 @@ async function api(opts: ServerOptions, url: URL): Promise<Response> {
   if (path === "/api/docs") return json({ docs: listDocs(opts.main) });
   if (path === "/api/doc") return docRoute(opts.main, url);
   if (path === "/api/runs") return json(listRuns(ctx, parseRunsQuery(url.searchParams)));
+  if (path.startsWith("/api/epics/")) {
+    const epic = safeDecode(path.slice("/api/epics/".length));
+    if (epic === null || !TASK_ID.test(epic) || epic === "_sessions") return error(404, "not found");
+    return json(buildEpic(ctx, epic));
+  }
   if (path.startsWith("/api/runs/")) {
     const parts = path.slice("/api/runs/".length).split("/").map(safeDecode);
     const [task, sub] = parts;

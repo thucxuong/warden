@@ -5,7 +5,7 @@
 import type { HomeResponse, RunsResponse, TicketsResponse } from "@api";
 import { ApiRequestError } from "@/lib/api";
 import {
-  docHtml, docs, health, home, runDetail, runEvents, runLog, runsResponse, signals,
+  docHtml, docs, epicFx100, health, home, runDetail, runEvents, runLog, runsResponse, signals,
   ticketsError, ticketsNoTool, ticketsOk,
 } from "./fixtures.ts";
 
@@ -38,6 +38,12 @@ function route(path: string): unknown {
     if (variant === "no-tool") return ticketsNoTool;
     if (variant === "tool-error") return ticketsError;
     return empty ? emptyTickets : ticketsOk;
+  }
+  const epic = /^\/api\/epics\/([^/]+)$/.exec(p);
+  if (epic) {
+    const id = decodeURIComponent(epic[1]!);
+    if (id === "FX-100" && !empty) return epicFx100;
+    return { ...epicFx100, epic: id, source: null, rows: [], usage: { ...epicFx100.usage, known: false } };
   }
   if (p === "/api/runs") {
     const res = runsResponse(url.searchParams);

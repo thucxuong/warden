@@ -215,6 +215,7 @@ All are GET. JSON responses have `cache-control: no-store`. Errors use `ApiError
 | `/api/runs/:task/events` | `EventsResponse` | 404 |
 | `/api/runs/:task/log?path=&lines=` | `LogResponse` | 400 bad path, 404 missing or history-only |
 | `/api/tickets` | `TicketsResponse` (always 200; see `state`) | 500 |
+| `/api/epics/:id` | `EpicResponse` (200 with `source: null` and no rows when nothing is found) | 404 bad id |
 | `/api/docs` | `DocsResponse` (unchanged) | |
 | `/api/doc?path=&format=html` | `text/plain` or `text/html` (unchanged) | 400, 404 |
 

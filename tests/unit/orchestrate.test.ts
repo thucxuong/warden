@@ -158,6 +158,25 @@ describe("orchestrate set-status", () => {
     }
   });
 
+  test("an orchestrated epic set done saves its orchestrator's steps and lists the file in changed", () => {
+    expect(cli(["orchestrate", "plan", "E-1"]).code).toBe(0);
+    const transcript = join(base, "orchestrator.jsonl");
+    writeFileSync(transcript, JSON.stringify({
+      type: "assistant", timestamp: new Date().toISOString(),
+      message: { id: "m1", model: "claude-sonnet-5-5", usage: { input_tokens: 10 }, content: [{ type: "tool_use", name: "Bash", input: { command: "warden orchestrate plan E-1" } }] },
+    }) + "\n");
+    const sessions = join(main, ".warden", "state", "_sessions");
+    mkdirSync(sessions, { recursive: true });
+    writeFileSync(join(sessions, "s1.json"), JSON.stringify({ schema: 1, sessionId: "s1", transcriptPath: transcript, projectAgent: false, task: null, orchestrate: "E-1", updatedAt: "" }));
+
+    expect(cli(["orchestrate", "set-status", "T-1", "done"]).json).toEqual({ id: "T-1", status: "done", changed: ["backlog/T-1.md"] }); // a ticket: nothing saved
+    const r = cli(["orchestrate", "set-status", "E-1", "done"]);
+    expect(r.code).toBe(0);
+    expect(r.json).toEqual({ id: "E-1", status: "done", changed: ["backlog/E-1.md", ".warden/history/E-1/epic.json"] });
+    const saved = JSON.parse(readFileSync(join(main, ".warden", "history", "E-1", "epic.json"), "utf8"));
+    expect(saved.rows.map((row: { kind: string }) => row.kind)).toEqual(["plan"]);
+  });
+
   test("a result of the wrong shape is exit 1", () => {
     writeFileSync(join(fx, "bad-set"), "");
     expect(cli(["orchestrate", "set-status", "T-1", "done"]).code).toBe(1);

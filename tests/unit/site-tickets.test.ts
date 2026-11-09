@@ -3,6 +3,7 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { WardenError } from "../../plugins/warden/src/lib/exit.ts";
 import type { TicketsOk } from "../../plugins/warden/src/site/api-types.ts";
+import { buildEpic } from "../../plugins/warden/src/site/epics.ts";
 import { siteCtx } from "../../plugins/warden/src/site/text.ts";
 import { buildTickets, singleFlight, type ToolRunner } from "../../plugins/warden/src/site/tickets.ts";
 import { FX_TICKETS, makeSiteFixture, PLUGIN_ROOT, type SiteFixture } from "../helpers/site-fixture.ts";
@@ -65,6 +66,52 @@ describe("board", () => {
     }]);
     expect(reports).toMatchObject({ id: "FX-300", title: "Reports", total: 2, done: 0, inProgress: false, running: [], signals: [] });
   }, 30_000);
+
+  test("epics: the orchestrator's cost, the tickets' cost and the total", () => {
+    const [billing, reports] = ok.epics;
+    const { orchestrator, tickets, total } = billing!.usage;
+    expect(orchestrator).toMatchObject({ input: 500_000, output: 50_000, known: true, unpriced: false });
+    expect(orchestrator.costUsd).toBeCloseTo((500_000 * 2 + 50_000 * 10) / 1e6, 6);
+    const runs = ok.tickets.filter((t) => t.epic === "FX-100" && t.run).map((t) => t.run!.usage);
+    expect(tickets.costUsd).toBeCloseTo(runs.reduce((sum, u) => sum + u.costUsd, 0), 6);
+    expect(total.costUsd).toBeCloseTo(orchestrator.costUsd + tickets.costUsd, 6);
+    expect(reports!.usage.orchestrator.known).toBe(false); // no orchestrator session
+  }, 30_000);
+});
+
+describe("epic page (/api/epics/:id)", () => {
+  test("what the orchestrator did, from its transcript", () => {
+    const epic = buildEpic(siteCtx(fx.main, PLUGIN_ROOT, fx.data, fx.now), "FX-100");
+    expect(epic).toMatchObject({ epic: "FX-100", source: "live", savedAt: null });
+    expect(epic.rows.map((r) => [r.kind, r.label, r.text])).toEqual([
+      ["plan", "Planned the epic", null],
+      ["start", "Started FX-102, FX-104", null],
+      ["work", "Ticket agents working on FX-102, FX-104", null],
+      ["stop", "Stopped and reported to you", "FX-104 waits for your approval: type `approve FX-104`."],
+    ]);
+    expect(epic.usage).toEqual(ok.epics[0]!.usage.orchestrator);
+    expect(epic.pricing).toMatch(/^Estimate using/);
+  });
+
+  test("from the saved copy when no transcript is here; empty when neither is", () => {
+    const ctx = () => siteCtx(fx.main, PLUGIN_ROOT, fx.data, fx.now);
+    expect(buildEpic(ctx(), "FX-300")).toMatchObject({ source: null, rows: [], usage: { known: false } });
+    const dir = join(fx.main, ".warden", "history", "FX-300");
+    mkdirSync(dir, { recursive: true });
+    const tokens = { input: 10, output: 1, cacheRead: 0, cacheWrite: 0, costUsd: 0.5, unpriced: false };
+    writeFileSync(join(dir, "epic.json"), JSON.stringify({
+      schema: 1, epic: "FX-300", savedAt: "2026-11-01T10:00:00.000Z", pricesDate: null,
+      rows: [{ at: "2026-11-01T09:00:00.000Z", kind: "done", tickets: ["FX-300"], text: null, tokens }],
+    }));
+    try {
+      const epic = buildEpic(ctx(), "FX-300");
+      expect(epic).toMatchObject({ source: "history", savedAt: "2026-11-01T10:00:00.000Z", pricing: "Estimate using the prices that came with warden." });
+      expect(epic.rows.map((r) => r.label)).toEqual(["Marked the epic done"]);
+      expect(epic.usage).toMatchObject({ costUsd: 0.5, known: true });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("rules with a fake tool", () => {

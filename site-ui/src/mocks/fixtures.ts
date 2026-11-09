@@ -3,7 +3,7 @@
 // Only loaded in `--mode mock`; never part of the production build.
 
 import type {
-  DocsResponse, EpicSummary, EventView, GateRun, HealthResponse, HomeResponse, ISO, LogResponse, PrInfo,
+  DocsResponse, EpicResponse, EpicRowKind, EpicRowView, EpicSummary, EventView, GateRun, HealthResponse, HomeResponse, ISO, LogResponse, PrInfo,
   ReviewFindingView, RunDetailResponse, RunRow, RunStatus, RunsResponse, Signal, SignalsResponse, StepKind,
   StepRef, StepUsage, TicketCard, TicketsOk, TicketsResponse, Timeline, TimelineLoop, TimelineMarker, TimelineStep,
   Usage, TicketStatus, BoardColumnId, Source, Thresholds,
@@ -385,6 +385,33 @@ const runningOf = (epic: string): EpicSummary["running"] =>
     .filter((c) => c.epic === epic && c.run && LIVE.includes(c.run.status) && c.run.source === "live")
     .map((c) => ({ id: c.id, title: c.title, step: c.run!.step, inStepMs: c.run!.inStepMs, signals: c.run ? (seedOf(c.id)?.signals ?? []) : [] }));
 
+const fx100Orchestrator = usage(120_000, 18_000, 900_000, 40_000, 1.42);
+
+// ---- /api/epics/:id ----
+
+const epicRow = (min: number, kind: EpicRowKind, label: string, cost: number, tickets: string[] = [], text: string | null = null): EpicRowView => ({
+  at: new Date(Date.parse(generatedAt) - min * 60_000).toISOString(), kind, tickets, label, text,
+  usage: usage(Math.round(cost * 80_000), Math.round(cost * 12_000), Math.round(cost * 600_000), Math.round(cost * 25_000), cost),
+});
+
+export const epicFx100: EpicResponse = {
+  generatedAt, epic: "FX-100", source: "live", savedAt: null, pricing: "Estimate using prices from 2026-11-05.",
+  rows: [
+    epicRow(95, "plan", "Planned the epic", 0.21),
+    epicRow(94, "stop", "Stopped and reported to you", 0.03, [], "Epic FX-100 has 6 tickets in 3 waves. Go ahead?"),
+    epicRow(90, "you", "You wrote", 0.02, [], "yes"),
+    epicRow(89, "start", "Started FX-101, FX-102", 0.06, ["FX-101", "FX-102"]),
+    epicRow(88, "work", "Ticket agents working on FX-101, FX-102", 0.32, ["FX-101", "FX-102"]),
+    epicRow(60, "fix", "Fixer working on FX-102", 0.18, ["FX-102"]),
+    epicRow(45, "ship", "Shipping FX-101", 0.12, ["FX-101"]),
+    epicRow(40, "done", "Marked FX-101 done", 0.05, ["FX-101"]),
+    epicRow(38, "plan", "Planned the next wave", 0.09),
+    epicRow(36, "work", "Ticket agent working on FX-104", 0.27, ["FX-104"]),
+    epicRow(30, "stop", "Stopped and reported to you", 0.07, [], "FX-104 waits for your approval: type `approve FX-104`.\nFX-102 is still running."),
+  ],
+  usage: fx100Orchestrator,
+};
+
 export const ticketsOk: TicketsOk = {
   state: "ok", generatedAt, tool: "backlog",
   columns: ([["backlog", "Backlog"], ["todo", "Todo"], ["in-progress", "In progress"], ["done", "Done"], ["archived", "Archived"]] as const)
@@ -392,8 +419,11 @@ export const ticketsOk: TicketsOk = {
   tickets: ticketCards,
   edges: ticketSeeds.flatMap((t) => t.blockedBy.map((b) => ({ from: b, to: t.id, satisfied: statusOf(b) === "done" || statusOf(b) === "archived" }))),
   epics: [
-    { id: "FX-100", title: "Billing", status: "doing", total: 6, done: 1, archived: 1, inProgress: true, running: runningOf("FX-100"), signals: [sig.orchestration] },
-    { id: "FX-300", title: "Reports", status: "todo", total: 2, done: 0, archived: 0, inProgress: false, running: [], signals: [] },
+    {
+      id: "FX-100", title: "Billing", status: "doing", total: 6, done: 1, archived: 1, inProgress: true, running: runningOf("FX-100"), signals: [sig.orchestration],
+      usage: { orchestrator: fx100Orchestrator, tickets: usage(410_000, 62_000, 3_900_000, 260_000, 5.31), total: usage(530_000, 80_000, 4_800_000, 300_000, 6.73) },
+    },
+    { id: "FX-300", title: "Reports", status: "todo", total: 2, done: 0, archived: 0, inProgress: false, running: [], signals: [], usage: { orchestrator: NA, tickets: usage(0, 0, 0, 0, 0), total: usage(0, 0, 0, 0, 0) } },
   ],
   errors: [],
 };

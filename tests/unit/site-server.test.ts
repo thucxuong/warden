@@ -124,7 +124,7 @@ describe("request rules", () => {
   });
 
   test("an unknown API path is 404 JSON and never falls through to the UI", async () => {
-    for (const path of ["/api", "/api/x", "/api/tasks", "/api/graph", "/api/runs/A/B/C", "/api/runs/..%2f", "/api/runs/_sessions"]) {
+    for (const path of ["/api", "/api/x", "/api/tasks", "/api/graph", "/api/runs/A/B/C", "/api/runs/..%2f", "/api/runs/_sessions", "/api/epics/", "/api/epics/A/B", "/api/epics/..%2f", "/api/epics/_sessions"]) {
       const res = await request(opts, path);
       expect(res.status).toBe(404);
       expect(res.headers.get("content-type")).toContain("application/json");

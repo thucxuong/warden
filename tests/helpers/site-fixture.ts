@@ -618,6 +618,24 @@ export default tools;
     epic: "FX-100", tool: "backlog", mainBranch: "main", mainRef: "origin/main", taskIdPattern: "^FX-\\d{3}$",
     children, allTickets: () => children, at: iso(now - 30 * MIN),
   }));
+  // Its orchestrator session: planned, started FX-102 and FX-104, ran their agents, then stopped for an approval.
+  const orchestrator = join(transcripts, "orchestrator-FX-100.jsonl");
+  const said = (min: number, id: string, input: number, content: unknown[], stop = "tool_use") => JSON.stringify({
+    type: "assistant", timestamp: iso(now - min * MIN),
+    message: { id, model: "claude-sonnet-5-5", content, stop_reason: stop, usage: { input_tokens: input, output_tokens: input / 10, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } },
+  });
+  const bash = (command: string) => ({ type: "tool_use", name: "Bash", input: { command } });
+  const ticketAgent = (task: string) => ({ type: "tool_use", name: "Agent", input: { subagent_type: "warden:ticket", prompt: `Task: ${task}\nWorktree: /w/${task}\nMode: work` } });
+  put(orchestrator, [
+    said(30, "o1", 100_000, [bash("warden orchestrate plan FX-100")]),
+    said(29, "o2", 50_000, [bash("warden start FX-102 --template feature --worktree")]),
+    said(29, "o3", 50_000, [bash("warden start FX-104 --template feature --worktree")]),
+    said(28, "o4", 200_000, [ticketAgent("FX-102"), ticketAgent("FX-104")]),
+    said(20, "o5", 100_000, [{ type: "text", text: "FX-104 waits for your approval: type `approve FX-104`." }], "end_turn"),
+  ].join("\n") + "\n");
+  put(join(state, "_sessions", "sess-orchestrator.json"), {
+    schema: 1, sessionId: "sess-orchestrator", transcriptPath: orchestrator, projectAgent: false, task: null, orchestrate: "FX-100", updatedAt: iso(now - 20 * MIN),
+  });
 
   // ---- data dir: reports ----
   const reports = join(data, "reports");

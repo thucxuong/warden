@@ -1,7 +1,7 @@
 import type { TicketToolHelp, TicketsOk } from "@api";
 import { KanbanSquare, Network, TriangleAlert, Wrench } from "lucide-react";
 import { lazy, Suspense } from "react";
-import { useSearchParams } from "wouter";
+import { Link, useSearchParams } from "wouter";
 import { PageHeader } from "@/components/app/AppShell";
 import { CommandBlock } from "@/components/app/CommandBlock";
 import { EmptyState, ErrorState, SkeletonRows } from "@/components/app/States";
@@ -70,6 +70,9 @@ function Toolbar({ data, view, epic, onView, onEpic }: {
           <SelectItem value="none">No epic</SelectItem>
         </SelectContent>
       </Select>
+      {data.epics.some((e) => e.id === epic) && (
+        <Link href={`/epics/${encodeURIComponent(epic)}`} className="text-xs text-primary hover:underline" data-testid="epic-page-link">Epic cost and orchestrator</Link>
+      )}
       <ToggleGroup type="single" variant="outline" size="sm" value={view} onValueChange={(v) => v && onView(v)} className="bg-card" aria-label="View">
         <ToggleGroupItem value="board" aria-label="Board" className="gap-1.5 px-3"><KanbanSquare className="size-3.5" /> Board</ToggleGroupItem>
         <ToggleGroupItem value="dag" aria-label="DAG" className="gap-1.5 px-3"><Network className="size-3.5" /> DAG</ToggleGroupItem>

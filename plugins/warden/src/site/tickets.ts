@@ -6,12 +6,13 @@ import { readRoles } from "../commands/tools.ts";
 import { CLOSED_STATUSES, dagRowProblem, DONE_PHASES, readPlans, runTicketToolAsync } from "../engine/tickets.ts";
 import type { DagTicket, TicketStatus } from "../types.ts";
 import type {
-  BoardColumn, BoardColumnId, CardRun, DagEdge, EpicSummary, Signal, TicketCard, TicketToolHelp, TicketsResponse,
+  BoardColumn, BoardColumnId, CardRun, DagEdge, EpicSummary, EpicUsage, Signal, TicketCard, TicketToolHelp, TicketsResponse, Usage,
 } from "./api-types.ts";
 import type { LoadedTask } from "./data.ts";
 import { resolvePr } from "./pr.ts";
 import { runSignals, sortSignals } from "./signals.ts";
-import { isGoing, stepRef, usageOf, type SiteCtx } from "./text.ts";
+import { orchestratorUsage } from "./epics.ts";
+import { isGoing, stepRef, sumUsage, usageOf, ZERO_TOKENS, toUsage, type SiteCtx } from "./text.ts";
 
 export const DAG_TIMEOUT_SEC = 60;
 export const SHOW_TIMEOUT_SEC = 20;
@@ -207,12 +208,24 @@ export async function buildTickets(ctx: SiteCtx, runTool: ToolRunner = defaultRu
         detail: `orchestration stopped with ${left} tickets left`, threshold: null, command: `/warden:orchestrate ${id}`,
       });
     }
-    return { id, title, status, total, done, archived, inProgress, running, signals };
+    return { id, title, status, total, done, archived, inProgress, running, signals, usage: epicUsage(ctx, id, children.map((t) => runs.get(t.id))) };
   });
 
   // 7. Columns.
   const columns: BoardColumn[] = COLUMNS.map((c) => ({ ...c, count: tickets.filter((t) => t.column === c.id).length }));
   return { state: "ok", generatedAt, tool, columns, tickets, edges, epics, errors };
+}
+
+// The orchestrator's cost, the epic's runs added up, and both. A broken transcript only makes the first unknown.
+function epicUsage(ctx: SiteCtx, epic: string, runs: (LoadedTask | undefined)[]): EpicUsage {
+  let orchestrator: Usage;
+  try {
+    orchestrator = orchestratorUsage(ctx, epic);
+  } catch {
+    orchestrator = toUsage(ZERO_TOKENS, 0, false, false);
+  }
+  const tickets = sumUsage(runs.filter((r): r is LoadedTask => r !== undefined).map(usageOf));
+  return { orchestrator, tickets, total: sumUsage([orchestrator, tickets]) };
 }
 
 const TICKET_STATUS_SET = new Set<TicketStatus>(["backlog", "todo", "doing", "review", "done", "archived"]);

@@ -56,7 +56,7 @@ function windowAt(windows: StepWindow[], at: number): StepWindow | null {
   return best;
 }
 
-interface AssistantMessage { id: string | null; model: string; at: number; usage: Record<string, unknown> }
+export interface AssistantMessage { id: string | null; model: string; at: number; usage: Record<string, unknown> }
 
 // Parsed transcripts by path, reused while size and mtime are unchanged. A long-running reader (warden site) reads the
 // same main-session transcript for many tasks; a short-lived command reads each file once anyway.
@@ -126,7 +126,7 @@ function eachMessage(links: SessionLink[], windows: StepWindow[], fn: (window: S
   }
 }
 
-function addMessage(totals: TokenTotals, message: AssistantMessage): void {
+export function addMessage(totals: TokenTotals, message: AssistantMessage): void {
   const input = count(message.usage.input_tokens);
   const output = count(message.usage.output_tokens);
   const cacheRead = count(message.usage.cache_read_input_tokens);

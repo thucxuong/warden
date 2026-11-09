@@ -20,7 +20,7 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useHealth, useHome, useTickets } from "@/lib/queries";
-import { formatDuration, formatRelative, formatStep, formatTime } from "@/lib/pure/format";
+import { formatCost, formatDuration, formatRelative, formatStep, formatTime } from "@/lib/pure/format";
 import type { Tone } from "@/lib/pure/tone";
 import { cn } from "@/lib/utils";
 
@@ -241,6 +241,12 @@ function EpicsBody({ q }: { q: ReturnType<typeof useTickets> }) {
                 ))}
               </div>
             )}
+            <div data-testid="epic-cost" className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-2.5 text-[11.5px] text-muted-foreground">
+              <span>Orchestrator <span className="font-mono text-foreground">{formatCost(e.usage.orchestrator)}</span></span>
+              <span>Tickets <span className="font-mono text-foreground">{formatCost(e.usage.tickets)}</span></span>
+              <span>Total <span className="font-mono font-semibold text-foreground">{formatCost(e.usage.total)}</span></span>
+              <Link href={`/epics/${encodeURIComponent(e.id)}`} className="ml-auto text-primary hover:underline">What the orchestrator did</Link>
+            </div>
             <SignalList signals={e.signals} />
           </li>
         );

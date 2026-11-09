@@ -18,6 +18,7 @@ This page is also the map of the `.warden/` folder. Each doc folder has one job,
   checks/                periodic checks                                          (committed)
   fixes/                 notes from the fixer                                     (committed)
   history/<task>/        the run record of each shipped task                      (committed)
+  history/<epic>/        epic.json: what the orchestrator did, saved at done      (committed)
   state/                 live run state                                           (gitignored)
 docs/
   INDEX.md               the map of the project's docs                            (committed)
@@ -52,6 +53,7 @@ Each doc folder (`context`, `rules`, `decisions`, `knowledge`, `checks`, `retros
 | `docs/retros/<date>.md` | `/warden:retro` | the retro check | yes | No |
 | `.warden/fixes/*.md` | the fixer | triage rules, the fixer | yes | No |
 | `.warden/history/<task>/` | the engine, at the ship step | site, retro | yes | Never. The hooks refuse it |
+| `.warden/history/<epic>/epic.json` | `warden orchestrate set-status <epic> done` | site | yes | No |
 | `.warden/state/` | the engine and hooks | every command | no (gitignored) | Never. The hooks refuse it |
 | `scripts/warden-setup.sh` | `warden init --write`, then you, the fixer | `setup.commands` | yes | Yes |
 | `.gitignore` | `warden init --write` adds `.warden/state/` and `.worktrees/` | git, `warden start --worktree` (checks `.worktrees/` is ignored) | yes | Yes |
@@ -222,6 +224,21 @@ Unknown or repeated keys make the file invalid. For an agent check, the text aft
 | `warden-docs.md` | command, auto | 1d | Runs `warden docs check` |
 
 When `retro.md` is missing, warden still lists a `retro` check built from the old `lastRetro` field.
+
+## .warden/history/<epic>/epic.json
+
+What the orchestrator of an epic did and what it cost, saved when `warden orchestrate set-status <epic> done` runs. The command lists the file in `changed`, so `/warden:orchestrate` commits it with the ticket file. It is written only when a session that ran `warden orchestrate` for the epic has its transcript on this machine.
+
+```ts
+{
+  schema: 1; epic; savedAt; pricesDate: string | null;
+  rows: { at; kind: "plan" | "start" | "work" | "fix" | "ship" | "done" | "clean" | "stop" | "you";
+          tickets: string[]; text: string | null;   // stop: the orchestrator's message; you: what the user wrote
+          tokens: { input, output, cacheRead, cacheWrite, costUsd, unpriced } }[];   // from this row until the next one
+}
+```
+
+While the transcripts are on the machine, the site reads them instead, so it also shows what happened after the save.
 
 ## .warden/history/<task>/
 

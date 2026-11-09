@@ -75,6 +75,8 @@ flowchart LR
 
 `warden orchestrate status PG-100` prints the cached plan with each ticket's live phase. The site's Tickets page shows the tickets and their runs.
 
+The site's epic page (`/epics/PG-100`, linked from the epic card on Home and from the Tickets page) shows what the orchestrator did: each step, what you wrote, where it stopped and why, and what each part cost. It also splits the epic's cost into the orchestrator's own session, the tickets, and the total. Warden reads this from the transcript of the session that ran `/warden:orchestrate`, so planning the epic before the first `warden orchestrate plan` is not counted. When the epic is done, the steps are saved in `.warden/history/PG-100/epic.json`, so they stay after Claude Code deletes old transcripts and show on other machines.
+
 | Phase | Meaning | What happens |
 |---|---|---|
 | `todo` | no run yet | the agent starts one |

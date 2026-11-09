@@ -6,7 +6,8 @@ import { loadStepsJson } from "../config/config.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
 import { mainRoot } from "../state/paths.ts";
 import { chooseBase } from "../state/store.ts";
-import { createPlan, createTicket, ID_PATTERN, setTicketStatus, statusPlan, TICKET_STATUSES, ticketsTool } from "../engine/tickets.ts";
+import { saveEpicHistory } from "../engine/epic.ts";
+import { cacheFile, createPlan, createTicket, ID_PATTERN, setTicketStatus, statusPlan, TICKET_STATUSES, ticketsTool } from "../engine/tickets.ts";
 import type { Ctx, TicketStatus } from "../types.ts";
 import { parseArgs, printJson } from "./next.ts";
 
@@ -54,7 +55,10 @@ export async function run(args: string[], ctx: Ctx): Promise<number> {
   const main = mainRoot(ctx.cwd);
   ticketsTool(main); // exit 3 before anything else when orchestrate is not set up
   if (sub === "set-status") {
-    printJson(setTicketStatus(main, ctx.root, first, second as TicketStatus));
+    const out = setTicketStatus(main, ctx.root, first, second as TicketStatus);
+    // An orchestrated epic set done: its orchestrator's steps and cost are saved with it.
+    const saved = second === "done" && existsSync(cacheFile(main, first)) ? saveEpicHistory(main, first) : null;
+    printJson(saved ? { ...out, changed: [...out.changed, saved] } : out);
     return EXIT.OK;
   }
   if (sub === "status") {

@@ -371,7 +371,12 @@ export interface EpicSummary {
   inProgress: boolean;
   running: { id: string; title: string; step: StepRef; inStepMs: number | null; signals: Signal[] }[];
   signals: Signal[];          // orchestration-stopped
+  usage: EpicUsage;
 }
+
+// orchestrator: the session that ran /warden:orchestrate (unknown without its transcript or a saved epic.json);
+// tickets: the epic's runs added up; total: both.
+export interface EpicUsage { orchestrator: Usage; tickets: Usage; total: Usage }
 
 export interface BoardColumn { id: BoardColumnId; title: string; count: number }
 
@@ -393,3 +398,25 @@ export type TicketsResponse =
 
 export interface DocEntry { path: string; title: string }
 export interface DocsResponse { docs: DocEntry[] }
+
+// ---- /api/epics/:id ----
+
+// plan, start, work (ticket agent), fix (fixer agent), ship, done (set-status done), clean, stop (the orchestrator
+// ended its turn), you (the user wrote).
+export type EpicRowKind = "plan" | "start" | "work" | "fix" | "ship" | "done" | "clean" | "stop" | "you";
+
+export interface EpicRowView {
+  at: ISO; kind: EpicRowKind; tickets: string[];
+  label: string;              // "Started PG-301, PG-302"
+  text: string | null;        // stop: the orchestrator's message; you: what the user wrote
+  usage: Usage;               // the orchestrator's own messages from this row until the next one
+}
+
+export interface EpicResponse {
+  generatedAt: ISO; epic: string;
+  source: Source | null;      // live: transcripts on this machine; history: .warden/history/<epic>/epic.json; null: neither
+  savedAt: ISO | null;        // history only
+  pricing: string;            // which prices the cost uses
+  rows: EpicRowView[];        // oldest first
+  usage: Usage;               // the rows added up
+}
