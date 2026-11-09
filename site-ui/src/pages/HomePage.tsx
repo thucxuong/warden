@@ -245,7 +245,7 @@ function EpicsBody({ q }: { q: ReturnType<typeof useTickets> }) {
               <span>Orchestrator <span className="font-mono text-foreground">{formatCost(e.usage.orchestrator)}</span></span>
               <span>Tickets <span className="font-mono text-foreground">{formatCost(e.usage.tickets)}</span></span>
               <span>Total <span className="font-mono font-semibold text-foreground">{formatCost(e.usage.total)}</span></span>
-              <Link href={`/epics/${encodeURIComponent(e.id)}`} className="ml-auto text-primary hover:underline">What the orchestrator did</Link>
+              <Link href={`/epics/${encodeURIComponent(e.id)}`} className="ml-auto text-primary hover:underline">How it went</Link>
             </div>
             <SignalList signals={e.signals} />
           </li>

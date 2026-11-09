@@ -43,7 +43,7 @@ function route(path: string): unknown {
   if (epic) {
     const id = decodeURIComponent(epic[1]!);
     if (id === "FX-100" && !empty) return epicFx100;
-    return { ...epicFx100, epic: id, source: null, rows: [], usage: { ...epicFx100.usage, known: false } };
+    return { ...epicFx100, epic: id, costSource: null, rows: [], usage: { ...epicFx100.usage, known: false } };
   }
   if (p === "/api/runs") {
     const res = runsResponse(url.searchParams);

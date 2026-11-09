@@ -72,7 +72,8 @@ async function api(opts: ServerOptions, url: URL): Promise<Response> {
   if (path.startsWith("/api/epics/")) {
     const epic = safeDecode(path.slice("/api/epics/".length));
     if (epic === null || !TASK_ID.test(epic) || epic === "_sessions") return error(404, "not found");
-    return json(buildEpic(ctx, epic));
+    const tickets = await buildTickets(ctx);
+    return json(buildEpic(ctx, epic, tickets.state === "ok" ? tickets.tickets.filter((t) => t.epic === epic).map((t) => t.id) : []));
   }
   if (path.startsWith("/api/runs/")) {
     const parts = path.slice("/api/runs/".length).split("/").map(safeDecode);

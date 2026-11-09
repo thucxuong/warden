@@ -18,7 +18,7 @@ This page is also the map of the `.warden/` folder. Each doc folder has one job,
   checks/                periodic checks                                          (committed)
   fixes/                 notes from the fixer                                     (committed)
   history/<task>/        the run record of each shipped task                      (committed)
-  history/<epic>/        epic.json: what the orchestrator did, saved at done      (committed)
+  history/<epic>/        epic.json: the orchestrator's cost, saved at done       (committed)
   state/                 live run state                                           (gitignored)
 docs/
   INDEX.md               the map of the project's docs                            (committed)
@@ -227,18 +227,12 @@ When `retro.md` is missing, warden still lists a `retro` check built from the ol
 
 ## .warden/history/<epic>/epic.json
 
-What the orchestrator of an epic did and what it cost, saved when `warden orchestrate set-status <epic> done` runs. The command lists the file in `changed`, so `/warden:orchestrate` commits it with the ticket file. It is written only when a session that ran `warden orchestrate` for the epic has its transcript on this machine.
+What the orchestrator of an epic cost, saved when `warden orchestrate set-status <epic> done` runs. The command lists the file in `changed`, so `/warden:orchestrate` commits it with the ticket file. It is written only when the session's transcript is on this machine and has token data. It holds totals only, no text from the session.
 
 ```ts
-{
-  schema: 1; epic; savedAt; pricesDate: string | null;
-  rows: { at; kind: "plan" | "start" | "work" | "fix" | "ship" | "done" | "clean" | "stop" | "you";
-          tickets: string[]; text: string | null;   // stop: the orchestrator's message; you: what the user wrote
-          tokens: { input, output, cacheRead, cacheWrite, costUsd, unpriced } }[];   // from this row until the next one
-}
+{ schema: 1; epic; savedAt; pricesDate: string | null;
+  tokens: { input, output, cacheRead, cacheWrite, costUsd, unpriced } }
 ```
-
-While the transcripts are on the machine, the site reads them instead, so it also shows what happened after the save.
 
 ## .warden/history/<task>/
 

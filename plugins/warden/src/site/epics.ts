@@ -1,59 +1,89 @@
-// /api/epics/:id and the orchestrator part of an epic's cost: what the orchestrator did, from the transcripts on this
-// machine, else from the epic.json saved when the epic was set done.
-import { liveEpicRows, readEpicHistory, sumTokens, type EpicRow } from "../engine/epic.ts";
+// /api/epics/:id and the orchestrator part of an epic's cost. How the epic's tickets went comes from their run logs in
+// .warden; only the orchestrator's cost needs a transcript or the epic.json saved when the epic was set done.
+import { liveOrchestratorTokens, readEpicHistory } from "../engine/epic.ts";
 import { pricesDate } from "../lib/prices.ts";
 import type { TokenTotals } from "../lib/tokens.ts";
-import type { EpicResponse, EpicRowView, ISO, Source, Usage } from "./api-types.ts";
-import { memo, pricingNote, toUsage, type SiteCtx } from "./text.ts";
+import type { EventLine } from "../types.ts";
+import type { EpicResponse, EpicRowKind, EpicRowView, ISO, Source, Usage } from "./api-types.ts";
+import type { LoadedTask } from "./data.ts";
+import { resolvePr } from "./pr.ts";
+import { memo, pricingNote, shippedAtOf, toUsage, ZERO_TOKENS, type SiteCtx } from "./text.ts";
 
-interface EpicRows { source: Source | null; savedAt: ISO | null; pricesDate: string | null; rows: EpicRow[] }
+interface OrchestratorCost { source: Source | null; savedAt: ISO | null; pricesDate: string | null; tokens: TokenTotals | null }
 
-function epicRows(ctx: SiteCtx, epic: string): EpicRows {
+function orchestratorCost(ctx: SiteCtx, epic: string): OrchestratorCost {
   return memo(ctx, `epic:${epic}`, () => {
-    const rows = liveEpicRows(ctx.main, epic);
-    if (rows.length > 0) return { source: "live", savedAt: null, pricesDate: pricesDate(), rows };
+    const tokens = liveOrchestratorTokens(ctx.main, epic);
+    if (tokens) return { source: "live", savedAt: null, pricesDate: pricesDate(), tokens };
     const saved = readEpicHistory(ctx.main, epic);
-    if (saved) return { source: "history", savedAt: saved.savedAt, pricesDate: saved.pricesDate, rows: saved.rows };
-    return { source: null, savedAt: null, pricesDate: pricesDate(), rows: [] };
+    if (saved) return { source: "history", savedAt: saved.savedAt, pricesDate: saved.pricesDate, tokens: saved.tokens };
+    return { source: null, savedAt: null, pricesDate: pricesDate(), tokens: null };
   });
 }
-
-const usage = (t: TokenTotals, known: boolean): Usage => toUsage(t, t.costUsd, t.unpriced, known);
 
 // What the orchestrator cost; unknown when there is nothing to read.
 export function orchestratorUsage(ctx: SiteCtx, epic: string): Usage {
-  const { rows } = epicRows(ctx, epic);
-  return usage(sumTokens(rows.map((r) => r.tokens)), rows.length > 0);
+  const { tokens } = orchestratorCost(ctx, epic);
+  return tokens ? toUsage(tokens, tokens.costUsd, tokens.unpriced, true) : toUsage(ZERO_TOKENS, 0, false, false);
 }
 
-const list = (ids: string[]) => ids.join(", ");
+const NAME: Record<string, string> = { analyze: "Analyze", plan: "Plan", implement: "Implement", ship: "Shipping" };
 
-function label(row: EpicRow, epic: string, firstPlan: boolean): string {
-  const many = row.tickets.length > 1;
-  switch (row.kind) {
-    case "plan": return firstPlan ? "Planned the epic" : "Planned the next wave";
-    case "start": return `Started ${list(row.tickets)}`;
-    case "work": return `Ticket agent${many ? "s" : ""} working on ${list(row.tickets)}`;
-    case "fix": return row.tickets.length ? `Fixer working on ${list(row.tickets)}` : "Fixer working";
-    case "ship": return `Shipping ${list(row.tickets)}`;
-    case "done": return row.tickets.includes(epic) ? "Marked the epic done" : `Marked ${list(row.tickets)} done`;
-    case "clean": return "Removed the worktrees of shipped tickets";
-    case "stop": return "Stopped and reported to you";
-    case "you": return "You wrote";
+// One line of a ticket's process, or null for an event that is no step of it. Never the free text of an event.
+function rowOf(e: EventLine): { kind: EpicRowKind; label: string } | null {
+  const d = e.data ?? {};
+  switch (e.type) {
+    case "run.started": return { kind: "start", label: "Started" };
+    case "step.started": {
+      const name = NAME[String(d.type)];
+      if (!name) return null; // check and review show by their result, an approve step by approve.waiting, a fix by fix.started
+      const attempt = typeof d.attempt === "number" && d.attempt > 1 ? ` (attempt ${d.attempt})` : "";
+      return { kind: d.type === "ship" ? "ship" : "work", label: name + attempt };
+    }
+    case "gate.passed": return d.job === "check" ? { kind: "check", label: "Checks passed" } : null;
+    case "gate.failed": return d.job === "check" ? { kind: "fail", label: `Checks failed${typeof d.verdict === "string" ? ` (${d.verdict})` : ""}` } : null;
+    case "review.round": return { kind: "review", label: `Review round ${d.round}: ${d.blocking} blocking, ${d.minor} minor` };
+    case "fix.started": return { kind: "fix", label: "Fixer started" };
+    case "fix.result": return { kind: "fix", label: `Fixer: ${String(d.result).toLowerCase().replaceAll("_", " ")}` };
+    case "proof.stale": return { kind: "check", label: "Code changed after the checks: running them again" };
+    case "approve.waiting": return { kind: "wait", label: "Waiting for approval" };
+    case "approve.granted": return { kind: "start", label: "Approved" };
+    case "approve.rejected": return { kind: "fail", label: "Rejected" };
+    case "question.asked": return { kind: "wait", label: "Asked a question" };
+    case "question.answered": return { kind: "start", label: "Question answered" };
+    case "run.blocked": return { kind: "fail", label: "Blocked" };
+    case "run.retry": return { kind: "start", label: "Retried" };
+    case "run.shipped": return { kind: "done", label: "Shipped" };
+    case "run.done": return { kind: "done", label: "Finished" };
+    case "run.archived": return { kind: "done", label: "Archived" };
+    default: return null;
   }
 }
 
-export function buildEpic(ctx: SiteCtx, epic: string): EpicResponse {
-  const { source, savedAt, pricesDate: date, rows } = epicRows(ctx, epic);
-  let planned = false;
-  const views: EpicRowView[] = rows.map((row) => {
-    const view = { at: row.at, kind: row.kind, tickets: row.tickets, label: label(row, epic, row.kind === "plan" && !planned), text: row.text, usage: usage(row.tokens, true) };
-    if (row.kind === "plan") planned = true;
-    return view;
-  });
+// The saved log of a shipped run ends before its ship step, so "Shipped" comes from the merge.
+function rowsOf(ctx: SiteCtx, loaded: LoadedTask): EpicRowView[] {
+  const ticket = loaded.run.task;
+  const rows: EpicRowView[] = [];
+  for (const e of loaded.events) {
+    const row = rowOf(e);
+    if (row) rows.push({ at: e.ts, ticket, ...row });
+  }
+  if (loaded.source === "history") {
+    const at = shippedAtOf(loaded, resolvePr(ctx, loaded).mergedAt);
+    if (at) rows.push({ at, ticket, kind: "done", label: "Shipped" });
+  }
+  return rows;
+}
+
+// `tickets`: the epic's children, from the ticket tool.
+export function buildEpic(ctx: SiteCtx, epic: string, tickets: string[]): EpicResponse {
+  const { source, savedAt, pricesDate: date } = orchestratorCost(ctx, epic);
+  const wanted = new Set(tickets);
+  const rows = ctx.tasks().filter((t) => wanted.has(t.run.task)).flatMap((t) => rowsOf(ctx, t));
+  rows.sort((a, b) => a.at.localeCompare(b.at));
   return {
-    generatedAt: ctx.generatedAt, epic, source, savedAt,
-    pricing: pricingNote({ pricesDate: date }, []),
-    rows: views, usage: orchestratorUsage(ctx, epic),
+    generatedAt: ctx.generatedAt, epic, costSource: source, savedAt,
+    pricing: `${pricingNote({ pricesDate: date }, [])} The orchestrator's cost is read from its session on this machine, or from the total saved when the epic was done. It shows n/a when neither is here.`,
+    rows, usage: orchestratorUsage(ctx, epic),
   };
 }

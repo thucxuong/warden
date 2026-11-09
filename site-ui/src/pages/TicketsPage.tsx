@@ -71,7 +71,7 @@ function Toolbar({ data, view, epic, onView, onEpic }: {
         </SelectContent>
       </Select>
       {data.epics.some((e) => e.id === epic) && (
-        <Link href={`/epics/${encodeURIComponent(epic)}`} className="text-xs text-primary hover:underline" data-testid="epic-page-link">Epic cost and orchestrator</Link>
+        <Link href={`/epics/${encodeURIComponent(epic)}`} className="text-xs text-primary hover:underline" data-testid="epic-page-link">Epic trace and cost</Link>
       )}
       <ToggleGroup type="single" variant="outline" size="sm" value={view} onValueChange={(v) => v && onView(v)} className="bg-card" aria-label="View">
         <ToggleGroupItem value="board" aria-label="Board" className="gap-1.5 px-3"><KanbanSquare className="size-3.5" /> Board</ToggleGroupItem>

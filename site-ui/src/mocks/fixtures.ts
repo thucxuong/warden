@@ -389,25 +389,24 @@ const fx100Orchestrator = usage(120_000, 18_000, 900_000, 40_000, 1.42);
 
 // ---- /api/epics/:id ----
 
-const epicRow = (min: number, kind: EpicRowKind, label: string, cost: number, tickets: string[] = [], text: string | null = null): EpicRowView => ({
-  at: new Date(Date.parse(generatedAt) - min * 60_000).toISOString(), kind, tickets, label, text,
-  usage: usage(Math.round(cost * 80_000), Math.round(cost * 12_000), Math.round(cost * 600_000), Math.round(cost * 25_000), cost),
+const epicRow = (min: number, ticket: string, kind: EpicRowKind, label: string): EpicRowView => ({
+  at: new Date(Date.parse(generatedAt) - min * 60_000).toISOString(), ticket, kind, label,
 });
 
 export const epicFx100: EpicResponse = {
-  generatedAt, epic: "FX-100", source: "live", savedAt: null, pricing: "Estimate using prices from 2026-11-05.",
+  generatedAt, epic: "FX-100", costSource: "live", savedAt: null, pricing: "Estimate using prices from 2026-11-05.",
   rows: [
-    epicRow(95, "plan", "Planned the epic", 0.21),
-    epicRow(94, "stop", "Stopped and reported to you", 0.03, [], "Epic FX-100 has 6 tickets in 3 waves. Go ahead?"),
-    epicRow(90, "you", "You wrote", 0.02, [], "yes"),
-    epicRow(89, "start", "Started FX-101, FX-102", 0.06, ["FX-101", "FX-102"]),
-    epicRow(88, "work", "Ticket agents working on FX-101, FX-102", 0.32, ["FX-101", "FX-102"]),
-    epicRow(60, "fix", "Fixer working on FX-102", 0.18, ["FX-102"]),
-    epicRow(45, "ship", "Shipping FX-101", 0.12, ["FX-101"]),
-    epicRow(40, "done", "Marked FX-101 done", 0.05, ["FX-101"]),
-    epicRow(38, "plan", "Planned the next wave", 0.09),
-    epicRow(36, "work", "Ticket agent working on FX-104", 0.27, ["FX-104"]),
-    epicRow(30, "stop", "Stopped and reported to you", 0.07, [], "FX-104 waits for your approval: type `approve FX-104`.\nFX-102 is still running."),
+    epicRow(89, "FX-101", "start", "Started"),
+    epicRow(89, "FX-102", "start", "Started"),
+    epicRow(88, "FX-101", "work", "Implement"),
+    epicRow(60, "FX-102", "fail", "Checks failed (CODE)"),
+    epicRow(58, "FX-102", "fix", "Fixer started"),
+    epicRow(50, "FX-101", "check", "Checks passed"),
+    epicRow(48, "FX-101", "review", "Review round 1: 0 blocking, 1 minor"),
+    epicRow(45, "FX-101", "ship", "Shipping"),
+    epicRow(40, "FX-101", "done", "Shipped"),
+    epicRow(36, "FX-104", "start", "Started"),
+    epicRow(30, "FX-104", "wait", "Waiting for approval"),
   ],
   usage: fx100Orchestrator,
 };

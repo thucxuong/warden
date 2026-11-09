@@ -1,21 +1,22 @@
 import type { EpicResponse, EpicRowKind, EpicSummary, TicketCard, Usage } from "@api";
-import { ArrowLeft, Bot, Layers, ListChecks } from "lucide-react";
+import { ArrowLeft, Layers, ListChecks, Route } from "lucide-react";
+import { useState } from "react";
 import { Link } from "wouter";
 import { PricingInfo } from "@/components/app/PricingInfo";
 import { Section } from "@/components/app/Section";
 import { EmptyState, ErrorState, SkeletonRows } from "@/components/app/States";
 import { TaskLink } from "@/components/app/TaskLink";
-import { ToneBadge } from "@/components/app/ToneBadge";
 import { UsageCell } from "@/components/app/UsageCell";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useEpic, useTickets } from "@/lib/queries";
 import { formatTime } from "@/lib/pure/format";
+import { cn } from "@/lib/utils";
 
 const DOT: Record<EpicRowKind, string> = {
-  plan: "var(--step-plan)", start: "var(--step-implement)", work: "var(--step-implement)", fix: "var(--step-fix)",
-  ship: "var(--step-ship)", done: "var(--step-check)", clean: "var(--step-ship)", stop: "var(--warning)", you: "var(--info)",
+  start: "var(--step-analyze)", work: "var(--step-implement)", check: "var(--step-check)", fail: "var(--step-fix)", fix: "var(--step-fix)",
+  review: "var(--step-review)", wait: "var(--step-approve)", ship: "var(--step-ship)", done: "var(--step-check)",
 };
 
 export function EpicPage({ epic }: { epic: string }) {
@@ -27,10 +28,9 @@ export function EpicPage({ epic }: { epic: string }) {
   return (
     <div className="space-y-5">
       <EpicHeader epic={epic} summary={summary} detail={q.data ?? null} />
-      <Section title="What the orchestrator did" icon={Bot} id="orchestrator" bodyClassName="p-0"
-        description={q.data?.source === "history" ? `saved when the epic was done, ${formatTime(q.data.savedAt)}` : q.data?.source === "live" ? "from the session transcripts on this machine" : undefined}>
+      <Section title="How the tickets went" icon={Route} id="epic-trace" bodyClassName="p-0" description="from each ticket's run log">
         {q.isPending ? <SkeletonRows rows={5} className="p-4" /> : q.isError ? <ErrorState error={q.error} onRetry={() => void q.refetch()} className="m-4" /> : (
-          <OrchestratorRows d={q.data} />
+          <Trace d={q.data} />
         )}
       </Section>
       {children.length > 0 && (
@@ -56,15 +56,14 @@ function EpicHeader({ epic, summary, detail }: { epic: string; summary: EpicSumm
   return (
     <Card className="gap-0 py-0 shadow-card">
       <div className="space-y-4 p-5">
-        <Link href="/" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="size-3.5" /> Overview
+        <Link href="/epics" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="size-3.5" /> Epics
         </Link>
         <div className="flex flex-wrap items-start gap-4">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2.5">
               <Layers className="size-5 text-muted-foreground" />
               <h1 className="font-mono text-2xl font-semibold tracking-tight">{epic}</h1>
-              {detail?.source === "history" && <ToneBadge tone="muted">from history</ToneBadge>}
             </div>
             <p className="mt-1 text-[15px] text-foreground/90">{summary?.title ?? <span className="text-muted-foreground">No title</span>}</p>
             {summary && (
@@ -88,47 +87,41 @@ function EpicHeader({ epic, summary, detail }: { epic: string; summary: EpicSumm
   );
 }
 
-function OrchestratorRows({ d }: { d: EpicResponse }) {
-  if (d.rows.length === 0) {
-    return (
-      <EmptyState text="No orchestrator session found for this epic." icon={Bot} className="m-4">
-        <p className="max-w-md text-xs text-muted-foreground">
-          The steps show here while the session that ran <code className="font-mono">/warden:orchestrate {d.epic}</code> is on this machine,
-          or once <code className="font-mono">.warden/history/{d.epic}/epic.json</code> is committed (warden saves it when the epic is done).
-        </p>
-      </EmptyState>
-    );
-  }
+function Trace({ d }: { d: EpicResponse }) {
+  const [only, setOnly] = useState<string | null>(null);
+  if (d.rows.length === 0) return <EmptyState text="No ticket of this epic has a run yet." icon={Route} className="m-4" />;
+  const tickets = [...new Set(d.rows.map((r) => r.ticket))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  const rows = only === null ? d.rows : d.rows.filter((r) => r.ticket === only);
+  const chip = (id: string | null, text: string) => (
+    <button key={text} type="button" data-testid="trace-filter" aria-pressed={only === id} onClick={() => setOnly(id)}
+      className={cn("rounded-full border px-2 py-0.5 font-mono text-[11.5px] hover:border-primary/40", only === id ? "border-primary/40 bg-accent text-accent-foreground" : "bg-muted/50 text-muted-foreground")}>
+      {text}
+    </button>
+  );
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead className="w-32 pl-4">Time</TableHead>
-          <TableHead>What happened</TableHead>
-          <TableHead className="w-36 pr-4 text-right">Cost until the next row</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {d.rows.map((r, i) => (
-          <TableRow key={i} data-testid="epic-row" data-kind={r.kind} className="align-top">
-            <TableCell className="pl-4 font-mono text-xs whitespace-nowrap text-muted-foreground">{formatTime(r.at)}</TableCell>
-            <TableCell className="whitespace-normal">
-              <div className="flex items-center gap-2">
-                <span className="size-2 shrink-0 rounded-full" style={{ background: DOT[r.kind] }} aria-hidden />
-                <span className={r.kind === "stop" || r.kind === "you" ? "font-medium" : undefined}>{r.label}</span>
-              </div>
-              {r.text && (
-                <details className="mt-1 ml-4 group">
-                  <summary className="cursor-pointer text-xs text-muted-foreground line-clamp-1 group-open:line-clamp-none">{r.text.split("\n")[0]}</summary>
-                  <div className="mt-1 max-h-80 overflow-auto rounded-md bg-muted/60 px-3 py-2 text-[13px] whitespace-pre-wrap">{r.text}</div>
-                </details>
-              )}
-            </TableCell>
-            <TableCell className="pr-4 text-right"><UsageCell usage={r.usage} /></TableCell>
+    <>
+      <div className="flex flex-wrap gap-1.5 border-b px-4 py-2.5">{chip(null, "All")}{tickets.map((t) => chip(t, t))}</div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-32 pl-4">Time</TableHead>
+            <TableHead className="w-28">Ticket</TableHead>
+            <TableHead className="pr-4">What happened</TableHead>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {rows.map((r, i) => (
+            <TableRow key={i} data-testid="epic-row" data-kind={r.kind} data-ticket={r.ticket}>
+              <TableCell className="pl-4 font-mono text-xs whitespace-nowrap text-muted-foreground">{formatTime(r.at)}</TableCell>
+              <TableCell><TaskLink task={r.ticket} /></TableCell>
+              <TableCell className="pr-4 whitespace-normal">
+                <span className="flex items-center gap-2"><span className="size-2 shrink-0 rounded-full" style={{ background: DOT[r.kind] }} aria-hidden />{r.label}</span>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </>
   );
 }
 

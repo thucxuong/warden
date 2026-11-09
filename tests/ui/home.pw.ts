@@ -41,7 +41,7 @@ test("epics: the card shows the orchestrator's cost and links to its page", asyn
   const cost = page.locator('[data-testid="epic-card"][data-id="FX-100"] [data-testid="epic-cost"]');
   await expect(cost).toContainText("Orchestrator $1.50"); // 500k input and 50k output tokens of Sonnet
   await expect(cost).toContainText("Total");
-  await cost.getByRole("link", { name: "What the orchestrator did" }).click();
+  await cost.getByRole("link", { name: "How it went" }).click();
   await expect(page).toHaveURL(/\/epics\/FX-100$/);
   await expect(page.getByRole("heading", { name: "FX-100" })).toBeVisible();
 });

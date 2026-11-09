@@ -1,9 +1,9 @@
-// The orchestrator's rows of an epic, read from its session transcripts (engine/epic.ts).
+// What the orchestrator of an epic cost, summed from its session transcripts (engine/epic.ts).
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { liveEpicRows, readEpicHistory, saveEpicHistory, sumTokens, type EpicRow } from "../../plugins/warden/src/engine/epic.ts";
+import { liveOrchestratorTokens, readEpicHistory, saveEpicHistory } from "../../plugins/warden/src/engine/epic.ts";
 
 const root = mkdtempSync(join(tmpdir(), "warden-epic-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -64,83 +64,63 @@ function session(id: string, path: string, orchestrate: string | undefined = "E-
   writeFileSync(join(dir, file), JSON.stringify({ schema: 1, sessionId: id, transcriptPath: path, projectAgent: false, task: null, updatedAt: "", ...(orchestrate && { orchestrate }) }));
 }
 
-const brief = (rows: EpicRow[]) => rows.map((r) => [r.kind, r.tickets.join(","), r.tokens.input, r.text]);
+const E1_INPUT = 1 + 2 + 4 + 8 + 16 + 32 + 64 + 128 + 256 + 512 + 1024 + 2048 + 32768 + 65536; // not E-9, the side chain or the talk after the end
 
 beforeEach(() => {
   main = join(root, `main-${++n}`);
   mkdirSync(main, { recursive: true });
 });
 
-describe("liveEpicRows", () => {
-  test("rows of the epic, merged, with the orchestrator's own messages up to the next row", () => {
+describe("liveOrchestratorTokens", () => {
+  test("counts the orchestrator's own messages for the epic, each once, at the model's rate", () => {
     session("s1", transcript("one"));
-    expect(brief(liveEpicRows(main, "E-1"))).toEqual([
-      ["plan", "", 1, null],
-      ["stop", "", 2, "Plan: 3 tickets. Go ahead?"],
-      ["you", "", 0, "yes"],
-      ["start", "T-1,T-2", 4 + 8, null],
-      ["work", "T-1,T-2", 16 + 32 + 64, null], // status and next are no rows
-      ["fix", "T-2", 128, null],
-      ["ship", "T-1", 256 + 512, null],
-      ["done", "T-1", 1024, null],
-      ["stop", "", 2048, "T-2 waits for you: type `retry T-2`."],
-      ["you", "", 0, "retry T-2"],
-      ["done", "E-1", 32768, null], // the work on E-9 in between is in no row
-      ["stop", "", 65536, "Done."], // the talk after the last stop is left out
-    ]);
+    const tokens = liveOrchestratorTokens(main, "E-1")!;
+    expect(tokens.input).toBe(E1_INPUT);
+    expect(tokens.costUsd).toBeCloseTo((E1_INPUT * 2) / 1e6, 9);
+    expect(tokens.unpriced).toBe(false);
   });
 
   test("another epic in the same session gets only its own part", () => {
     session("s1", transcript("one"));
-    expect(brief(liveEpicRows(main, "E-9"))).toEqual([["plan", "", 4096, null], ["start", "T-9", 8192, null]]);
-  });
-
-  test("costs use the model's rate and add up", () => {
-    session("s1", transcript("one"));
-    const rows = liveEpicRows(main, "E-1");
-    const total = sumTokens(rows.map((r) => r.tokens));
-    expect(total.input).toBe(1 + 2 + 12 + 112 + 128 + 768 + 1024 + 2048 + 32768 + 65536);
-    expect(total.costUsd).toBeCloseTo((total.input * 2) / 1e6, 9);
-    expect(total.unpriced).toBe(false);
+    expect(liveOrchestratorTokens(main, "E-9")!.input).toBe(4096 + 8192);
   });
 
   test("the same transcript in two sessions counts once; agent records and other sessions are not read", () => {
     const path = transcript("one");
     session("s1", path);
     session("s2", path, "E-7");
-    session("s3", transcript("plain", [say("11:00:05", "x1", 5, [bash("warden orchestrate plan E-1")])]), undefined);
+    session("s3", transcript("plain", [say("11:00:05", "x1", 5, [bash("warden orchestrate plan E-1")])]), ""); // no orchestrate in its record
     session("s1", transcript("agent", [say("11:00:05", "x2", 7, [bash("warden orchestrate plan E-1")])]), "E-1", "a1");
-    const rows = liveEpicRows(main, "E-1");
-    expect(rows).toHaveLength(12);
-    expect(sumTokens(rows.map((r) => r.tokens)).input).toBe(1 + 2 + 12 + 112 + 128 + 768 + 1024 + 2048 + 32768 + 65536);
+    expect(liveOrchestratorTokens(main, "E-1")!.input).toBe(E1_INPUT);
   });
 
-  test("nothing to read: no sessions, a missing transcript, or no orchestrate command for the epic", () => {
-    expect(liveEpicRows(main, "E-1")).toEqual([]);
+  test("unknown, not 0: no sessions, a missing transcript, no command for the epic, or no token data", () => {
+    expect(liveOrchestratorTokens(main, "E-1")).toBeNull();
     session("s1", join(root, "gone.jsonl"));
-    expect(liveEpicRows(main, "E-1")).toEqual([]);
+    expect(liveOrchestratorTokens(main, "E-1")).toBeNull();
     session("s2", transcript("one"));
-    expect(liveEpicRows(main, "E-2")).toEqual([]);
+    expect(liveOrchestratorTokens(main, "E-2")).toBeNull();
+    const renamed = { type: "assistant", timestamp: at("11:00:05"), message: { id: "r1", model: "claude-sonnet-5-5", content: [bash("warden orchestrate plan E-3")], usage: { tokens_in: 500 } } };
+    session("s3", transcript("renamed", [renamed]), "E-3");
+    expect(liveOrchestratorTokens(main, "E-3")).toBeNull();
   });
 
-  test("a session still working has an open last row", () => {
+  test("a session still working counts what it has so far", () => {
     session("s1", transcript("live", LINES.slice(0, 8)));
-    const rows = liveEpicRows(main, "E-1");
-    expect(rows.at(-1)!.kind).toBe("work");
-    expect(rows.at(-1)!.tokens.input).toBe(16);
+    expect(liveOrchestratorTokens(main, "E-1")!.input).toBe(1 + 2 + 4 + 8 + 16);
   });
 });
 
 describe("epic history", () => {
-  test("saved at done with the rows, read back", () => {
+  test("saves the total and no text of the session", () => {
     session("s1", transcript("one"));
     expect(saveEpicHistory(main, "E-1")).toBe(".warden/history/E-1/epic.json");
-    const saved = readEpicHistory(main, "E-1")!;
-    expect(saved.epic).toBe("E-1");
-    expect(saved.rows).toEqual(liveEpicRows(main, "E-1"));
+    expect(readEpicHistory(main, "E-1")!.tokens.input).toBe(E1_INPUT);
+    const raw = readFileSync(join(main, ".warden", "history", "E-1", "epic.json"), "utf8");
+    for (const said of ["retry T-2", "Go ahead", "waits for you"]) expect(raw).not.toContain(said);
   });
 
-  test("nothing saved when there are no rows", () => {
+  test("nothing saved when there is no cost to save", () => {
     expect(saveEpicHistory(main, "E-1")).toBeNull();
     expect(existsSync(join(main, ".warden", "history", "E-1"))).toBe(false);
     expect(readEpicHistory(main, "E-1")).toBeNull();

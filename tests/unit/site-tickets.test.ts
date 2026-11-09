@@ -80,34 +80,33 @@ describe("board", () => {
 });
 
 describe("epic page (/api/epics/:id)", () => {
-  test("what the orchestrator did, from its transcript", () => {
-    const epic = buildEpic(siteCtx(fx.main, PLUGIN_ROOT, fx.data, fx.now), "FX-100");
-    expect(epic).toMatchObject({ epic: "FX-100", source: "live", savedAt: null });
-    expect(epic.rows.map((r) => [r.kind, r.label, r.text])).toEqual([
-      ["plan", "Planned the epic", null],
-      ["start", "Started FX-102, FX-104", null],
-      ["work", "Ticket agents working on FX-102, FX-104", null],
-      ["stop", "Stopped and reported to you", "FX-104 waits for your approval: type `approve FX-104`."],
-    ]);
-    expect(epic.usage).toEqual(ok.epics[0]!.usage.orchestrator);
-    expect(epic.pricing).toMatch(/^Estimate using/);
-  });
+  const ctx = () => siteCtx(fx.main, PLUGIN_ROOT, fx.data, fx.now);
 
-  test("from the saved copy when no transcript is here; empty when neither is", () => {
-    const ctx = () => siteCtx(fx.main, PLUGIN_ROOT, fx.data, fx.now);
-    expect(buildEpic(ctx(), "FX-300")).toMatchObject({ source: null, rows: [], usage: { known: false } });
+  test("how each child ticket went, from the run logs, oldest first, with no session text", () => {
+    const epic = buildEpic(ctx(), "FX-100", ["FX-101", "FX-102", "FX-104"]);
+    expect([...new Set(epic.rows.map((r) => r.ticket))].sort()).toEqual(["FX-101", "FX-102", "FX-104"]);
+    expect(epic.rows.map((r) => r.at)).toEqual(epic.rows.map((r) => r.at).sort());
+    const of = (t: string) => epic.rows.filter((r) => r.ticket === t).map((r) => r.label);
+    expect(of("FX-102")[0]).toBe("Started");
+    expect(of("FX-104")).toContain("Waiting for approval");
+    expect(of("FX-101").at(-1)).toBe("Shipped");
+    expect(JSON.stringify(epic)).not.toContain("waits for your approval");
+    expect(epic.usage).toEqual(ok.epics[0]!.usage.orchestrator);
+    expect(epic.costSource).toBe("live");
+  }, 30_000);
+
+  test("tickets of other epics are left out; the cost comes from the saved total, or is unknown", () => {
+    expect(buildEpic(ctx(), "FX-300", [])).toMatchObject({ costSource: null, rows: [], usage: { known: false } });
     const dir = join(fx.main, ".warden", "history", "FX-300");
     mkdirSync(dir, { recursive: true });
-    const tokens = { input: 10, output: 1, cacheRead: 0, cacheWrite: 0, costUsd: 0.5, unpriced: false };
     writeFileSync(join(dir, "epic.json"), JSON.stringify({
       schema: 1, epic: "FX-300", savedAt: "2026-11-01T10:00:00.000Z", pricesDate: null,
-      rows: [{ at: "2026-11-01T09:00:00.000Z", kind: "done", tickets: ["FX-300"], text: null, tokens }],
+      tokens: { input: 10, output: 1, cacheRead: 0, cacheWrite: 0, costUsd: 0.5, unpriced: false },
     }));
     try {
-      const epic = buildEpic(ctx(), "FX-300");
-      expect(epic).toMatchObject({ source: "history", savedAt: "2026-11-01T10:00:00.000Z", pricing: "Estimate using the prices that came with warden." });
-      expect(epic.rows.map((r) => r.label)).toEqual(["Marked the epic done"]);
-      expect(epic.usage).toMatchObject({ costUsd: 0.5, known: true });
+      const epic = buildEpic(ctx(), "FX-300", []);
+      expect(epic).toMatchObject({ costSource: "history", savedAt: "2026-11-01T10:00:00.000Z", usage: { costUsd: 0.5, known: true } });
+      expect(epic.pricing).toContain("Estimate using the prices that came with warden.");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

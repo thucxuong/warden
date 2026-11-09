@@ -158,7 +158,7 @@ describe("orchestrate set-status", () => {
     }
   });
 
-  test("an orchestrated epic set done saves its orchestrator's steps and lists the file in changed", () => {
+  test("an orchestrated epic set done saves its orchestrator's cost and lists the file in changed", () => {
     expect(cli(["orchestrate", "plan", "E-1"]).code).toBe(0);
     const transcript = join(base, "orchestrator.jsonl");
     writeFileSync(transcript, JSON.stringify({
@@ -174,7 +174,7 @@ describe("orchestrate set-status", () => {
     expect(r.code).toBe(0);
     expect(r.json).toEqual({ id: "E-1", status: "done", changed: ["backlog/E-1.md", ".warden/history/E-1/epic.json"] });
     const saved = JSON.parse(readFileSync(join(main, ".warden", "history", "E-1", "epic.json"), "utf8"));
-    expect(saved.rows.map((row: { kind: string }) => row.kind)).toEqual(["plan"]);
+    expect(saved.tokens.input).toBe(10);
   });
 
   test("a result of the wrong shape is exit 1", () => {

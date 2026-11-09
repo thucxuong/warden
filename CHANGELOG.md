@@ -1,13 +1,14 @@
 # Changelog
 
-## 0.14.0 — unreleased
+## 0.14.0 — 2026-11-09
 
-The session that orchestrates an epic was not shown anywhere, so an epic's cost on the site left out the orchestrator's own work. On a real epic that was more than the tickets cost.
+The site could not show how an epic went as a whole, and an epic's cost left out the session that orchestrated it. On a real epic that session cost more than the tickets.
 
-- New epic page on the site (`/epics/<id>`): what the orchestrator did, step by step (planned, started, ticket agents, fixer, shipped, marked done), what you wrote, where it stopped with its message, and the cost of each step.
-- The epic card on Home shows the orchestrator's cost, the tickets' cost and the total, and links to the epic page. The Tickets page links to it when an epic is picked.
-- Warden reads this from the transcripts of the sessions that ran `warden orchestrate`. It records nothing new while the orchestrator works, so epics run with earlier versions show too.
-- `warden orchestrate set-status <epic> done` saves the steps to `.warden/history/<epic>/epic.json` and lists it in `changed`. `/warden:orchestrate` adds and commits it with the epic's ticket file.
+- New Epics page in the site's menu: every epic with its progress and its orchestrator, tickets and total cost.
+- New epic page (`/epics/<id>`): how the child tickets went, in order, from their run logs in `.warden` (started, steps, failed checks, fixes, review rounds, approvals, blocks, shipped). It can be filtered by ticket.
+- The epic card on Home shows the three costs and links to the epic page. The Tickets page links to it when an epic is picked.
+- The orchestrator's cost is read from its session transcript. It shows n/a, never $0, when the transcript is not on this machine or has no token data.
+- `warden orchestrate set-status <epic> done` saves that total to `.warden/history/<epic>/epic.json` and lists it in `changed`. `/warden:orchestrate` adds and commits it with the epic's ticket file. No text from the session is saved.
 - New `/api/epics/<id>`; `/api/tickets` epics have a `usage` with `orchestrator`, `tickets` and `total`.
 
 ## 0.13.0 — 2026-11-05

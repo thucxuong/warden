@@ -401,22 +401,16 @@ export interface DocsResponse { docs: DocEntry[] }
 
 // ---- /api/epics/:id ----
 
-// plan, start, work (ticket agent), fix (fixer agent), ship, done (set-status done), clean, stop (the orchestrator
-// ended its turn), you (the user wrote).
-export type EpicRowKind = "plan" | "start" | "work" | "fix" | "ship" | "done" | "clean" | "stop" | "you";
+export type EpicRowKind = "start" | "work" | "check" | "fail" | "fix" | "review" | "wait" | "ship" | "done";
 
-export interface EpicRowView {
-  at: ISO; kind: EpicRowKind; tickets: string[];
-  label: string;              // "Started PG-301, PG-302"
-  text: string | null;        // stop: the orchestrator's message; you: what the user wrote
-  usage: Usage;               // the orchestrator's own messages from this row until the next one
-}
+// One step of how a child ticket went, from its run log. Never free text from a session.
+export interface EpicRowView { at: ISO; ticket: string; kind: EpicRowKind; label: string }
 
 export interface EpicResponse {
   generatedAt: ISO; epic: string;
-  source: Source | null;      // live: transcripts on this machine; history: .warden/history/<epic>/epic.json; null: neither
+  rows: EpicRowView[];        // every child ticket's steps, oldest first
+  usage: Usage;               // the orchestrator's own cost; unknown when costSource is null
+  costSource: Source | null;  // live: session transcripts on this machine; history: .warden/history/<epic>/epic.json
   savedAt: ISO | null;        // history only
-  pricing: string;            // which prices the cost uses
-  rows: EpicRowView[];        // oldest first
-  usage: Usage;               // the rows added up
+  pricing: string;            // which prices the cost uses and where it comes from
 }

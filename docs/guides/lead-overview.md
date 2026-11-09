@@ -72,7 +72,7 @@ From top to bottom:
    | a fix to merge | merge the fix branch or PR it names into the main branch, then `warden retry <task>` |
 
 2. **Running**: live runs with their step (`implement (2/5)`), time in the step, tokens and cost so far, and any warning badge.
-3. **Epics**: each epic in progress, with a bar of done against total tickets, its running tickets, and a warning when an orchestration stopped. It needs a ticket tool (see [Tickets](#tickets)).
+3. **Epics**: each epic in progress, with a bar of done against total tickets, its running tickets, a warning when an orchestration stopped, and its cost (see [Epics](#epics)). It needs a ticket tool (see [Tickets](#tickets)).
 4. **Recently shipped**: the last 8 shipped runs with the pull request, the total time, tokens and cost.
 
 The side column has **Reports** (your open reports to the warden maintainers, any question they wait for you to answer with the reply command, and the last sync) and **Project health**: the warden version against the project's and the newest one known on this machine, the result of `warden tools --check`, config problems (an invalid `steps.json`, a broken flow file, no ticket tool, a bad `site.thresholds`), and leftover worktrees: shipped, merged tasks whose worktree is still there, with the `warden clean` command to copy. It shows the same tasks that session start counts, and never fetches or removes anything.
@@ -99,6 +99,12 @@ The tickets of your project's ticket tool (`warden tools <tool> dag`) as a board
 The **DAG** toggle draws the same tickets as a graph, with `blocked_by` as arrows. Each node shows the status, the running step and time, tokens and cost, and warnings, including "Waiting on deps" when a blocker is not done. You can filter by epic.
 
 Without a ticket tool, the page says how to add one: write a tool (see [Write a ticket tool](write-a-ticket-tool.md)), list it in `.warden/tools/index.ts` and name it under `"tickets"` in `.warden/tools/roles.json`.
+
+### Epics
+
+Every epic with its progress and three costs: the session that ran `/warden:orchestrate` (the orchestrator), the tickets, and the total. The orchestrator's cost shows `n/a` when its session is not on this machine and no total was saved when the epic was done.
+
+Click an epic to see how its tickets went, in order: when each started, its steps and attempts, failed checks, fixes, review rounds, approvals, blocks and shipping. You can filter by ticket. This comes from each ticket's run log, and no text from any session is shown or saved.
 
 ### History
 
