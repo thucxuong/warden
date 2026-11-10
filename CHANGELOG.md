@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+Reports used to reach the maintainers only after a background triage run on the maintainer's machine, started by a "doorbell". The doorbell broke silently when Claude Code updated itself, so reports sat on the `reports` branch and no GitHub issue was made.
+
+- `warden report` now opens a GitHub issue right away, with your GitHub CLI (`gh`), on the repo warden was installed from. You need `gh` installed and logged in; any GitHub account can report, no write access needed. The report is public, so keep private details out.
+- When the issue cannot be opened (no `gh`, logged out, offline), the report waits on this machine and session start tries again. Session start says once when `gh` is missing or logged out.
+- Status comes back from the issue about once an hour: `accepted` and `needs-info` labels, closed as completed (`fixed`, with the milestone as the version) or not planned (`wontfix`). The note is the maintainers' last comment; comments from anyone else are ignored.
+- `warden report reply` posts the answer as a comment on the issue. The automatic answer run is gone: session start shows the question and the agent answers it.
+- Removed: the doorbell, `scripts/wa-register.ts`, the `reports` branch transport, and the maintainer commands `warden report inbox`, `set` and `ask`. `/wa-triage` now works on the issues directly with `gh`.
+- Reports that already have a verdict are not sent again. Reports still `sent` from before this version get their issue at the next sync.
+
 ## 0.15.0 — 2026-11-09
 
 A big ticket used to mean waiting for all its parts and releasing them at once, and an epic counted as finished when its tickets were, with no check of the whole. Planning an epic now has its own skill, every ticket can merge on its own, and an epic ends with a proper closure.

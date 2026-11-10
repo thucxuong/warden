@@ -339,8 +339,7 @@ function Reports({ q }: { q: HomeQ }) {
           {r.sync && (
             <p className="text-[11px] text-muted-foreground">
               {r.sync.lastError ? <span className="text-destructive">Sync failed: {r.sync.lastError}</span>
-                : <>Synced {r.sync.lastFetchAt ? formatRelative(r.sync.lastFetchAt, q.data.generatedAt) : "never"}</>}
-              {r.sync.pushAccess === false && " · read-only (no push access)"}
+                : <>Synced {r.sync.lastAttemptAt ? formatRelative(r.sync.lastAttemptAt, q.data.generatedAt) : "never"}</>}
             </p>
           )}
         </div>

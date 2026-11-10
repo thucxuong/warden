@@ -11,7 +11,7 @@ These pages are for people (and Claude sessions) working on warden itself, in th
 | Consumer project | A team that installed warden, and its Claude sessions ("the project's agent") | The team's own repo |
 | Warden Agent | A Claude session in the warden repo that triages reports, fixes warden and releases it | This repo, on a maintainer's machine |
 
-The project's agent files a report with `warden report`. The report reaches this repo's machine, the Warden Agent decides what it is, and the verdict goes back to the project at its next session start.
+The project's agent files a report with `warden report`, which opens a GitHub issue in this repo with the user's `gh`. The Warden Agent judges it on the issue, and the verdict goes back to the project at its next session start.
 
 ## What lives where
 
@@ -20,8 +20,7 @@ The project's agent files a report with `warden report`. The report reaches this
 | `plugins/warden/` | The plugin: `bin/`, `src/`, `skills/`, `agents/`, `hooks/`, `templates/`, `upgrades/` | Yes |
 | `.claude-plugin/marketplace.json` | The marketplace that lists the one plugin | Yes, when Claude Code adds the marketplace |
 | `.claude/skills/wa-triage/` | The triage skill of the Warden Agent | No |
-| `scripts/wa-register.ts` | Registers this repo as the Warden Agent on this machine (the doorbell) | No |
-| `triage/` | The ledger, the doorbell log and scratch files. All gitignored. | No |
+| `triage/` | Scratch files of the triage skill. Gitignored. | No |
 | `tests/` | Unit and end-to-end tests | No |
 | `docs/` | User docs; `docs/internal/` holds the specs and the design | No |
 | `website/` | The public website, built from `README.md` and `docs/` | No |
@@ -33,7 +32,7 @@ A project's marketplace copy holds the whole repo at `stable`, but Claude Code l
 
 | Job | Page |
 |---|---|
-| Set up the doorbell, triage reports, ask the project questions, keep the ledger | [Triage](triage.md) |
+| Triage reports and ask the project questions | [Triage](triage.md) |
 | Bump the version, write the changelog and upgrade notes, tag, move `stable`, verify | [Releasing](releasing.md) |
 | Set up a dev checkout, run the tests and the type check, follow the code style | [Contributing](contributing.md) |
 | Build, preview and deploy the website | [Website](website.md) |
@@ -42,8 +41,7 @@ A project's marketplace copy holds the whole repo at `stable`, but Claude Code l
 
 - Repo: `thucxuong/warden` on GitHub. Public, MIT license.
 - Projects install from the `stable` branch (`thucxuong/warden#stable`), never from `main`.
-- Reports travel on the `reports` branch of the same repo.
-- Bugs and enhancements that the Warden Agent accepts become GitHub issues in this repo.
+- Each report is a GitHub issue in this repo, opened by the project's `gh`. The old `reports` branch is no longer used.
 - Version: see `plugins/warden/.claude-plugin/plugin.json`.
 
 ## See also

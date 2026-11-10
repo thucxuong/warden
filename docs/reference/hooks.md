@@ -54,7 +54,7 @@ The lines it can add:
 | A report's status changed | `warden: report <id> "<title>" is now <status>[ in <version>].[ Note: <note>]` |
 | A report needs info | The line above, plus ` Answer it from this project when the user's request is done: warden report reply <id> --body "<answer>"` |
 | Any report status changed | `warden: when the user's current request is done, run warden report --status --write. ...` (with the commit command for `.warden/reports.md`) |
-| Reports cannot leave this machine (told once) | `warden: reports from this machine reach warden only on this machine. When the user's current request is done, tell them in one short line.` |
+| Reports wait because `gh` is missing or logged out (told once) | `warden: <n> report(s) wait to reach the warden maintainers: <reason>. When the user's current request is done, tell them in one short line.` |
 
 Session start never writes a tracked file.
 

@@ -2,7 +2,6 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { LoadedTask } from "../../plugins/warden/src/site/data.ts";
-import { answerRunner } from "../../plugins/warden/src/site/reports.ts";
 import {
   DEFAULT_THRESHOLDS, jobLimitSec, median, parseThresholds, samplesOf, signalsFor, usualFrom, type Sample,
 } from "../../plugins/warden/src/site/signals.ts";
@@ -238,23 +237,5 @@ describe("rules", () => {
     const cur = { id: "check", type: "check" as const, startedAt: at(NOW - MIN), startSha: "", startDirty: [], attempt: 1 };
     const gate = { pid: 1, pidStart: "x", job: "check" as const, stepId: "check", startedAt: at(NOW - MIN), reruns: 0 };
     expect(sig(loaded({ current: cur, gate }, three), [], () => false).map((s) => s.severity)).toEqual(["error", "warn"]);
-  });
-});
-
-describe("D5 answer runner", () => {
-  test("none, running, gone and overdue", () => {
-    const dir = join(base, "reports");
-    mkdirSync(dir, { recursive: true });
-    const lock = (id: string, v: unknown) => writeFileSync(join(dir, `${id}.answer.lock`), typeof v === "string" ? v : JSON.stringify(v));
-    const now = Date.now();
-    expect(answerRunner(dir, "R-1", now)).toBe("none");
-    lock("R-2", "");
-    expect(answerRunner(dir, "R-2", now)).toBe("running"); // fresh and empty: being written
-    expect(answerRunner(dir, "R-2", now + 11_000)).toBe("gone");
-    lock("R-3", { pid: 1, pidStart: "x", at: new Date(now - 5 * MIN).toISOString() });
-    expect(answerRunner(dir, "R-3", now, () => false)).toBe("gone");
-    expect(answerRunner(dir, "R-3", now, () => true)).toBe("running");
-    lock("R-4", { pid: 1, pidStart: "x", at: new Date(now - 21 * MIN).toISOString() });
-    expect(answerRunner(dir, "R-4", now, () => true)).toBe("overdue");
   });
 });

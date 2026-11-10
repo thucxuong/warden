@@ -24,3 +24,20 @@ export function marketplaceClone(pluginRoot: string): { clone: string; marketpla
     return null;
   }
 }
+
+// The GitHub owner/name the plugin was installed from: the marketplace's github source, else a github.com url source.
+// Null for a local or non-GitHub install. Never throws.
+export function marketplaceRepo(pluginRoot: string): string | null {
+  try {
+    const layout = /^(.+\/plugins)\/cache\/([^/]+)\/([^/]+)\/[^/]+$/.exec(realpathSync(pluginRoot));
+    if (!layout || layout[3] !== "warden") return null;
+    const source = readJson<Record<string, { source?: { source?: unknown; repo?: unknown; url?: unknown } } | undefined>>(
+      join(layout[1]!, "known_marketplaces.json"),
+    )[layout[2]!]?.source;
+    const repo = source?.source === "github" ? source.repo
+      : typeof source?.url === "string" ? /github\.com[/:]([\w.-]+\/[\w.-]+?)(?:\.git)?\/?$/.exec(source.url)?.[1] : null;
+    return typeof repo === "string" && /^[\w.-]+\/[\w.-]+$/.test(repo) ? repo : null;
+  } catch {
+    return null;
+  }
+}

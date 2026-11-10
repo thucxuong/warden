@@ -65,14 +65,13 @@ describe("recently shipped and the project", () => {
 describe("reports", () => {
   test("open reports, the question first, the gone runner, the sync line", () => {
     const r = home.reports;
-    expect(r).toMatchObject({ available: true, closedCount: 1, questionsWaiting: 1, sync: { lastError: null, pushAccess: false } });
+    expect(r).toMatchObject({ available: true, closedCount: 1, questionsWaiting: 1, sync: { lastError: null } });
     expect(r.open.map((x) => x.id)).toEqual(["R-ab12-0001", "R-ab12-0002", "R-ab12-0004"]);
-    expect(r.open[0]).toMatchObject({ question: { text: "Which version?" }, command: 'warden report reply R-ab12-0001 --body "<answer>"', answerRunner: "none" });
-    expect(r.open[2]).toMatchObject({ question: null, command: null, answerRunner: "gone" });
-    expect(r.open[2]!.signals).toEqual([{ kind: "dead-job", severity: "error", label: "Job gone", detail: "answer runner for R-ab12-0004 is gone", threshold: null, command: null }]);
+    expect(r.open[0]).toMatchObject({ question: { text: "Which version?" }, command: 'warden report reply R-ab12-0001 --body "<answer>"' });
+    expect(r.open[2]).toMatchObject({ status: "accepted", question: null, command: null, signals: [] });
   }, 30_000);
 
-  test("SECRET_TOKEN in *.answer.json and *.answer.log is never in any body", async () => {
+  test("SECRET_TOKEN in a stray outbox file is never in any body", async () => {
     const tasks = ((await getJson<RunsResponse>(opts, "/api/runs")).body).rows.map((r) => r.task);
     const paths = [
       "/api/home", "/api/health", "/api/signals", "/api/tickets", "/api/docs", "/api/runs", "/api/runs?status=shipped,done",

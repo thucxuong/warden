@@ -24,7 +24,7 @@ export const HELP: Record<string, string> = {
   retry: "warden retry <task>   (a person, in a terminal)",
   reset: "warden reset <task> [--yes]   (a person, in a terminal)",
   flow: "warden flow check <file|name>... | warden flow save <path> --name <name> [--force]",
-  report: "warden report --kind bug|enhancement --title <t> --body <b>|--file <p> | warden report --status [--all | --write] | warden report reply <id> --body <answer>|--file <p> | warden report sync [--background] | warden report inbox [--all] | warden report set <key|file> --status <s> [--note <t>] [--fixed-in <v>] | warden report ask <key> --question <q>",
+  report: "warden report --kind bug|enhancement --title <t> --body <b>|--file <p> | warden report --status [--all | --write] | warden report reply <id> --body <answer>|--file <p> | warden report sync [--background]",
   retro: "warden retro --done [--date YYYY-MM-DD] [--note <t>]",
   upgrade: "warden upgrade --notes | --done",
   tools: "warden tools [--check [<name>] | --init | --skill | --usage [--since YYYY-MM-DD] | --verify tickets [--write]] | warden tools <name|role> [args...]",

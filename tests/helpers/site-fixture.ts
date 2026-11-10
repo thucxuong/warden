@@ -641,18 +641,14 @@ export default tools;
   const reports = join(data, "reports");
   const report = (id: string, status: string, extra: Record<string, unknown> = {}) => put(join(reports, `${id}.json`), {
     schema: 1, id, projectId: "fx", kind: "bug", title: `Report ${id}`, body: "Something broke.", createdAt: iso(now - 2 * DAY),
-    status, fixedIn: status === "fixed" ? "0.6.3" : null, note: null, projectDir: main, ...extra,
+    status, fixedIn: status === "fixed" ? "0.6.3" : null, note: null, issue: null, ...extra,
   });
-  report("R-ab12-0001", "needs-info", { createdAt: iso(now - 3 * DAY), thread: [{ from: "wa", at: iso(now - 1 * DAY), text: "Which version?" }] });
+  report("R-ab12-0001", "needs-info", { createdAt: iso(now - 3 * DAY), note: "Which version?", noteAt: iso(now - 1 * DAY) });
   report("R-ab12-0002", "sent", { createdAt: iso(now - 1 * DAY) });
   report("R-ab12-0003", "fixed");
-  report("R-ab12-0004", "needs-info", {
-    thread: [{ from: "wa", at: iso(now - 2 * DAY), text: "Can you share the log?" }, { from: "project", at: iso(now - 1 * DAY), text: "Here it is." }],
-  });
-  put(join(reports, "R-ab12-0004.answer.lock"), { pid: dead, pidStart: "x", at: iso(now - 5 * MIN) });
-  put(join(reports, "R-ab12-0004.answer.json"), { argv: ["claude"], env: { SECRET: "SECRET_TOKEN=do-not-serve" } });
-  put(join(reports, "R-ab12-0004.answer.log"), "SECRET_TOKEN=do-not-serve\n");
-  put(join(data, "reports-sync.json"), { schema: 1, lastFetchAt: iso(now - 30 * MIN), lastError: null, pushAccess: false });
+  report("R-ab12-0004", "accepted", { note: "Accepted. Planned for a coming release.", issue: 12 });
+  put(join(reports, "notes.log"), "SECRET_TOKEN=do-not-serve\n"); // a stray file in the outbox is never served
+  put(join(data, "reports-sync.json"), { schema: 1, lastAttemptAt: iso(now - 30 * MIN), lastError: null, told: false });
 
   let stopped = false;
   return {

@@ -59,10 +59,6 @@ const sig = {
     kind: "slow", severity: "warn", label: "Slow", detail: "12 min in implement, usual 4 min (median of 6)",
     threshold: "flagged above 2x usual, at least 2 min", command: null,
   },
-  answerGone: {
-    kind: "dead-job", severity: "error", label: "Job gone", detail: "answer runner for R-ab12-0004 is gone",
-    threshold: null, command: 'warden report reply R-ab12-0004 --body "<answer>"',
-  },
   orchestration: {
     kind: "orchestration-stopped", severity: "warn", label: "Orchestration stopped",
     detail: "orchestration stopped with 4 tickets left", threshold: null, command: "/warden:orchestrate FX-100",
@@ -265,21 +261,21 @@ export const home: HomeResponse = {
         id: "R-ab12-0001", title: "warden wait hangs after a gate restart", kind: "bug", status: "needs-info",
         createdAt: agoMin(60 * 30), fixedIn: null, note: null,
         question: { text: "Which version?", at: agoMin(60 * 5) },
-        command: 'warden report reply R-ab12-0001 --body "<answer>"', answerRunner: "none", signals: [],
+        command: 'warden report reply R-ab12-0001 --body "<answer>"', signals: [],
       },
       {
         id: "R-ab12-0004", title: "Doorbell misses the second question", kind: "bug", status: "needs-info",
         createdAt: agoMin(60 * 20), fixedIn: null, note: "maintainer asked for a log", question: null,
-        command: null, answerRunner: "gone", signals: [sig.answerGone],
+        command: null, signals: [],
       },
       {
         id: "R-ab12-0002", title: "Show the flow name in warden status", kind: "enhancement", status: "sent",
-        createdAt: agoMin(60 * 8), fixedIn: null, note: null, question: null, command: null, answerRunner: "none", signals: [],
+        createdAt: agoMin(60 * 8), fixedIn: null, note: null, question: null, command: null, signals: [],
       },
     ],
     closedCount: 1,
     questionsWaiting: 1,
-    sync: { lastFetchAt: agoMin(14), lastError: null, pushAccess: false },
+    sync: { lastAttemptAt: agoMin(14), lastError: null },
   },
 };
 

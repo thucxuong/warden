@@ -2,7 +2,7 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, renameSync } from "node:fs";
 import { join } from "node:path";
-import { machineId } from "../../plugins/warden/src/lib/reports-git.ts";
+import { machineId } from "../../plugins/warden/src/lib/reports.ts";
 import { legacyWorktreesDir, taskDir, worktreesDir } from "../../plugins/warden/src/state/paths.ts";
 import { readEvents, readRun, withLock, writeRun } from "../../plugins/warden/src/state/store.ts";
 import { done, ensureGate, findRunForWorktree, next, reset, retry, start, statusLines } from "../../plugins/warden/src/engine/machine.ts";

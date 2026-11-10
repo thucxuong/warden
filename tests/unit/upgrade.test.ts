@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { newerVersionNotice, run, upgradeNotice } from "../../plugins/warden/src/commands/upgrade.ts";
 import { WardenError } from "../../plugins/warden/src/lib/exit.ts";
-import { marketplaceClone } from "../../plugins/warden/src/lib/marketplace.ts";
+import { marketplaceClone, marketplaceRepo } from "../../plugins/warden/src/lib/marketplace.ts";
 import type { Ctx } from "../../plugins/warden/src/types.ts";
 
 const temps: string[] = [];
@@ -232,6 +232,23 @@ describe("newerVersionNotice", () => {
     expect(newerVersionNotice(installed)).toBeNull();
     writeJson(join(base, "plugins/known_marketplaces.json"), "nope");
     expect(newerVersionNotice(installed)).toBeNull();
+  });
+
+  test("marketplaceRepo reads a github source or a github.com url, else null", () => {
+    const known = (source: unknown) => writeJson(join(base, "plugins/known_marketplaces.json"), { wm: { source } });
+    expect(marketplaceRepo(installed)).toBeNull(); // no registry
+    known({ source: "github", repo: "acme/warden" });
+    expect(marketplaceRepo(installed)).toBe("acme/warden");
+    known({ source: "git", url: "https://github.com/acme/warden-fork.git" });
+    expect(marketplaceRepo(installed)).toBe("acme/warden-fork");
+    known({ source: "git", url: "git@github.com:acme/w.git" });
+    expect(marketplaceRepo(installed)).toBe("acme/w");
+    known({ source: "git", url: "https://gitlab.com/acme/warden.git" });
+    expect(marketplaceRepo(installed)).toBeNull();
+    known({ source: "directory", path: "/x" });
+    expect(marketplaceRepo(installed)).toBeNull();
+    known({ source: "github", repo: "acme/warden" });
+    expect(marketplaceRepo(pluginRoot)).toBeNull(); // not in the cache layout
   });
 
   test("marketplaceClone gives the clone dir and the marketplace name, or null", () => {

@@ -120,7 +120,7 @@ The Markdown files in `docs/` (without `docs/archived/`) and in `.warden/rules/`
 |---|---|
 | Slow | A step runs more than 2x its usual time, and at least 2 min. The usual time is the median of the newest 20 runs of that step type in this project (live and history). With fewer than 5, a default is used: analyze, plan, check, review and ship 10 min, implement 20 min, fix 15 min. Waiting for a person does not count. |
 | Loop | 3 or more bounces in one run (check or review back to implement, a dirty tree, a stale proof), 2 or more fixer rounds, or 3 rejected outputs in a row at one step. |
-| Job gone | The engine worker of a running gate is gone, the fixer's worktree is missing, or the answer runner of a report is gone. Type the command it shows (`warden wait <task>` restarts the worker). |
+| Job gone | The engine worker of a running gate is gone, or the fixer's worktree is missing. Type the command it shows (`warden wait <task>` restarts the worker). |
 | Job not started | The run waits for engine work that never started. `warden wait <task>` starts it. |
 | Job overdue | A gate runs far past its time limit (all its command timeouts, plus 5 min). If it never ends: `warden reset <task>`. |
 | Fixer quiet, Fixer done? | The fixer has not returned after 30 min, or it returned but its output was not handed in. |

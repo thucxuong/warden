@@ -351,13 +351,10 @@ export interface ReportRecord {
   schema: 1; id: string; projectId: string; kind: "bug" | "enhancement";
   title: string; body: string; createdAt: string;
   status: "sent" | "accepted" | "fixed" | "wontfix" | "needs-info";
-  fixedIn: string | null; note: string | null;  // set by WA
-  projectDir?: string;                          // 0.5: main checkout that filed it, so the WA can ask a question there
-  thread?: ReportMessage[];                     // 0.5: questions and answers after the body, oldest first
+  fixedIn: string | null; note: string | null;  // read back from the issue: milestone, last maintainer comment
+  issue?: number | null;                        // the GitHub issue number, once it is open
+  noteAt?: string | null;                       // when the maintainer wrote the note
 }
-
-// 0.5: one message in a report's thread. "wa" asks, "project" answers.
-export interface ReportMessage { from: "wa" | "project"; at: string; text: string }
 
 // ---------------------------------------------------------------------------
 // 4.14 History

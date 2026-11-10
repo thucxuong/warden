@@ -68,6 +68,6 @@ export function buildHome(ctx: SiteCtx): HomeResponse {
   return {
     project: projectInfo(ctx), generatedAt: ctx.generatedAt,
     needsYou, running, recentlyShipped,
-    reports: readReports(ctx.data, ctx.main, ctx.now),
+    reports: readReports(ctx.data, ctx.main),
   };
 }

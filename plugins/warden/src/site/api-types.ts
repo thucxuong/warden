@@ -105,7 +105,7 @@ export interface ReportsPanel {
   open: ReportItem[];         // status sent | accepted | needs-info; questions first, then newest createdAt
   closedCount: number;        // fixed + wontfix
   questionsWaiting: number;
-  sync: { lastFetchAt: ISO | null; lastError: string | null; pushAccess: boolean | null } | null;
+  sync: { lastAttemptAt: ISO | null; lastError: string | null } | null;
 }
 
 export interface ReportItem {
@@ -114,7 +114,6 @@ export interface ReportItem {
   createdAt: ISO; fixedIn: string | null; note: string | null;
   question: { text: string; at: ISO } | null;   // a maintainer question waits for this project
   command: string | null;     // 'warden report reply R-… --body "<answer>"' when question is set
-  answerRunner: "none" | "running" | "gone" | "overdue";
   signals: Signal[];
 }
 

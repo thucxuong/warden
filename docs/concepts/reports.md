@@ -19,9 +19,9 @@ warden report --kind bug --title "Gate blocks after a clean merge" --body "What 
 | `--body <text>` | The report text, as one argument. |
 | `--file <path>` | Read the body from a file instead. Without `--body` or `--file`, the body is read from stdin. |
 
-A good body says what happened, what you expected, the steps to repeat it, and the evidence (the exact message or command output). Keep repository names, links, secrets, credentials and customer data out of it.
+A good body says what happened, what you expected, the steps to repeat it, and the evidence (the exact message or command output). Keep repository names, links, secrets, credentials and customer data out of it: **the report becomes a public GitHub issue**.
 
-The command prints `{"id":"R-eb85-0001","status":"sent"}`. The id has two parts: four characters that name your machine, and a number. So reports from several machines in one project never clash.
+The command prints `{"id":"R-eb85-0001","status":"sent","issue":41}`. When it could not send, `issue` is `null` and `waiting` says why (for example `the GitHub CLI (gh) is not logged in: run gh auth login`). The id has two parts: four characters that name your machine, and a number. So reports from several machines in one project never clash.
 
 Warden also files a report by itself when the fixer finds that warden is at fault (a `WARDEN_BUG` result). See [Gates and self-healing](gates-and-self-healing.md#the-fixer).
 
@@ -29,9 +29,10 @@ Warden also files a report by itself when the fixer finds that warden is at faul
 
 1. The report is saved on your machine, in the `reports/` folder of the warden data folder (by default `~/.claude/plugins/data/warden-warden-marketplace/reports/`).
 2. A row is added to `.warden/reports.md` in the **main checkout**, also when the command runs in a task worktree. This table is committed, so your team sees the reports too.
-3. A background sync sends the report to the warden maintainers with git, and fetches status updates back. It runs after each report, and from session start about once an hour. Run it now with `warden report sync`.
+3. Warden opens a GitHub issue for it on the warden repository (the one warden was installed from), with your GitHub CLI. You need [`gh`](https://cli.github.com) installed and logged in (`gh auth login`); any GitHub account can report.
+4. A background sync reads the issue back about once an hour, from session start: its state, labels, milestone and the maintainers' last comment. Run it now with `warden report sync`.
 
-The sync needs write access to the warden repository. Without it, reports stay on this machine, and session start tells the agent once: "reports from this machine reach warden only on this machine".
+When the issue cannot be opened (no `gh`, not logged in, offline), the report stays on this machine and session start tries again each minute. When `gh` is missing or logged out, session start tells the agent once.
 
 ### Committing `.warden/reports.md`
 
@@ -59,16 +60,13 @@ warden report --status --write  # rewrite .warden/reports.md from the latest sta
 
 When the maintainers need more information, a report moves to `needs-info` with a question. A report gets at most three questions.
 
-- **Usually it is answered at once, by itself.** When the project's main checkout is on the machine that filed the report, warden starts a headless, read-only Claude run there. It looks at the project's code, config, `.warden` files, logs and git history, may run `warden status` and read-only git commands, changes nothing, and answers with `warden report reply`. The report goes back to `sent`.
-- **Otherwise the question waits.** That happens for a report filed on another machine, filed before warden 0.5, or when the answer run could not start. Session start then shows the question with the command to answer it.
-
-To answer by hand, from the project:
+Session start shows the question with the command to answer it. The agent answers from the project's code, config and logs:
 
 ```bash
 warden report reply R-eb85-0001 --body "The check was bun test; the log line was ..."
 ```
 
-The answer is one argument (or `--file <path>`), at most 4000 characters. Keep secrets, credentials and customer data out of it. `reply` fails when the report has no open question.
+The answer is one argument (or `--file <path>`), at most 4000 characters, and is posted as a comment on the public issue. Keep secrets, credentials and customer data out of it. `reply` fails when the report has no open question.
 
 ## What session start tells you
 
@@ -86,7 +84,7 @@ Every new session (and every resume, clear or compact) starts with a few lines f
 | `warden: orchestration of <epic> stopped` | An epic run stopped with tickets left. | Offers to go on. |
 | `warden: report <id> "<title>" is now <status>` | A report changed status, with the maintainers' note and, for `needs-info`, the reply command. | Tells you; answers a question when your request is done. |
 | `warden: when the user's current request is done, run warden report --status --write` | Follows a status change. | Refreshes and commits `.warden/reports.md` on the main branch, when it is safe. |
-| `warden: reports from this machine reach warden only on this machine` | The sync has no write access. | Tells you once. |
+| `warden: <n> report(s) wait to reach the warden maintainers` | `gh` is missing or not logged in, so reports could not be sent. | Tells you once. |
 | `warden: not set up here. Run /warden:init.` | The repo has no `.warden/warden.json`. | Offers `/warden:init`. |
 
 Each report status change is told once per main checkout.

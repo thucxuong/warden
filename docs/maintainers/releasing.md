@@ -67,15 +67,7 @@ flowchart LR
 
    If `merge-base` exits 1, `stable` has commits that the tag does not. Stop and find out why.
 
-8. **Close the reports** that the release fixes:
-
-   ```bash
-   plugins/warden/bin/warden report set <key> --status fixed --fixed-in 0.6.2
-   ```
-
-   Each project sees the new status at its next session start. See [Triage](triage.md).
-
-9. **Re-register the doorbell** if the release changed `scripts/wa-register.ts` or the triage skill's allowed commands: `bun scripts/wa-register.ts`.
+8. **Close the reports** that the release fixes: set each issue's milestone to the version (for example `0.6.2`) and close it as completed. Each project sees the new status after its next sync. See [Triage](triage.md).
 
 ## Verify in the playground
 
@@ -83,7 +75,7 @@ A release is not done when the tests pass. Each version is proven on a real cons
 
 1. Update the plugin in the playground and let its agent run `/warden:upgrade`.
 2. Have the playground's agent do one to three real tickets that use what the release changed. Use a cheaper model (Sonnet or Haiku); the goal is to test warden, not to build the app.
-3. The playground's agent reports what goes wrong with warden through `/warden:report` and the retro, as any project would. The doorbell triages the reports.
+3. The playground's agent reports what goes wrong with warden through `/warden:report` and the retro, as any project would. Run `/wa-triage` on the new issues.
 4. Fix the real bugs, release a patch, mark the reports fixed, and upgrade the playground again.
 5. Repeat until a round finds no real warden problem. Then start the next version.
 

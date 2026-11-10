@@ -7,7 +7,6 @@ import { stripHeredocs } from "../../plugins/warden/src/hooks/pre-tool-use.ts";
 import { done, start } from "../../plugins/warden/src/engine/machine.ts";
 import { readEvents, readSessionRecord } from "../../plugins/warden/src/state/store.ts";
 import { commit, sh, write } from "../helpers/repo.ts";
-import { NO_ACCESS_LINE } from "../../plugins/warden/src/lib/reports-git.ts";
 import { PLUGIN_ROOT, T, IMPL, CHECK, FEATURE, base, main, wt, ctx, gates, startFlow, run, donePlan, implement, drive, atFix, spawn, hook, check, bash, editAt, reason, eventTypes, installHooksFixture, VERSION, hookWithRoot } from "../helpers/hooks-fixture.ts";
 
 setDefaultTimeout(60_000);
@@ -449,11 +448,17 @@ describe("SessionStart: line order of spec 0.3 section 10", () => {
 
   // A sync state that is fresh, so session start only reads it and starts nothing.
   function syncState(over: Record<string, unknown> = {}): void {
-    write(ctx.data, "reports-sync.json", JSON.stringify({
-      schema: 1, lastAttemptAt: new Date().toISOString(), lastFetchAt: null, pushed: [], pushAccess: false, told: false, seenSent: [], lastError: "no-access", ...over,
+    write(ctx.data, "reports-sync.json", JSON.stringify({ schema: 1, lastAttemptAt: new Date().toISOString(), lastError: "no-auth", told: false, ...over }));
+  }
+  // A report still without its issue.
+  function waitingReport(): void {
+    write(ctx.data, "reports/R-0002.json", JSON.stringify({
+      schema: 1, id: "R-0002", projectId: "demo", kind: "bug", title: "Slow", body: "b", createdAt: "2026-10-01T00:00:00Z",
+      status: "sent", fixedIn: null, note: null, issue: null,
     }));
   }
-  const remote = { WARDEN_REPORTS_REMOTE: "/nonexistent/warden-reports.git" };
+  const WAITING_LINE = "warden: 1 report(s) wait to reach the warden maintainers: the GitHub CLI (gh) is not logged in: run gh auth login. When the user's current request is done, tell them in one short line.";
+  const on = { WARDEN_REPORTS_REPO: "example/none" };
   const sessionWith = (root: string, env: Record<string, string>) =>
     handleHook("session-start", { session_id: "S1", transcript_path: "/tmp/S1.jsonl", cwd: main, hook_event_name: "session-start" }, { ...ctx, root, env: { ...ctx.env, ...env } }, spawn);
 
@@ -462,34 +467,34 @@ describe("SessionStart: line order of spec 0.3 section 10", () => {
     write(main, ".warden/reports.md", "| ID | Title | Status | Fixed in |\n|---|---|---|---|\n| R-0001 | Flaky login | sent | — |\n");
     write(ctx.data, "reports/R-0001.json", JSON.stringify({
       schema: 1, id: "R-0001", projectId: "demo", kind: "bug", title: "Flaky login", body: "b", createdAt: "2026-10-01T00:00:00Z",
-      status: "accepted", fixedIn: null, note: null,
+      status: "accepted", fixedIn: null, note: null, issue: 7,
     }));
-    syncState({ pushed: ["R-0001"] });
+    waitingReport();
+    syncState();
 
-    const lines = (await sessionWith(fakeRoot(), remote))!.split("\n");
+    const lines = (await sessionWith(fakeRoot(), on))!.split("\n");
     expect(lines.length).toBe(4);
     expect(lines[0]).toStartWith(`warden: ${T} stopped at implement`);
     expect(lines[1]).toBe('warden: report R-0001 "Flaky login" is now accepted.');
     expect(lines[2]).toStartWith("warden: when the user's current request is done, run warden report --status --write");
-    expect(lines[3]).toBe(NO_ACCESS_LINE);
+    expect(lines[3]).toBe(WAITING_LINE);
   });
 
-  test("the no-access line is shown once, and again only after access came back and was lost", async () => {
+  test("the waiting line is shown once, and only while a report waits and gh is missing or logged out", async () => {
     const root = fakeRoot();
     syncState();
-    expect(await sessionWith(root, remote)).toBe(NO_ACCESS_LINE);
-    expect(await sessionWith(root, remote)).toBeNull();
-    expect(await sessionWith(root, remote)).toBeNull();
-    // access came back (a push worked: told false, pushAccess true), then was lost
-    syncState({ pushAccess: true, told: false, lastError: null });
-    expect(await sessionWith(root, remote)).toBeNull();
-    syncState({ pushAccess: false, told: false, lastError: "no-access" });
-    expect(await sessionWith(root, remote)).toBe(NO_ACCESS_LINE);
+    expect(await sessionWith(root, on)).toBeNull(); // nothing waits
+    waitingReport();
+    expect(await sessionWith(root, on)).toBe(WAITING_LINE);
+    expect(await sessionWith(root, on)).toBeNull();
+    syncState({ lastError: "offline" });
+    expect(await sessionWith(root, on)).toBeNull(); // offline: the next sync tries again, nothing to tell
   });
 
-  test("no report sync line, state or process when the transport is off", async () => {
+  test("no report sync line, state or process when reports are off", async () => {
     const root = fakeRoot();
     syncState();
+    waitingReport();
     expect(await hookWithRoot(root, "session-start")).toBeNull();
     expect(JSON.parse(readFileSync(join(ctx.data, "reports-sync.json"), "utf8")).told).toBe(false);
   });

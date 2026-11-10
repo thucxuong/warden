@@ -10,8 +10,8 @@ import {
   branchExists, deleteBranch, diffNames, fetchMain, head, isAncestor, mergeBase, mergeNoEdit, porcelain, revParse, showFile,
   worktreeAdd, worktreeList, worktreeRemove,
 } from "../lib/git.ts";
-import { ring } from "../lib/doorbell.ts";
-import { newReportId, startReportSync } from "../lib/reports-git.ts";
+import { fileReport as fileReportRecord } from "../commands/report.ts";
+import { startReportSync } from "../lib/reports.ts";
 import { readJson, writeJsonAtomic } from "../lib/json.ts";
 import * as proc from "../lib/proc.ts";
 import { legacyWorktreesDir, mainRef, mainRoot, sessionsDir, taskDir, worktreesDir } from "../state/paths.ts";
@@ -19,7 +19,7 @@ import { appendEvent, listTasks, readEvents, readRun, runExists, withLock, write
 import {
   DEFAULT_LIMITS,
   type CheckStep, type Ctx, type DoneResponse, type EventType, type FixOutput, type FlowJson, type Gates, type Limits,
-  type NextResponse, type ReportRecord, type ReviewRound, type RouteBack, type RunJson, type SessionRecord,
+  type NextResponse, type ReviewRound, type RouteBack, type RunJson, type SessionRecord,
   type StatusLine, type StepsJson, type TriageReport,
 } from "../types.ts";
 import { lintFlow } from "./flow-lint.ts";
@@ -909,39 +909,17 @@ function acceptFix(s: S, out: FixOutput): void {
   }
 }
 
-// The same record and table row as `warden report` (4.13).
+// The same record and table row as `warden report` (4.13); the background sync opens its issue.
 function fileReport(s: S, title: string, body: string): string {
-  const dir = join(s.ctx.data, "reports");
-  mkdirSync(dir, { recursive: true });
-  const counterPath = join(dir, "counter.json");
-  let n = existsSync(counterPath) ? readJson<{ last: number }>(counterPath).last : 0;
   let projectId = "unknown";
   try {
     projectId = loadWardenJson(join(s.main, ".warden", "warden.json")).projectId;
   } catch {
     // the report still matters more than its project id
   }
-  for (;;) {
-    n += 1;
-    const id = newReportId(s.ctx.data, n);
-    const record: ReportRecord = {
-      schema: 1, id, projectId, kind: "bug", title, body, createdAt: now(), status: "sent", fixedIn: null, note: null,
-    };
-    try {
-      writeFileSync(join(dir, `${id}.json`), JSON.stringify(record, null, 2) + "\n", { flag: "wx" });
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === "EEXIST") continue;
-      throw err;
-    }
-    writeJsonAtomic(counterPath, { last: n });
-    const table = join(s.main, ".warden", "reports.md");
-    const current = existsSync(table) ? readFileSync(table, "utf8") : "| ID | Title | Status | Fixed in |\n|---|---|---|---|\n";
-    const cell = title.replace(/\|/g, "/").replace(/\s+/g, " ").trim();
-    writeFileSync(table, (current.endsWith("\n") ? current : current + "\n") + `| ${id} | ${cell} | sent | — |\n`);
-    ring(s.ctx);
-    startReportSync(s.ctx);
-    return id;
-  }
+  const { record } = fileReportRecord(s.ctx, s.main, projectId, "bug", title, body);
+  startReportSync(s.ctx);
+  return record.id;
 }
 
 // ---------------------------------------------------------------------------

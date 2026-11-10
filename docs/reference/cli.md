@@ -383,7 +383,7 @@ warden report sync [--background]
 | `--body <b>` | The body as one argument |
 | `--file <p>` | Read the body from a file. Without `--body` or `--file`, the body comes from stdin |
 
-It saves the report in this machine's outbox, adds a row to `.warden/reports.md` in the main checkout (also when run from a task worktree), and starts sending it in the background. Output: `{"id":"R-eb85-0001","status":"sent"}`. Ids look like `R-<4 hex>-<number>`.
+It saves the report in this machine's outbox, adds a row to `.warden/reports.md` in the main checkout (also when run from a task worktree), and opens a public GitHub issue for it with `gh` on the repo warden was installed from. Output: `{"id":"R-eb85-0001","status":"sent","issue":41}`. When the issue could not be opened, `issue` is `null` and `waiting` gives the reason; session start tries again. Ids look like `R-<4 hex>-<number>`.
 
 Keep repository names, links, secrets, credentials and customer data out of the title and body.
 
@@ -393,7 +393,7 @@ Lists this project's reports from this machine's outbox.
 
 | Form | Output |
 |---|---|
-| `--status` | `{"reports":[{id, title, status, fixedIn, note}], "closed": <n>}`. Only open reports (`sent`, `accepted`, `needs-info`); `closed` counts `fixed` and `wontfix` |
+| `--status` | `{"reports":[{id, title, status, fixedIn, note, issue}], "closed": <n>}`. Only open reports (`sent`, `accepted`, `needs-info`); `closed` counts `fixed` and `wontfix` |
 | `--status --all` | `{"reports":[...]}` with every report |
 | `--status --write` | Rewrites the rows of `.warden/reports.md` to match the outbox and adds missing rows. Prints `{"rowsUpdated", "open", "closed"}` |
 
@@ -401,15 +401,11 @@ Statuses: `sent`, `accepted`, `fixed`, `wontfix`, `needs-info`.
 
 ### `reply`
 
-Answers the maintainers' open question on a report (status `needs-info`). The answer is 1 to 4000 characters. The report goes back to `sent` and is sent again. Output: `{"id","status":"sent"}`. Exit 3 for an unknown report, 1 when it has no open question.
+Answers the maintainers' open question on a report (status `needs-info`) with a comment on its issue. The answer is 1 to 4000 characters. The report goes back to `sent`. Output: `{"id","status":"sent"}`. Exit 3 for an unknown report, 1 when it has no open question or the comment could not be posted.
 
 ### `sync`
 
-Sends this machine's reports and fetches their status now. Always exits 0. Output: `{"enabled","fetched","pushed","updated","edits","pushAccess"}` plus `"skipped":"busy"` when another sync runs. With `--background` it starts the sync and prints `{"started": true|false}`.
-
-### Maintainer subcommands
-
-`warden report inbox [--all]`, `warden report set <key|file> --status <s> [--note <t>] [--fixed-in <v>]` and `warden report ask <key> --question <q>` are for the warden maintainers. See [maintainer triage](../maintainers/triage.md).
+Opens the issues still missing and reads back the status of each open one now. Always exits 0. Output: `{"enabled","sent","refreshed","error"}` plus `"skipped":"busy"` when another sync runs. With `--background` it starts the sync and prints `{"started": true|false}`. How maintainers answer: [maintainer triage](../maintainers/triage.md).
 
 ---
 

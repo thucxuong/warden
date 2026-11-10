@@ -6,7 +6,7 @@ import { type CheckRow, checksDueLine, checksFailedLine, listChecks, mainCheckou
 import { leftoverLine } from "../commands/clean.ts";
 import { newerVersionNotice, upgradeNotice } from "../commands/upgrade.ts";
 import { ensureGate } from "../engine/machine.ts";
-import { reportSyncLine } from "../lib/reports-git.ts";
+import { reportSyncLine } from "../lib/reports.ts";
 import { orchestrateLines } from "../engine/tickets.ts";
 import type { Ctx, RunJson } from "../types.ts";
 import {

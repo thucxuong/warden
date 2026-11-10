@@ -60,7 +60,7 @@ To run a command against the checkout from a terminal, use the wrapper: `plugins
 | `plugins/warden/src/hooks/` | One handler per hook event; `resolve.ts` finds the run a session or path belongs to |
 | `plugins/warden/src/state/` | Paths and the run store (atomic writes, task lock, events) |
 | `plugins/warden/src/config/` | Loading and checking `warden.json`, `steps.json`, triage rules |
-| `plugins/warden/src/lib/` | Git, processes, tokens, reports transport, doorbell, answer runner, small helpers |
+| `plugins/warden/src/lib/` | Git, processes, tokens, reports (GitHub issues through `gh`), small helpers |
 | `plugins/warden/src/site/` | The local `warden site` server: the read-only JSON API and the static file server |
 | `plugins/warden/site-dist/` | The committed UI build that `warden site` serves. Never edit by hand: run `bun run ui:build` |
 | `site-ui/` | The site UI source (React, Vite, Tailwind, shadcn) |
@@ -92,7 +92,7 @@ To run a command against the checkout from a terminal, use the wrapper: `plugins
 - **Background work never blocks.** Gates run in a detached worker; `warden done` returns at once, and `warden wait` is the only run command that blocks.
 - **Comments say why**, and name the spec section they follow (the specs are in `docs/internal/`).
 - **Plain words** in every message, skill and doc. Short sentences.
-- **Shipped text rules.** No file under `plugins/warden/` (`skills`, `agents`, `templates`, `src`, `site-dist`) contains `github.com/thucxuong`, `thucxuong/warden`, `WD-` or `issue #`. Skills and agents never use the word "issue" at all. Projects never see where reports go.
+- **Shipped text rules.** No file under `plugins/warden/` (`skills`, `agents`, `templates`, `src`, `site-dist`) contains `github.com/thucxuong`, `thucxuong/warden`, `WD-` or `issue #`. Skills and agents never use the word "issue" at all. Warden reads the repo for reports from the install source, never from a shipped file.
 
 ## Tests
 
@@ -100,7 +100,7 @@ To run a command against the checkout from a terminal, use the wrapper: `plugins
 - Each test points `WARDEN_DATA` at a temp dir.
 - The fake reviewer is `tests/fixtures/bin/claude`. A test uses it with `WARDEN_TEST_MODE=1` and `WARDEN_CLAUDE_BIN=<path>`; outside test mode, warden ignores `WARDEN_CLAUDE_BIN`.
 - `WARDEN_POLL_MS` shortens the `warden wait` poll, in test mode only.
-- Report transport tests set `WARDEN_REPORTS_REMOTE` to a bare repo in a temp dir, so they never reach the real `reports` branch.
+- Report tests set `WARDEN_REPORTS_REPO` and put a fake `gh` on `PATH`, so they never open a real issue.
 - `tests/helpers/repo.ts` builds a template repo once per file and copies it per test, and puts the real git binary first on the PATH on macOS. Use it for tests that need git.
 - When you add a skill, add it to `expectedSkills` (and its frontmatter fields to `expectedExtras`) in `tests/unit/skills.test.ts`.
 

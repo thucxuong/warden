@@ -51,7 +51,7 @@ You do not set these. They are listed so you know what they are when you see the
 | `WARDEN_DATA` | The data folder, set by the wrapper script (see below) |
 | `WARDEN_ROLE` | Set on the review gate's reviewer. While it is set, warden's hooks do nothing |
 | `WARDEN_TOOLS_MAIN` | Set when the engine runs the `tickets` tool, so the tool code comes from the main checkout |
-| `WARDEN_TEST_MODE`, `WARDEN_CLAUDE_BIN`, `WARDEN_POLL_MS`, `WARDEN_REPORTS_REMOTE` | For warden's own tests. `WARDEN_CLAUDE_BIN` and `WARDEN_POLL_MS` are ignored unless `WARDEN_TEST_MODE=1`. Leave them all unset |
+| `WARDEN_TEST_MODE`, `WARDEN_CLAUDE_BIN`, `WARDEN_POLL_MS`, `WARDEN_REPORTS_REPO` | For warden's own tests. `WARDEN_CLAUDE_BIN` and `WARDEN_POLL_MS` are ignored unless `WARDEN_TEST_MODE=1`. Leave them all unset |
 | `HOME` | Used to find `~/.claude/plugins/` (installed marketplaces, the data folders) |
 
 The report transport turns off interactive git prompts for its own git calls (`GIT_TERMINAL_PROMPT=0`, `GCM_INTERACTIVE=never`, ssh in batch mode), so a sync never hangs on a password prompt.
@@ -77,9 +77,9 @@ The data folder holds what belongs to this machine, not to the project. The `war
 | `root` | Pointer to the plugin folder, written by session start |
 | `hook-errors.log` | Internal hook errors. Look here when a hook seems to do nothing |
 | `machine.json` | This machine's id (8 hex characters), made once. The first 4 are in report ids |
-| `reports/R-*.json` | The report outbox: one record per report, with its status, the maintainers' note and the question thread |
+| `reports/R-*.json` | The report outbox: one record per report, with its issue number, status and the maintainers' note |
 | `reports/counter.json` | The last report number |
-| `reports-sync.json`, `reports-sync.lock`, `reports-pending.json`, `reports-git/` | The background report sync: its state, its lock, queued status changes, and a private git copy used to send and fetch reports |
+| `reports-sync.json`, `reports-sync.lock` | The background report sync (through `gh`): its state and its lock |
 
 Because reports live here, `warden report --status` on another machine does not show this machine's reports. See [reports](../concepts/reports.md).
 
