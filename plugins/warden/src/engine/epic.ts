@@ -1,13 +1,14 @@
 // What the session that orchestrates an epic cost. How the epic's tickets went is in their own run logs; only this
 // number needs a Claude Code transcript. It is summed from the transcripts of the sessions that ran
 // `warden orchestrate` (.warden/state/_sessions has their paths). No text of a session is kept. Transcripts stay on one
-// machine and Claude Code deletes old ones, so `set-status <epic> done` saves the total to .warden/history/<epic>/epic.json.
+// machine and Claude Code deletes old ones, so `set-status <epic> done` saves the total to the records database as <epic>/epic.json.
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { readJson, writeJsonAtomic } from "../lib/json.ts";
 import { pricesDate } from "../lib/prices.ts";
 import { addMessage, emptyTotals, roundUsd, type AssistantMessage, type TokenTotals } from "../lib/tokens.ts";
-import { historyDir, sessionsDir } from "../state/paths.ts";
+import { sessionsDir } from "../state/paths.ts";
+import { recordStore } from "../records/store.ts";
 
 export interface EpicHistory { schema: 1; epic: string; savedAt: string; pricesDate: string | null; tokens: TokenTotals }
 
@@ -171,25 +172,19 @@ export function liveOrchestratorTokens(main: string, epic: string): TokenTotals 
   return hasTokens(total) ? total : null;
 }
 
-export function epicHistoryFile(main: string, epic: string): string {
-  return join(historyDir(main, epic), "epic.json");
+// A row in the records database with status "epic", which the site's lists never ask for.
+export function epicHistoryOf(summary: Record<string, unknown> | null | undefined): EpicHistory | null {
+  const saved = summary as unknown as EpicHistory | null | undefined;
+  return saved && saved.schema === 1 && typeof saved.tokens === "object" && saved.tokens !== null ? saved : null;
 }
 
-export function readEpicHistory(main: string, epic: string): EpicHistory | null {
-  try {
-    const saved = readJson<EpicHistory>(epicHistoryFile(main, epic));
-    return saved.schema === 1 && typeof saved.tokens === "object" && saved.tokens !== null ? saved : null;
-  } catch {
-    return null;
-  }
-}
-
-// At `set-status <epic> done`: saves the total, so it outlives the transcripts. The path from main, or null when
-// the transcripts on this machine have nothing for the epic.
-export function saveEpicHistory(main: string, epic: string): string | null {
+// At `set-status <epic> done`: saves the total, so it outlives the transcripts. False when the transcripts on this
+// machine have nothing for the epic.
+export async function saveEpicHistory(main: string, epic: string): Promise<boolean> {
   const tokens = liveOrchestratorTokens(main, epic);
-  if (tokens === null) return null;
-  const file = epicHistoryFile(main, epic);
-  writeJsonAtomic(file, { schema: 1, epic, savedAt: new Date().toISOString(), pricesDate: pricesDate(), tokens } satisfies EpicHistory);
-  return relative(main, file);
+  if (tokens === null) return false;
+  const savedAt = new Date().toISOString();
+  const summary = { schema: 1, epic, savedAt, pricesDate: pricesDate(), tokens } satisfies EpicHistory;
+  await (await recordStore(main)).save({ ticket: epic, status: "epic", flow: "epic", finishedAt: savedAt, summary, detail: {} });
+  return true;
 }

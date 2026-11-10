@@ -49,8 +49,6 @@ describe("review", () => {
     expect(readFileSync(join(taskDir(main, T), "review/leftover.md"), "utf8")).toContain("round 4");
 
     // Ship needs the leftovers in the description.
-    sh(wt, "add", `.warden/history/${T}`);
-    sh(wt, "commit", "-q", "-m", "record");
     const bad = await done(ctx, T, JSON.stringify({ pr: "p", merged: false, mergeCommit: null, description: "no section" }), spawn);
     expect(bad.errors).toEqual(['description: must contain the "## Unresolved review findings" section']);
   });
@@ -82,20 +80,18 @@ describe("review", () => {
 });
 
 describe("ship and stale proofs", () => {
-  test("ship prep writes history; ship done -> shipped", async () => {
+  test("ship prep writes nothing to the worktree; ship done -> shipped", async () => {
     await startFlow([IMPL, CHECK, REVIEW, SHIP]);
     await implement();
     await drive();
     const nx = await next(ctx, T, spawn);
     expect(nx.status).toBe("agent");
     expect(nx.step?.id).toBe("ship");
-    expect(nx.context.ship?.historyDir).toBe(join(wt, ".warden/history", T));
-    expect(nx.instructions).toContain(`run \`git -C ${wt} add .warden/history/${T}\`, then \`git -C ${wt} commit -m 'chore(${T}): run record'\``);
-    expect(existsSync(join(wt, ".warden/history", T, "summary.json"))).toBe(true);
+    expect(nx.instructions).not.toContain("run record");
+    expect(existsSync(join(wt, ".warden/history"))).toBe(false);
 
     const missing = await done(ctx, T, JSON.stringify({ pr: null, merged: false, mergeCommit: null, description: "d" }), spawn);
     expect(missing.errors).toContain("pr or mergeCommit is required");
-    expect(missing.errors).toContain(`the run record is not committed: commit .warden/history/${T}/`);
 
     const res = await ship();
     expect(res.errors).toEqual([]);
@@ -129,15 +125,14 @@ describe("ship and stale proofs", () => {
     expect(r.waiting?.reason).toStartWith("code keeps changing after the gates (3 stale proofs): code changed after gates: HEAD ");
   });
 
-  test("a history-only commit keeps the proofs valid", async () => {
+  test("ship adds nothing to the ticket branch", async () => {
     await startFlow([IMPL, CHECK, REVIEW, SHIP]);
     await implement();
     await drive();
-    sh(wt, "add", `.warden/history/${T}`);
-    sh(wt, "commit", "-q", "-m", "record");
     const nx = await next(ctx, T, spawn);
     expect(nx.status).toBe("agent");
     expect(run().counters.staleProofs).toBe(0);
+    expect(sh(wt, "status", "--porcelain")).toBe("");
   });
 });
 

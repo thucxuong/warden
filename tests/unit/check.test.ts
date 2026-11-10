@@ -124,13 +124,6 @@ describe("runCheck", () => {
     expect(readEvents(repo, TASK).filter((e) => e.type === "gate.command")).toHaveLength(1);
   });
 
-  test("this task's uncommitted history does not count as left files", async () => {
-    mkdirSync(join(repo, ".warden/history", TASK), { recursive: true });
-    writeFileSync(join(repo, ".warden/history", TASK, "summary.json"), "{}\n");
-    const result = await runCheck({ commands: [cmd("test", "true")] }, ctx);
-    expect(result.passed).toBe(true);
-  });
-
   test("a timed-out command fails with exit 124", async () => {
     const result = await runCheck({ commands: [cmd("slow", "sleep 5", { timeoutSec: 1 })] }, ctx);
     expect(result.passed).toBe(false);

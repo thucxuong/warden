@@ -157,7 +157,7 @@ See [project files](project-files.md#doc-folders).
 /warden:tools e2e
 ```
 
-Writes or changes a tool in `.warden/tools/`. Without a name, it lists the tools and asks what you need. It adds the tool to `index.ts`, tries it, sets a role in `roles.json` when warden should use it, and runs `warden tools --check` before you commit.
+Writes or changes a tool in `.warden/tools/`. Without a name, it lists the tools and asks what you need. It adds the tool to `index.ts`, tries it, sets a role in `roles.json` when warden should use it, and runs `warden tools --check` before you commit. `/warden:tools records` sets up the database every project needs for its run records.
 
 See [write a tool](../guides/write-a-tool.md) and [write a ticket tool](../guides/write-a-ticket-tool.md).
 

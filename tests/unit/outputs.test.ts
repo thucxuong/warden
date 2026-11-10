@@ -308,21 +308,15 @@ describe("implement", () => {
 });
 
 describe("ship", () => {
-  test("gates, history, pr and mergeCommit are checked", () => {
+  test("gates, pr and mergeCommit are checked", () => {
     const run = runAt("ship", { leftovers: "review/leftover.md" });
     expect(errorsFor(run, { pr: null, merged: true, mergeCommit: "deadbeefdeadbeef", description: "d" })).toEqual([
       "gates are not proven for HEAD: no proof for c",
-      `the run record is not committed: commit .warden/history/${T}/`,
       "mergeCommit: deadbeefdeadbeef not found",
       'description: must contain the "## Unresolved review findings" section',
     ]);
-    const sha = head(wt);
-    commit(wt, { [`.warden/history/${T}/summary.json`]: "{}\n" });
-    write(wt, `.warden/history/${T}/run.json`, "{}\n");
-    const proven = { ...run, leftovers: null, proofs: [{ stepId: "c", kind: "check" as const, sha, at: "" }] };
-    expect(errorsFor(proven, { pr: "p", merged: false, mergeCommit: null, description: "d" })).toEqual([
-      `the run record has uncommitted changes: .warden/history/${T}/run.json`,
-    ]);
+    const proven = { ...run, leftovers: null, proofs: [{ stepId: "c", kind: "check" as const, sha: head(wt), at: "" }] };
+    expect(errorsFor(proven, { pr: "p", merged: false, mergeCommit: null, description: "d" })).toEqual([]);
   });
 
   test("shape", () => {

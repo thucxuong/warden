@@ -59,8 +59,6 @@ describe("review blocking and leftovers", () => {
     expect(next.json.instructions).toContain("leftover");
 
     // Ship: the description must carry the leftovers.
-    git(wt, "add", ".warden/history/T-004");
-    git(wt, "commit", "-q", "-m", "chore(T-004): run record");
     const without = done(cp, "T-004", { pr: "PR-1", merged: false, mergeCommit: null, description: "Adds a constant." });
     expect(without.code).toBe(1);
     expect(without.json.errors.join("\n")).toContain("Unresolved review findings");

@@ -8,6 +8,7 @@ import { lintFlow } from "../engine/flow-lint.ts";
 import { start } from "../engine/machine.ts";
 import { showTicket } from "../engine/tickets.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
+import { recordStore } from "../records/store.ts";
 import { refreshPrices } from "../lib/prices.ts";
 import { branchExists, commitsAhead, currentBranch, fetchMain, isIgnored, showFile, worktreeAdd, worktreeList } from "../lib/git.ts";
 import { mainRoot, SESSIONS_DIR_NAME, taskDir, worktreeRoot, WORKTREES_DIR_NAME, worktreesDir } from "../state/paths.ts";
@@ -158,6 +159,7 @@ export async function run(args: string[], ctx: Ctx): Promise<number | void> {
   if (!useWorktree && (branch === mainBranch || branch === "")) throw new WardenError("start on a ticket branch, or pass --worktree");
   precheck(main, task, flow, ref, base);
   const taskText = ticketText(main, ctx.root, task); // after precheck: an existing run is reported as such
+  await recordStore(main); // a records tool that is set up must load (#33). It does not connect: an outage must not stop new work.
   const worktree = useWorktree ? ensureWorktree(main, task, branch, ref) : worktreeRoot(ctx.cwd);
 
   await refreshPrices(0); // a new ticket always checks for new prices

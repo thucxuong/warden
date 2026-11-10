@@ -38,6 +38,7 @@ export function HomePage() {
           <NeedsYou q={home} />
           <Running q={home} />
           <Epics />
+          {home.data?.recordsError && <div className="rounded-xl border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm" data-testid="records-error">Finished tickets are missing: {home.data.recordsError}</div>}
           <RecentlyShipped q={home} />
         </div>
         <aside className="flex min-w-0 flex-col gap-5">

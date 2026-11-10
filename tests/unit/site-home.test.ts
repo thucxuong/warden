@@ -55,7 +55,7 @@ describe("recently shipped and the project", () => {
   test("newest first, at most 8, with PR links", () => {
     expect(home.recentlyShipped.map((s) => s.task)).toEqual(["FX-101", "FX-095", "FX-094", "FX-093", "FX-092", "FX-091", "FX-090"]);
     expect(home.recentlyShipped[0]).toMatchObject({ source: "live", pr: { label: "#7", url: "https://github.com/acme/fx/pull/7", source: "ship-event" } });
-    expect(home.recentlyShipped.at(-1)).toMatchObject({ source: "history", pr: { label: "#5", merged: true, source: "git" } });
+    expect(home.recentlyShipped.at(-1)).toMatchObject({ source: "history", pr: { label: "#5", merged: true, source: "ship-event" } });
     expect(home.recentlyShipped.at(-1)!.usage).toMatchObject({ costUsd: 0.12, known: true });
     expect(home.project).toMatchObject({ id: "fx", root: fx.main, mainBranch: "main" });
     expect(home.generatedAt).toBe(new Date(fx.now).toISOString());
@@ -108,11 +108,11 @@ describe("runs", () => {
 
   test("run detail: a history run has the limitation line; an unknown run is 404", async () => {
     const h = (await getJson<RunDetailResponse>(opts, "/api/runs/FX-090")).body;
-    expect(h.limitations).toEqual(["From the committed history: no logs, no outputs, no ship step; tokens from summary.json."]);
+    expect(h.limitations).toEqual(["From the records database: no logs or step outputs."]);
     expect(h.timeline.endsBeforeShip).toBe(true);
     expect(h.gates[0]!.commands[0]!.log!.available).toBe(false);
     const missing = await getJson(opts, "/api/runs/FX-999");
-    expect(missing).toMatchObject({ status: 404, body: { error: "no run FX-999 on this machine or in .warden/history" } });
+    expect(missing).toMatchObject({ status: 404, body: { error: "no run FX-999 on this machine or in the records database" } });
     expect((await request(opts, "/api/runs/FX-090/log?path=checks/1/lint.log")).status).toBe(404);
   }, 30_000);
 
@@ -122,7 +122,7 @@ describe("runs", () => {
     expect(d.plan.waves!.map((w) => w.tasks.map((t) => t.id))).toEqual([["T1"], ["T2"]]);
     expect(d.plan.approval.state).toBe("no-approve-step");
     expect(d.changes.files.map((f) => [f.path, f.source])).toEqual([["src/fx-101.test.ts", "git"], ["src/fx-101.ts", "git"]]);
-    expect(d.changes.commits.map((c) => c.subject)).toEqual(["feat(FX-101): Invoice totals", "chore(FX-101): run record"]);
+    expect(d.changes.commits.map((c) => c.subject)).toEqual(["feat(FX-101): Invoice totals"]);
     expect(d.changes.claimed).toEqual(["src/fx-101.test.ts", "src/fx-101.ts"]);
     expect(d.review.rounds[0]!.kept.map((f) => f.state)).toEqual(["noted"]);
     expect(d.usage.steps.map((s) => s.stepId)).toEqual(["plan", "implement", "check", "review", "ship"]);

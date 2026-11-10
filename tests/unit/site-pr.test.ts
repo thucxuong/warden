@@ -1,7 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadTask, type LoadedTask } from "../../plugins/warden/src/site/data.ts";
+import { loadedFromRecord } from "../../plugins/warden/src/site/finished.ts";
+import type { RunRecord } from "../../plugins/warden/src/types.ts";
+import { RECORDS_FILE } from "../helpers/tools-fixture.ts";
 import { prLink, prNumber, resolvePr } from "../../plugins/warden/src/site/pr.ts";
 import { siteCtx } from "../../plugins/warden/src/site/text.ts";
 import { makeSiteFixture, PLUGIN_ROOT, type SiteFixture } from "../helpers/site-fixture.ts";
@@ -14,7 +17,8 @@ beforeAll(() => {
 afterAll(() => fx.stop());
 
 const ctx = () => siteCtx(fx.main, PLUGIN_ROOT, fx.data, fx.now);
-const load = (task: string) => loadTask(fx.main, task, false)!;
+const rows = () => JSON.parse(readFileSync(join(fx.main, RECORDS_FILE), "utf8")) as RunRecord[];
+const load = (task: string): LoadedTask => loadTask(fx.main, task, false) ?? loadedFromRecord(fx.main, rows().find((r) => r.ticket === task)!);
 
 describe("prLink", () => {
   const gh = "git@github.com:acme/fx.git";

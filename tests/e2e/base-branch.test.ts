@@ -48,8 +48,6 @@ describe("a run off a branch other than main", () => {
       expect(waited.json.step.id).toBe("ship");
       expect(waited.json.instructions).toContain(`Base branch: ${name}. Open the PR against it, or merge into it.`);
 
-      git(wt, "add", ".warden/history/T-001");
-      git(wt, "commit", "-q", "-m", "chore(T-001): run record");
       expect(bashHook(cp, "S1", `git -C ${cp.main} merge --no-ff t-001`, { cwd: wt }).denied).toBe(false);
       git(cp.main, "merge", "--no-ff", "-q", "-m", "merge T-001", "t-001");
       if (remote) git(cp.main, "push", "-q", "origin", name);

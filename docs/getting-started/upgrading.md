@@ -88,6 +88,10 @@ Each version that ships has a note in the plugin's `upgrades/` folder, named `v<
 
 Skipping versions is fine: `warden upgrade --notes` joins the notes of every version in between, in order.
 
+## Run records move to your own database in 0.16.0
+
+From 0.16.0, the ship step no longer commits a run record, and `.warden/history/` is gone. Finished runs stay in `.warden/state/_records/` on the machine that ran them, or go to a database your project sets up with `/warden:tools records` so the whole team shares them. `/warden:upgrade` loads the old records with `warden records import`, then removes `.warden/history/` from the repo. With a database, each teammate needs its login in their environment. See [State and history](../concepts/state-and-history.md#the-records-database).
+
 ## Every run starts from a ticket in 0.9.0
 
 From 0.9.0 `warden start <id>` always reads the task from the ticket tool, and `--text`, `--text-file` and `--ticket` are gone. The ticket tool must have `create`. `/warden:upgrade` writes a ticket tool that keeps tickets as Markdown files in `backlog/` when your project has none, and adds a ticket by hand for each live run that started from text. Those runs keep working either way.

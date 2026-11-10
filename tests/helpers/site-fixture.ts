@@ -2,7 +2,7 @@
 // site must show, a ticket tool, reports and a data dir. All times are relative to `now`. Used by the site unit tests
 // and, through site-fixture-serve.ts, by the Playwright specs.
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { validateStepsJson } from "../../plugins/warden/src/config/config.ts";
 import { buildPlan } from "../../plugins/warden/src/engine/tickets.ts";
@@ -12,6 +12,10 @@ import { handle, type ServerOptions } from "../../plugins/warden/src/site/server
 import type {
   DagTicket, EventLine, EventType, FlowJson, HistorySummary, ReviewRound, RunJson, StepsJson, TriageReport,
 } from "../../plugins/warden/src/types.ts";
+import { recordOf } from "../../plugins/warden/src/records/record.ts";
+import type { LoadedTask } from "../../plugins/warden/src/site/data.ts";
+import type { RunRecord } from "../../plugins/warden/src/types.ts";
+import { RECORDS_ENTRY, RECORDS_FILE, RECORDS_HEAD } from "./tools-fixture.ts";
 import { tmpBase } from "./repo.ts";
 
 export interface SiteFixture {
@@ -213,9 +217,11 @@ export function makeSiteFixture(): SiteFixture {
   mkdirP(join(w, "tools", "backlog"));
   copyFileSync(join(REPO, "tests/fixtures/tools/backlog-tickets.ts"), join(w, "tools", "backlog", "tickets.ts"));
   put(join(w, "tools", "index.ts"), `import { command, type Tool } from "./tool.ts";
+${RECORDS_HEAD}
 
 const tools: Tool[] = [
   { name: "backlog", summary: "tickets in backlog/*.md", run: command("bun .warden/tools/backlog/tickets.ts") },
+${RECORDS_ENTRY}
   {
     name: "keys", summary: "checks the API key",
     probe: () => [{ status: "FAIL", label: "api key", detail: "FX_KEY is not set" }],
@@ -224,12 +230,13 @@ const tools: Tool[] = [
 ];
 export default tools;
 `);
-  put(join(w, "tools", "roles.json"), { tickets: "backlog" });
+  put(join(w, "tools", "roles.json"), { tickets: "backlog", records: "recordsdb" });
   for (const t of FX_TICKETS) put(join(main, "backlog", `${t.id}.md`), ticketFile(t));
   const initSha = commitAll(main, "init", now - 10 * DAY);
 
   // ---- shipped runs: a branch with the change and the run record, merged with --no-ff ----
   const transcripts = join(base, "transcripts");
+  const records: RunRecord[] = [];
   const shipped = (task: string, title: string, n: number, startedAt: number, mergeMessage: string, flow: FlowJson) => {
     const branch = task.toLowerCase();
     const baseSha = git(main, ["rev-parse", "HEAD"]);
@@ -278,16 +285,19 @@ export default tools;
     const impl = summary.steps.find((s) => s.type === "implement")!;
     impl.tokens = { ...summary.tokens };
     impl.costUsd = 0.12;
-    const hist = join(w, "history", task);
-    put(join(hist, "run.json"), run);
-    put(join(hist, "flow.json"), flow);
-    put(join(hist, "task.md"), `# ${task}: ${title}\n\n${title}.\n`);
-    put(join(hist, "events.jsonl"), ev.text());
-    put(join(hist, "summary.json"), summary);
-    review.forEach((r) => put(join(hist, "review", `${r.round}-1.json`), r));
-    commitAll(main, `chore(${task}): run record`, shipAt + 30_000);
+    const taskMd = `# ${task}: ${title}\n\n${title}.\n`;
+    const loaded: LoadedTask = {
+      source: "history", run: { ...run, status: "shipped" }, flow, summary, triage: [], review: review as LoadedTask["review"], leftovers: null, events: ev.list,
+      links: [], steps: null, dir: "", tokens: {},
+    };
     git(main, ["checkout", "-q", "main"]);
     git(main, ["merge", "-q", "--no-ff", "-m", mergeMessage, branch], shipAt + 60_000);
+    const pull = /#(\d+)/.exec(mergeMessage)?.[1];
+    const shippedEvent = {
+      seq: ev.list.length + 1, ts: iso(shipAt + 60_000), task, type: "run.shipped", step: "ship",
+      data: { pr: pull ? `#${pull}` : null, mergeCommit: git(main, ["rev-parse", "HEAD"]) },
+    } as EventLine;
+    records.push(recordOf({ ...loaded, events: [...ev.list, shippedEvent] }, taskMd, null));
     return { ev, code, baseSha, merge: git(main, ["rev-parse", "HEAD"]), shipAt, review, summary, run };
   };
 
@@ -651,6 +661,13 @@ export default tools;
   put(join(data, "reports-sync.json"), { schema: 1, lastAttemptAt: iso(now - 30 * MIN), lastError: null, told: false });
 
   let stopped = false;
+  put(join(main, RECORDS_FILE), records);
+  // A finished run on this machine that the database does not have yet is read from its files.
+  for (const name of readdirSync(join(w, "state"))) {
+    const file = join(w, "state", name, "run.json");
+    if (existsSync(file) && ["shipped", "done"].includes((JSON.parse(readFileSync(file, "utf8")) as RunJson).status)) put(join(w, "state", name, "record-unsaved"), "");
+  }
+
   return {
     main, data, now,
     stop() {

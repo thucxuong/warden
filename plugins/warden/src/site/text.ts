@@ -3,9 +3,10 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { loadStepsJson } from "../config/config.ts";
-import type { EventLine, FlowJson, HistorySummary, ReviewRound, RunJson } from "../types.ts";
+import type { EventLine, FlowJson, HistorySummary, RecordSummary, ReviewRound, RunJson } from "../types.ts";
+import type { Sample } from "./signals.ts";
 import type { ISO, Person, StepKind, StepRef, Usage, WaitKind } from "./api-types.ts";
-import { lazyAuthor, loadAll, readText, type Author, type LoadedTask } from "./data.ts";
+import { lazyAuthor, loadAll, readText, taskMdOf, type Author, type LoadedTask } from "./data.ts";
 
 export const TASK_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 export const FIX_STEP = /^fix-(\d+)$/;
@@ -21,7 +22,14 @@ export interface SiteCtx {
   now: number;
   generatedAt: ISO;
   mainBranch: string | null;   // steps.json mainBranch; null when it does not load
-  tasks(): LoadedTask[];       // every loaded run, live and history (live wins)
+  tasks(): LoadedTask[];       // runs read from files on this machine
+  finished: RecordSummary[];   // the finished runs this page asked the database for (finished.ts)
+  usualSamples: Sample[];      // past step timings from the database
+  epicCosts: Map<string, Record<string, unknown>>;  // saved orchestrator cost by epic
+  epicEvents: Map<string, EventLine[]>;             // event logs of an epic's finished tickets
+  record: LoadedTask | null;   // the one full record a run page asked for
+  recordsError: string | null; // why the database could not answer
+  defaultFrom: ISO | null;     // start of the range History used because the request named no dates
   remoteUrl(): string | null;  // git config remote.origin.url
   author(): Author;            // git user.name/email of main, read once per request
   memo: Map<string, unknown>;  // per-request cache for the other modules
@@ -40,6 +48,7 @@ export function siteCtx(main: string, root: string, data: string, now = Date.now
   return {
     main, root, data, now, generatedAt: iso(now), mainBranch,
     tasks: () => (tasks ??= loadAll(main, author)),
+    finished: [], usualSamples: [], epicCosts: new Map(), epicEvents: new Map(), record: null, recordsError: null, defaultFrom: null,
     author,
     remoteUrl: () => (remote === undefined ? (remote = gitRead(main, ["config", "--get", "remote.origin.url"])?.trim() || null) : remote),
     memo: new Map(),
@@ -79,7 +88,7 @@ export function titleFromText(text: string | null, task: string): string | null 
 }
 
 export function taskTitle(loaded: LoadedTask): string | null {
-  return titleFromText(readText(join(loaded.dir, "task.md")), loaded.run.task);
+  return titleFromText(taskMdOf(loaded), loaded.run.task);
 }
 
 // The kind of a step id: the step.started type, else the flow step type, else fix for fix-<n>.

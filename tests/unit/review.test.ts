@@ -27,7 +27,6 @@ beforeAll(() => {
   commitFiles(template.dir, {
     "a.ts": "export const a = 1;\nexport const b = 2;\nexport const c = 3;\n",
     "bun.lock": "lock\n",
-    ".warden/history/T-001/summary.json": "{}\n",
   }, "change");
 });
 
@@ -131,13 +130,12 @@ describe("argv and stdin", () => {
     expect(prompt).toContain(`git diff ${base}...HEAD`);
   });
 
-  test("stdin is the diff against run.baseSha, without lockfiles and history", async () => {
+  test("stdin is the diff against run.baseSha, without lockfiles", async () => {
     respond(null, reply([]));
     await runReview(ctxFor(), run);
     const stdin = readFileSync(join(calls, "call-1.stdin"), "utf8");
     expect(stdin).toContain("+export const b = 2;");
     expect(stdin).not.toContain("bun.lock");
-    expect(stdin).not.toContain(".warden/history");
   });
 
   test("after the branch merged main, main's commits are not reviewed", async () => {

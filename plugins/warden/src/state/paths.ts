@@ -56,12 +56,9 @@ export function taskDir(main: string, task: string): string {
   return join(stateRoot(main), task);
 }
 
+// The old committed record folder (before #33). Only `warden records import` reads it.
 export function historyRoot(main: string): string {
   return join(main, ".warden", "history");
-}
-
-export function historyDir(main: string, task: string): string {
-  return join(historyRoot(main), task);
 }
 
 // origin/<mainBranch> when a remote named origin exists, else the local branch.

@@ -97,6 +97,7 @@ export const e2e: Tool = {
 | Role | Used by | What the tool must do |
 |---|---|---|
 | `tickets` | `warden start` (every run starts from a ticket), `/warden:orchestrate` and `warden orchestrate create` | `dag [<epic>]`, `show <id>`, `set-status <id> <status>` and `create`; optionally `link`, below |
+| `records` | `warden start`, shipping and the warden site | a `records` object with `save`, `list`, `get` and `events`, in the project's own database. Optional: without it, finished runs stay in `.warden/state/_records/` on this machine. `recipes/records.md` says how; prove it with `warden tools --verify records` |
 | `graph` | the work skill and the ticket agent | `query "<question>"` prints plain text and exits 0 |
 | `pr` | the push and merge rules | `create` and `merge` subcommands. Warden treats them as the pull request and merge commands |
 
@@ -104,7 +105,7 @@ The `tickets` tool prints one JSON value on stdout. Exit 0 is ok, 1 an error, 2 
 - `dag [<epic>]` prints `DagTicket[]`: `{ id, title, status, blocked_by, epic?, type? }`. With an epic, its direct children; without, every ticket that is not an epic. It has 300 s.
 - `show <id>` prints one `DagTicket` with a `body` (the ticket text). It has 60 s.
 - `set-status <id> <status>` prints `{ id, status, changed }`, where `changed` lists the repo paths the caller must commit. Running it twice changes nothing more. It has 60 s.
-- `create --title <t> --type <type> --body-file <path> [--epic <id>] [--blocked-by <id,id>]` makes a ticket and prints `{ ticket, changed }`: `ticket` is the new `DagTicket` with its `body` (the text of the body file), `changed` as for set-status. The tool picks the id (its own numbering, or the id the tracker gives), never one a warden run already uses (`.warden/state/<id>` or `.warden/history/<id>`): a run started from text before 0.9 has no ticket. The id must match `^[A-Za-z0-9][A-Za-z0-9._-]*$`, and `taskIdPattern` unless `--type epic`. A new ticket is `todo`. It runs in the main checkout and has 60 s.
+- `create --title <t> --type <type> --body-file <path> [--epic <id>] [--blocked-by <id,id>]` makes a ticket and prints `{ ticket, changed }`: `ticket` is the new `DagTicket` with its `body` (the text of the body file), `changed` as for set-status. The tool picks the id (its own numbering, or the id the tracker gives), never one a warden run already uses (`.warden/state/<id>`): a run started from text before 0.9 has no ticket. The id must match `^[A-Za-z0-9][A-Za-z0-9._-]*$`, and `taskIdPattern` unless `--type epic`. A new ticket is `todo`. It runs in the main checkout and has 60 s.
 - Optional, for a tracker outside the repo: `link <id> <url>` records the pull request url on the ticket and prints `{ id }`. Warden calls it once, in the main checkout, after the ship step of a run is handed in with a `pr`. It has 60 s. It must not change repo files: warden ignores any `changed` it prints and warns. A tool that keeps tickets as repo files leaves it out.
 - A tool without `create` or `link` exits 2 for it. Warden reads that as "not supported", so report any other problem with these two as exit 1. `create` is required since 0.9: `warden tools --check` fails with `role tickets create` when the tool exits 2 for it (it calls `create` with no flags, which must exit 1 and write nothing).
 
@@ -128,6 +129,7 @@ Warden reads only the roles above. When a project needs one of these jobs, write
 | `ci` | `recipes/ci.md` | CI runs of a branch, with the failing step's log | `gh run`, `az pipelines` |
 | `doctor` | `recipes/doctor.md` | is the project's setup healthy, and how to fix what is not | none |
 | `tickets` | `ticket-tool-recipe.md` | the `tickets` role | `az boards`, `jira` |
+| `records` | `recipes/records.md` | the `records` role: finished runs in the project's database | none |
 
 ## Raw commands a tool covers
 

@@ -17,8 +17,6 @@ This page is also the map of the `.warden/` folder. Each doc folder has one job,
   rules/                 rules every agent step must follow                       (committed)
   checks/                periodic checks                                          (committed)
   fixes/                 notes from the fixer                                     (committed)
-  history/<task>/        the run record of each shipped task                      (committed)
-  history/<epic>/        epic.json: the orchestrator's cost, saved at done       (committed)
   state/                 live run state                                           (gitignored)
 docs/
   INDEX.md               the map of the project's docs                            (committed)
@@ -28,7 +26,7 @@ docs/
   archived/              what is no longer true                                   (committed)
 ```
 
-`.warden/` holds what warden needs to run. `docs/` holds what people and agents need to know, next to the project's own docs.
+`.warden/` holds what controls the work (config, rules, checks, tools) and the git-ignored state. `docs/` holds what people and agents need to know, next to the project's own docs.
 
 Each doc folder (`context`, `rules`, `decisions`, `knowledge`, `checks`, `retros`, `fixes`, `flows`) has an `INDEX.md` with one line per file.
 
@@ -52,8 +50,6 @@ Each doc folder (`context`, `rules`, `decisions`, `knowledge`, `checks`, `retros
 | `.warden/checks/*.md` | `warden init --write`, you | `warden checks`, session start | yes | Yes |
 | `docs/retros/<date>.md` | `/warden:retro` | the retro check | yes | No |
 | `.warden/fixes/*.md` | the fixer | triage rules, the fixer | yes | No |
-| `.warden/history/<task>/` | the engine, at the ship step | site, retro | yes | Never. The hooks refuse it |
-| `.warden/history/<epic>/epic.json` | `warden orchestrate set-status <epic> done` | site | yes | No |
 | `.warden/state/` | the engine and hooks | every command | no (gitignored) | Never. The hooks refuse it |
 | `scripts/warden-setup.sh` | `warden init --write`, then you, the fixer | `setup.commands` | yes | Yes |
 | `.gitignore` | `warden init --write` adds `.warden/state/` and `.worktrees/` | git, `warden start --worktree` (checks `.worktrees/` is ignored) | yes | Yes |
@@ -225,38 +221,30 @@ Unknown or repeated keys make the file invalid. For an agent check, the text aft
 
 When `retro.md` is missing, warden still lists a `retro` check built from the old `lastRetro` field.
 
-## .warden/history/<epic>/epic.json
+## Run records
 
-What the orchestrator of an epic cost, saved when `warden orchestrate set-status <epic> done` runs. The command lists the file in `changed`, so `/warden:orchestrate` commits it with the ticket file. It is written only when the session's transcript is on this machine and has token data. It holds totals only, no text from the session.
+Finished runs are not committed. Each one is a row in the project's records database, saved through the tool named by the `records` role when the run ships or finishes. Without that role, they are files in `.warden/state/_records/`. See [State and history](../concepts/state-and-history.md#the-records-database) and the [recipe](../../plugins/warden/skills/tools/recipes/records.md).
 
-```ts
-{ schema: 1; epic; savedAt; pricesDate: string | null;
-  tokens: { input, output, cacheRead, cacheWrite, costUsd, unpriced } }
+```sql
+warden_records (ticket, status, flow, finished_at, summary json, detail json)
 ```
 
-## .warden/history/<task>/
-
-The run record, written by the engine when the run enters its ship step, into the task worktree. The ship step commits it with the change, so it lands on the main branch with the PR. A run without a ship step (for example `do`) has no history folder.
-
-| File | Content |
+| Column | Content |
 |---|---|
-| `run.json` | The run as it was at ship entry, with `status: "shipping"` |
-| `flow.json` | The flow the run used |
-| `task.md` | The task text |
-| `plan.md` | The plan, when a plan step ran |
-| `events.jsonl` | Every event up to the ship step |
-| `triage/<n>.json` | Each triage report |
-| `review/<round>-<try>.json` | Each review round |
-| `review/leftover.md` | Blocking findings left after the last review round, when there were any |
-| `summary.json` | Time, tokens and estimated cost per step, rounds, verdicts, findings, author, commit, branch |
+| `ticket` | The ticket id, or the epic id on an epic's row. One row per ticket |
+| `status` | `shipped` or `done`. An epic's saved cost has `epic`. `warden tools --verify records` writes rows with `verify` |
+| `flow` | The flow name. `epic` on an epic's row |
+| `finished_at` | When the run shipped or finished. Indexed |
+| `summary` | What the lists show: title, start, duration, step, rounds, verdicts, tokens, cost, author, pull request, step timings |
+| `detail` | The run, the flow, the totals below, the task text, the plan, triage reports, review rounds, leftovers and every event |
 
-Logs, raw reviewer output and the `steps.json` copy are not copied. The engine rewrites the folder each time the run enters the ship step again.
+Logs, raw reviewer output, step outputs and the `steps.json` copy are not saved. They stay on the machine that ran the ticket.
 
-`summary.json`:
+The totals, in `detail.summary`:
 
 ```ts
 {
-  schema: 1; task; flow; status: "shipping";
+  schema: 1; task; flow; status;
   startedAt; endedAt; durationMs;
   steps: { id, type, startedAt, endedAt, durationMs, attempts,
            tokens: { input, output, cacheRead, cacheWrite }, costUsd }[];
@@ -265,8 +253,15 @@ Logs, raw reviewer output and the `steps.json` copy are not copied. The engine r
   findings: { blocking, minor, dropped, leftovers };
   tokens: { input, output, cacheRead, cacheWrite }; costUsd;   // costUsd is an estimate
   pricesDate;                  // the date of the prices it used; null: those that came with warden; absent on older runs
-  author: { name, email }; commit; pr: null; branch;
+  author: { name, email }; commit; pr; branch;
 }
+```
+
+An epic's row is saved by `warden orchestrate set-status <epic> done`, only when the session's transcript is on this machine. Its `summary`:
+
+```ts
+{ schema: 1; epic; savedAt; pricesDate: string | null;
+  tokens: { input, output, cacheRead, cacheWrite, costUsd, unpriced } }
 ```
 
 Tokens come from the transcripts of the sessions and subagents linked to the task. The reviewer's tokens and cost are added to the review step.
@@ -295,6 +290,8 @@ Live state. It is gitignored and lives in the main checkout only, even for runs 
     outputs/<seq>-<step>.json             every hand-in, accepted or not
     fix/<n>.json, fix/<n>-repair-<i>.log  fixer outputs and repair logs
     .lock                  the task lock
+    record-unsaved         the run finished, but its record is not in the database yet
+  _records/                finished runs, when there is no records database: <ticket>.json and <ticket>.detail.json
   _sessions/               one record per Claude Code session (and per subagent)
   _checks/<name>.json      periodic check results; <name>.log and <name>.lock while running
   _orchestrate/<epic>.json the cached orchestrate plan

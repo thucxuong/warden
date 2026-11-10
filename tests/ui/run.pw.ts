@@ -50,13 +50,13 @@ test("FX-101: PR, plan waves, files, commits and token totals", async ({ page })
 
 test("FX-090: a history run says where its data comes from", async ({ page }) => {
   await page.goto("/runs/FX-090");
-  await expect(page.getByTestId("limitations")).toContainText("From the committed history");
+  await expect(page.getByTestId("limitations")).toContainText("From the records database");
 });
 
 test.describe("unknown run", () => {
   test.use({ allowConsole: [/status of 404/] });
   test("FX-999: not-found state", async ({ page }) => {
     await page.goto("/runs/FX-999");
-    await expect(page.getByText("no run FX-999 on this machine or in .warden/history")).toBeVisible();
+    await expect(page.getByText("no run FX-999 on this machine or in the records database")).toBeVisible();
   });
 });

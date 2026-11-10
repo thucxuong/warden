@@ -6,6 +6,9 @@ import { buildEpic } from "./epics.ts";
 import { buildHealth } from "./health.ts";
 import { buildHome } from "./home.ts";
 import { renderMarkdown } from "./markdown.ts";
+import { flushRecords } from "../records/record.ts";
+import { runExists } from "../state/store.ts";
+import { defaultFrom, prepareEpicEvents, prepareHome, prepareRecord, prepareRuns, prepareSignals } from "./finished.ts";
 import { HttpError, listRuns, parseRunsQuery, runDetail, runEvents, runLog } from "./runs.ts";
 import { runSignals, siteThresholds, usualTimes } from "./signals.ts";
 import { serveStatic } from "./static.ts";
@@ -62,25 +65,43 @@ function docRoute(main: string, url: URL): Response {
 async function api(opts: ServerOptions, url: URL): Promise<Response> {
   const path = url.pathname.replace(/\/+$/, "") || "/api";
   const ctx = siteCtx(opts.main, opts.root, opts.data, (opts.now ?? Date.now)());
-  if (path === "/api/home") return json(buildHome(ctx));
+  if (path === "/api/home") {
+    await prepareHome(ctx);
+    return json(buildHome(ctx));
+  }
   if (path === "/api/health") return json(await buildHealth(ctx));
-  if (path === "/api/signals") return json(signals(ctx));
+  if (path === "/api/signals") {
+    await prepareSignals(ctx);
+    return json(signals(ctx));
+  }
   if (path === "/api/tickets") return json(await buildTickets(ctx));
   if (path === "/api/docs") return json({ docs: listDocs(opts.main) });
   if (path === "/api/doc") return docRoute(opts.main, url);
-  if (path === "/api/runs") return json(listRuns(ctx, parseRunsQuery(url.searchParams)));
+  if (path === "/api/runs") {
+    const q = parseRunsQuery(url.searchParams);
+    if (q.source !== "live") {
+      const from = defaultFrom(ctx, q.from, q.to);
+      if (from !== null) ctx.defaultFrom = new Date(from).toISOString();
+      await prepareRuns(ctx, q);
+      if (ctx.recordsError !== null) return error(503, ctx.recordsError);
+    }
+    return json(listRuns(ctx, q));
+  }
   if (path.startsWith("/api/epics/")) {
     const epic = safeDecode(path.slice("/api/epics/".length));
     if (epic === null || !TASK_ID.test(epic) || epic === "_sessions") return error(404, "not found");
     const tickets = await buildTickets(ctx);
-    return json(buildEpic(ctx, epic, tickets.state === "ok" ? tickets.tickets.filter((t) => t.epic === epic).map((t) => t.id) : []));
+    const children = tickets.state === "ok" ? tickets.tickets.filter((t) => t.epic === epic).map((t) => t.id) : [];
+    await prepareEpicEvents(ctx, children);
+    return json(buildEpic(ctx, epic, children));
   }
   if (path.startsWith("/api/runs/")) {
     const parts = path.slice("/api/runs/".length).split("/").map(safeDecode);
     const [task, sub] = parts;
     if (parts.length > 2 || task === null || task === undefined || !TASK_ID.test(task) || task === "_sessions" || sub === null) {
-      return error(404, `no run ${task ?? ""} on this machine or in .warden/history`);
+      return error(404, `no run ${task ?? ""} on this machine or in the records database`);
     }
+    if (!runExists(opts.main, task)) await prepareRecord(ctx, task);
     if (sub === undefined) return json(runDetail(ctx, task));
     if (sub === "events") return json(runEvents(ctx, task));
     if (sub === "log") return json(runLog(ctx, task, url.searchParams.get("path"), url.searchParams.get("lines")));
@@ -125,6 +146,7 @@ export async function handle(opts: ServerOptions, req: Request): Promise<Respons
 }
 
 export function startServer(opts: ServerOptions): ReturnType<typeof Bun.serve> {
+  void flushRecords(opts.main); // anything an earlier outage left unsaved
   // idleTimeout: /api/health waits up to 60 s for the project's probes. The Host check uses the bound port (port 0 in tests).
   return Bun.serve({ hostname: "127.0.0.1", port: opts.port, idleTimeout: 120, fetch: (req, server) => handle({ ...opts, port: server.port ?? opts.port }, req) });
 }

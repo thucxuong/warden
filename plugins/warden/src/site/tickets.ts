@@ -3,10 +3,11 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { readRoles } from "../commands/tools.ts";
+import { finishedPr, finishedUsage, prepareBoard, summaryOf } from "./finished.ts";
 import { CLOSED_STATUSES, dagRowProblem, DONE_PHASES, readPlans, runTicketToolAsync } from "../engine/tickets.ts";
-import type { DagTicket, TicketStatus } from "../types.ts";
+import type { DagTicket, RecordSummary, TicketStatus } from "../types.ts";
 import type {
-  BoardColumn, BoardColumnId, CardRun, DagEdge, EpicSummary, EpicUsage, Signal, TicketCard, TicketToolHelp, TicketsResponse, Usage,
+  BoardColumn, BoardColumnId, CardRun, DagEdge, EpicSummary, EpicUsage, RunStatus, Signal, TicketCard, TicketToolHelp, TicketsResponse, Usage,
 } from "./api-types.ts";
 import type { LoadedTask } from "./data.ts";
 import { resolvePr } from "./pr.ts";
@@ -85,6 +86,13 @@ function cardRun(ctx: SiteCtx, loaded: LoadedTask): CardRun {
   };
 }
 
+function finishedCard(ctx: SiteCtx, record: RecordSummary): CardRun {
+  return {
+    task: record.ticket, status: record.status as RunStatus, source: "history", step: summaryOf(record).step,
+    inStepMs: null, usage: finishedUsage(record), pr: finishedPr(ctx, record),
+  };
+}
+
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
 export async function buildTickets(ctx: SiteCtx, runTool: ToolRunner = defaultRunner): Promise<TicketsResponse> {
@@ -119,12 +127,9 @@ export async function buildTickets(ctx: SiteCtx, runTool: ToolRunner = defaultRu
     rows.set(t.id, t);
   });
 
-  // Runs by task id: live first, then history.
+  // Runs by task id, from files.
   const runs = new Map<string, LoadedTask>();
-  for (const loaded of ctx.tasks()) {
-    const old = runs.get(loaded.run.task);
-    if (!old || (old.source === "history" && loaded.source === "live")) runs.set(loaded.run.task, loaded);
-  }
+  for (const loaded of ctx.tasks()) runs.set(loaded.run.task, loaded);
   const liveOpen = (id: string) => {
     const r = runs.get(id);
     return r !== undefined && r.source === "live" && isGoing(r.run);
@@ -147,6 +152,16 @@ export async function buildTickets(ctx: SiteCtx, runTool: ToolRunner = defaultRu
     }
   });
 
+  // Finished runs of these tickets, and the saved cost of these epics, from the database.
+  await prepareBoard(ctx, [...rows.keys()].filter((id) => !runs.has(id)), epicIds);
+  const finished = new Map(ctx.finished.map((r) => [r.ticket, r]));
+  const usageOfTicket = (id: string): Usage | undefined => {
+    const live = runs.get(id);
+    if (live) return usageOf(live);
+    const record = finished.get(id);
+    return record ? finishedUsage(record) : undefined;
+  };
+
   // 4. Cards.
   const tickets: TicketCard[] = [...rows.values()].sort((a, b) => byId(a.id, b.id)).map((t) => {
     const loaded = runs.get(t.id);
@@ -163,7 +178,8 @@ export async function buildTickets(ctx: SiteCtx, runTool: ToolRunner = defaultRu
     }
     let run: CardRun | null = null;
     try {
-      run = loaded ? cardRun(ctx, loaded) : null;
+      const record = finished.get(t.id);
+      run = loaded ? cardRun(ctx, loaded) : record ? finishedCard(ctx, record) : null;
     } catch {
       run = null;
     }
@@ -208,7 +224,7 @@ export async function buildTickets(ctx: SiteCtx, runTool: ToolRunner = defaultRu
         detail: `orchestration stopped with ${left} tickets left`, threshold: null, command: `/warden:orchestrate ${id}`,
       });
     }
-    return { id, title, status, total, done, archived, inProgress, running, signals, usage: epicUsage(ctx, id, children.map((t) => runs.get(t.id))) };
+    return { id, title, status, total, done, archived, inProgress, running, signals, usage: epicUsage(ctx, id, children.map((t) => usageOfTicket(t.id))) };
   });
 
   // 7. Columns.
@@ -217,14 +233,14 @@ export async function buildTickets(ctx: SiteCtx, runTool: ToolRunner = defaultRu
 }
 
 // The orchestrator's cost, the epic's runs added up, and both. A broken transcript only makes the first unknown.
-function epicUsage(ctx: SiteCtx, epic: string, runs: (LoadedTask | undefined)[]): EpicUsage {
+function epicUsage(ctx: SiteCtx, epic: string, runs: (Usage | undefined)[]): EpicUsage {
   let orchestrator: Usage;
   try {
     orchestrator = orchestratorUsage(ctx, epic);
   } catch {
     orchestrator = toUsage(ZERO_TOKENS, 0, false, false);
   }
-  const tickets = sumUsage(runs.filter((r): r is LoadedTask => r !== undefined).map(usageOf));
+  const tickets = sumUsage(runs.filter((r): r is Usage => r !== undefined));
   return { orchestrator, tickets, total: sumUsage([orchestrator, tickets]) };
 }
 

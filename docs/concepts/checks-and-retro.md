@@ -84,7 +84,7 @@ If `.warden/checks/retro.md` is missing, warden still lists a `retro` check with
 
 The retro looks back at the work since the last retro and turns friction into fixes. It runs only when you ask for it, or say yes when it is offered.
 
-1. The agent collects what happened: `warden status --all`, the run records in `.warden/history/*/summary.json`, the live state of runs without a ship step, the fix notes in `.warden/fixes/`, and the current conversation.
+1. The agent collects what happened: `warden status --all`, the runs still going on this machine, every finished run from `warden records list`, the fix notes in `.warden/fixes/`, and the current conversation.
 2. It writes two parts: **Friction** (what went wrong or took too long, each item concrete) and **Routing** (where each finding goes).
 3. It shows you the retro and waits for your OK. It writes nothing before that.
 4. It saves `docs/retros/<YYYY-MM-DD>.md` in the main checkout (a second retro on the same day is added to the same file), makes the routed changes you agreed to, and updates each folder's `INDEX.md`.

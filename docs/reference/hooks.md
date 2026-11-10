@@ -103,7 +103,7 @@ The rules are checked in this order. The first match decides.
 
 | # | Target file | Decision and message |
 |---|---|---|
-| 1 | Under `.warden/state/` or any `.warden/history/` | Deny: `state and history are written by the engine only` |
+| 1 | Under `.warden/state/` | Deny: `state is written by the engine only` |
 | 2 | Inside a live run's fix worktree | Only the `warden:fixer` agent may edit, and only files inside `fix.scope` that are not forbidden. Else deny: `only the warden:fixer subagent edits the fix worktree` or `outside the fixer scope` |
 | 3 | While any run is live: `.warden/steps.json`, `.warden/flows/**`, `.warden/warden.json`, `.warden/triage-rules.json` or `.warden/tools/roles.json`, in the main checkout or any live run's worktree | Deny: `gate files cannot change while a run is live (<task>); finish or reset it first` |
 | 4 | Not inside a live run's worktree | Allow |
@@ -123,7 +123,7 @@ Rules, in order. The first match decides. warden reads the command text; a hered
 |---|---|---|
 | B1 | Runs `warden approve`, `warden retry` or `warden reset` | Deny: `approve, retry and reset are for a person. Ask the user to type "approve" / "retry".` |
 | B2 | Mentions `PROJECT_AGENT`, `WARDEN_ROLE`, `WARDEN_CLAUDE_BIN`, `WARDEN_DATA`, `WARDEN_ROOT`, `WARDEN_TEST_MODE`, `CLAUDE_PLUGIN_ROOT` or `CLAUDE_PLUGIN_DATA`; or runs `claude -p` / `claude --print`; or runs `script` together with `warden` | Deny: `this command changes how warden itself runs; ask the user to do it` |
-| B3 | Writes (with `>`, `tee`, `rm`, `mv`, `cp`, `sed -i`, `git rm`, `git checkout`, `git restore` and similar) and names `.warden/state` or `.warden/history`; or, while a run is live, names a gate config file (`steps.json`, `warden.json`, `triage-rules.json`, `flows`, `tools/roles.json` under `.warden/`). The fixer may write config files inside its own fix worktree | Deny: `state, history and gate files are written by the engine only` |
+| B3 | Writes (with `>`, `tee`, `rm`, `mv`, `cp`, `sed -i`, `git rm`, `git checkout`, `git restore` and similar) and names `.warden/state`; or, while a run is live, names a gate config file (`steps.json`, `warden.json`, `triage-rules.json`, `flows`, `tools/roles.json` under `.warden/`). The fixer may write config files inside its own fix worktree | Deny: `state and gate files are written by the engine only` |
 | B4 | A subagent runs `warden ask` | Deny: `a subagent cannot ask the user; stop and give the question back to the caller (a ticket agent replies ASK <Task>: <question>)` |
 | B5 | Push, PR or merge (list below) while the run is at a fix step | Allowed only for the `warden:fixer` agent, and only when the command names the fix branch. A merge (or a push to the main branch or the run's base branch) also needs `PROJECT_AGENT=1` in Claude Code's environment. Else deny: `only the warden:fixer subagent pushes the fix branch` |
 | B6 | Push, PR or merge at any other step | Allowed only at the ship step (or after the run shipped or is done) when all gates are proven for HEAD. Else deny: `push/PR/merge is allowed only in the ship step after all gates pass for HEAD (<task> at <step>)` |
@@ -162,7 +162,7 @@ Before it blocks, it restarts a dead engine worker, so `warden wait` has somethi
 
 ## SubagentStop
 
-Runs when a subagent ends. It links the subagent's own transcript to the task, so its tokens count for that task in `summary.json` and on the site. It never blocks.
+Runs when a subagent ends. It links the subagent's own transcript to the task, so its tokens count for that task in its run record and on the site. It never blocks.
 
 ## See also
 

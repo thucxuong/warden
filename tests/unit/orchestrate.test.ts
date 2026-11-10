@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { sh as git } from "../helpers/repo.ts";
 import { base, cli, installCommandsFixture, main, wt } from "../helpers/commands-fixture.ts";
-import { barrel, writeRoles, writeTools } from "../helpers/tools-fixture.ts";
+import { barrel, writeRoles, writeTools, RECORDS_ENTRY, RECORDS_FILE, RECORDS_HEAD } from "../helpers/tools-fixture.ts";
 
 installCommandsFixture();
 
@@ -35,7 +35,7 @@ case "$1" in
   create) cat '${fx}'/create.json 2>/dev/null || exit 2 ;;
 esac
 `);
-  writeTools(main, barrel(`  { name: "fake", summary: "fixture ticket tool", run: command(${JSON.stringify(`sh '${script}'`)}) },`));
+  writeTools(main, barrel(`  { name: "fake", summary: "fixture ticket tool", run: command(${JSON.stringify(`sh '${script}'`)}) },\n${RECORDS_ENTRY}`, `import { command } from "./tool";\n${RECORDS_HEAD}`));
   setTickets(true);
   put("dag-E-1.json", [row("T-1"), row("T-2", ["T-1"]), row("T-3", ["T-1"], "todo", { type: "bug" })]);
   put("all.json", [row("T-1"), row("T-2", ["T-1"]), row("T-3", ["T-1"]), row("T-50", [], "done"), row("T-60", [], "doing")]);
@@ -43,7 +43,7 @@ esac
 });
 
 function setTickets(on: boolean): void {
-  writeRoles(main, on ? { tickets: "fake" } : {});
+  writeRoles(main, on ? { tickets: "fake", records: "recordsdb" } : {});
 }
 
 describe("orchestrate plan", () => {
@@ -158,7 +158,7 @@ describe("orchestrate set-status", () => {
     }
   });
 
-  test("an orchestrated epic set done saves its orchestrator's cost and lists the file in changed", () => {
+  test("an orchestrated epic set done saves its orchestrator's cost to the records database", () => {
     expect(cli(["orchestrate", "plan", "E-1"]).code).toBe(0);
     const transcript = join(base, "orchestrator.jsonl");
     writeFileSync(transcript, JSON.stringify({
@@ -172,9 +172,9 @@ describe("orchestrate set-status", () => {
     expect(cli(["orchestrate", "set-status", "T-1", "done"]).json).toEqual({ id: "T-1", status: "done", changed: ["backlog/T-1.md"] }); // a ticket: nothing saved
     const r = cli(["orchestrate", "set-status", "E-1", "done"]);
     expect(r.code).toBe(0);
-    expect(r.json).toEqual({ id: "E-1", status: "done", changed: ["backlog/E-1.md", ".warden/history/E-1/epic.json"] });
-    const saved = JSON.parse(readFileSync(join(main, ".warden", "history", "E-1", "epic.json"), "utf8"));
-    expect(saved.tokens.input).toBe(10);
+    expect(r.json).toEqual({ id: "E-1", status: "done", changed: ["backlog/E-1.md"] });
+    const rows = JSON.parse(readFileSync(join(main, RECORDS_FILE), "utf8")) as { ticket: string; status: string; summary: { tokens: { input: number } } }[];
+    expect(rows.find((r) => r.ticket === "E-1")).toMatchObject({ status: "epic", summary: { tokens: { input: 10 } } });
   });
 
   test("a result of the wrong shape is exit 1", () => {
@@ -218,7 +218,7 @@ describe("orchestrate create (0.8)", () => {
 
   test("an id a warden run already uses is refused", () => {
     put("create.json", created("T-9"));
-    mkdirSync(join(main, ".warden/history/T-9"), { recursive: true });
+    mkdirSync(join(main, ".warden/state/T-9"), { recursive: true });
     const r = cli(["orchestrate", "create", "--title", "x", "--type", "feature", "--body-file", body()]);
     expect(r.code).toBe(1);
     expect(r.err).toContain("ticket tool: create: id T-9 is already used by a warden run");

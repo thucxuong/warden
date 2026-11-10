@@ -136,10 +136,10 @@ export function leftoverText(round: number, maxRounds: number, blocking: Finding
   return [`## Unresolved review findings (round ${round}, past the ${maxRounds}-round cap)`, ...lines, ""].join("\n");
 }
 
-// Lockfiles at any depth and warden's own history are not worth reviewing.
+// Lockfiles at any depth are not worth reviewing.
 function diffExcludes(): string[] {
   const lockfiles = LOCKFILES.flatMap((name) => [name, `*/${name}`]);
-  return [...lockfiles, ".warden/history/**"];
+  return lockfiles;
 }
 
 function capDiff(diff: string): string {

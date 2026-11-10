@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.16.0 — 2026-11-10
+
+Every shipped ticket added a run record to the repo, so the repo kept growing with files nobody reads in git. Finished runs no longer go in the repo at all.
+
+- The ship step no longer commits a run record, and `.warden/history/` is gone. `/warden:upgrade` loads the old records with `warden records import`, then removes the folder from the repo. Old copies stay in git history.
+- Without a database, warden keeps each finished run in `.warden/state/_records/` on the machine that ran it. Git ignores that folder. Each machine sees only its own runs.
+- A team that wants to share finished runs can keep them in its own database through a new, optional `records` role. Warden ships no database code: `/warden:tools records` writes the tool for your database (instructions for Postgres and MongoDB), and `warden tools --verify records` proves it. A database outage never stops a ship: warden saves the run later.
+- New `warden records list [--since YYYY-MM-DD]` prints the finished runs, newest first. The retro uses it.
+- The warden site asks for only what each page shows: Home reads the 8 newest runs, History reads the last 30 days by default, and a run page reads one record.
+
 ## 0.15.2 — 2026-11-10
 
 - The review step no longer fails when Claude Code runs in verbose mode (`"verbose": true` in the user settings). The reviewer then prints all its events as one JSON list, and warden marked even a clean review as malformed, so the run was blocked with `reviewer unavailable: malformed`. Warden now reads the final result from that list. (#35)

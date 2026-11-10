@@ -150,13 +150,16 @@ export function usualFrom(samples: Sample[], kind: TimedKind, t: Thresholds, exc
 }
 
 function allSamples(ctx: SiteCtx): Sample[] {
-  return memo(ctx, "samples", () => ctx.tasks().flatMap((t) => {
-    try {
-      return samplesOf(t);
-    } catch {
-      return [];
-    }
-  }));
+  return memo(ctx, "samples", () => {
+    const fromFiles = new Set(ctx.tasks().map((t) => t.run.task));
+    return [...ctx.usualSamples.filter((s) => !fromFiles.has(s.task)), ...ctx.tasks().flatMap((t) => {
+      try {
+        return samplesOf(t);
+      } catch {
+        return [];
+      }
+    })];
+  });
 }
 
 export function usualTimes(ctx: SiteCtx): UsualTime[] {

@@ -99,8 +99,6 @@ export function implement(): Promise<DoneResponse> {
 }
 
 export function ship(): Promise<DoneResponse> {
-  sh(wt, "add", `.warden/history/${T}`);
-  sh(wt, "commit", "-q", "-m", "chore: run record");
   return done(ctx, T, JSON.stringify({ pr: "https://example.com/pr/1", merged: false, mergeCommit: null, description: "d" }), spawn);
 }
 

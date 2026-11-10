@@ -32,7 +32,7 @@ const TEXT: Record<string, string> = {
   implement:
     "Make the change the task and plan ask for, with tests. Commit all of it in one or more commits and leave nothing uncommitted. When you are back from a gate, fix exactly what it reports, nothing else. Do not change gate files. Do not run the checks to prove the step; the engine runs them. `filesChanged` must be exactly the files that differ from the start of this step; check with `git diff --name-only <step start> HEAD`.",
   ship:
-    "Deliver the proven commit without changing it. 1) <commit-record>. 2) Open the PR or merge as the project how-to says. 3) If there are leftovers, put the file text in the description under `## Unresolved review findings`. 4) Hand in the ship output with `warden done`; never remove the worktree or the branch before that. 5) Then run `warden clean` from the main checkout: it removes the worktree and the branch once the branch is merged. Any other change sends the run back to the gates.",
+    "Deliver the proven commit without changing it. 1) Open the PR or merge as the project how-to says. 2) If there are leftovers, put the file text in the description under `## Unresolved review findings`. 3) Hand in the ship output with `warden done`; never remove the worktree or the branch before that. 4) Then run `warden clean` from the main checkout: it removes the worktree and the branch once the branch is merged. Any other change sends the run back to the gates.",
   fix:
     "A check failed and triage says it is not (only) the change. Delegate this step to the warden:fixer subagent (Agent tool, subagent_type 'warden:fixer') in the foreground, never with run_in_background, with the context below. Wait for it to return, then pass its JSON to `warden done`. A FIXED output needs a new fix note and a new narrow triage rule, unless the triage report already named a matching rule (give its id as `ruleId`) or the fix is already on the main branch (give its sha as `mergeCommit`). Do not fix it yourself and do not touch the ticket worktree.",
 };
@@ -41,26 +41,9 @@ function textKey(type: CatalogType, variant?: AnalyzeVariant): string {
   return type === "analyze" ? `analyze/${variant ?? "generic"}` : type;
 }
 
-// A path as one shell word: as it is when it is plain, else in single quotes.
-function shellWord(path: string): string {
-  return /^[A-Za-z0-9._\/@%+=:,-]+$/.test(path) ? path : `'${path.replaceAll("'", "'\\''")}'`;
-}
-
-// Ship step 1. With the worktree known, two `git -C` commands that work from any directory.
-function commitRecordText(ship: ShipText): string {
-  if (ship.worktree === undefined) return "Commit the run record: `git add .warden/history/<task> && git commit -m 'chore(<task>): run record'`";
-  const git = `git -C ${shellWord(ship.worktree)}`;
-  return `Commit the run record: run \`${git} add .warden/history/<task>\`, then \`${git} commit -m 'chore(<task>): run record'\``;
-}
-
-export interface ShipText {
-  worktree?: string;
-}
-
 // Empty for engine and human steps (check, review, approve).
-export function catalogText(type: CatalogType, task: string, variant?: AnalyzeVariant, ship: ShipText = {}): string {
-  const text = (TEXT[textKey(type, variant)] ?? "").replace("<commit-record>", commitRecordText(ship));
-  return text.replaceAll("<task>", task);
+export function catalogText(type: CatalogType, task: string, variant?: AnalyzeVariant): string {
+  return (TEXT[textKey(type, variant)] ?? "").replaceAll("<task>", task);
 }
 
 // ---------------------------------------------------------------------------
@@ -73,7 +56,6 @@ export const GATE_FILE_GLOBS = [
   ".warden/warden.json",
   ".warden/triage-rules.json",
   ".warden/state/**",
-  ".warden/history/**",
 ];
 
 // What the fixer may never change, whatever fix.scope says (4.2).
@@ -83,7 +65,6 @@ export const FIX_FORBIDDEN_GLOBS = [
   ".warden/warden.json",
   ".warden/tools/roles.json",
   ".warden/state/**",
-  ".warden/history/**",
 ];
 export const LOCKFILES = ["package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock", "bun.lockb"];
 
@@ -104,10 +85,9 @@ export function isFixForbidden(path: string): boolean {
   return matchesAny(path, FIX_FORBIDDEN_GLOBS) || LOCKFILES.includes(name);
 }
 
-// Paths the evidence checks never count: live state (gitignored) and this task's own history,
-// which ship prep writes uncommitted into the worktree.
-export function isIgnoredPath(path: string, task: string): boolean {
-  return path.startsWith(".warden/state/") || path.startsWith(`.warden/history/${task}/`);
+// Paths the evidence checks never count: live state (gitignored).
+export function isIgnoredPath(path: string): boolean {
+  return path.startsWith(".warden/state/");
 }
 
 // Whether a step of this type may change `path` in the ticket worktree.
@@ -121,8 +101,6 @@ export function editAllowed(type: CatalogType, variant: AnalyzeVariant | undefin
       return matchesAny(path, NOTES);
     case "implement":
       return !isGateFile(path);
-    case "ship":
-      return path.startsWith(`.warden/history/${task}/`);
     default:
       return false; // check, review, approve and fix change nothing in the ticket worktree
   }

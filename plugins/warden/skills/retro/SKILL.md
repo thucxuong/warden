@@ -9,7 +9,8 @@ Run this only when the user asked for a retro or agreed to one you offered (sess
 
 1. Collect what happened since the last retro date. Run `warden checks` and read `last` in the `retro` row (`null` means never).
    - Run `warden status --all`.
-   - Read `.warden/history/*/summary.json` for shipped runs. History is written only when a run enters its ship step, with status `shipping` (meaning "written at ship entry"). A run without a ship step (for example `do`) has no history folder: its data is in `.warden/state/<task>/` (`run.json`, `events.jsonl`), and `warden status --all` shows its status.
+   - Run `warden records list --since <last>` (just `warden records list` when `last` is `null`). It prints every finished run the team shipped, with its rounds, verdicts and cost. If it fails, say in the retro that it covers this machine's runs only.
+   - Read `.warden/state/<task>/` (`run.json`, `events.jsonl`) for runs still going on this machine.
    - Read the notes in `.warden/fixes/`.
    - Run `warden tools --usage --since <last>` (just `warden tools --usage` when `last` is `null`). It counts what the agent ran, from the session transcripts: `tools` (calls and failures per tool), `raw` (raw commands a tool covers that the agent ran anyway) and `commands` (commands run at least twice with no tool, costliest first).
    - Look at the current conversation.

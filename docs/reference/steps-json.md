@@ -96,7 +96,7 @@ Each command:
 How a check set runs:
 
 - Commands run in order. The first command that exits non-zero fails the set. Only the exit code counts, never the output text.
-- If a command leaves files behind (untracked or changed files in the worktree, other than the run's own state and history), the run is blocked. Add those files to `.gitignore` on the main branch.
+- If a command leaves files behind (untracked or changed files in the worktree, other than the run's own state), the run is blocked. Add those files to `.gitignore` on the main branch.
 - Each command's output goes to `.warden/state/<task>/checks/<n>/<name>.log`.
 - Every command gets `WARDEN_TASK`, `WARDEN_MAIN_ROOT`, `WARDEN_WORKTREE`, and `PATH` with warden's `bin` first, so `run: "warden tools e2e run"` works. warden never sets `CI`. `PROJECT_AGENT` is removed. See [environment](environment.md).
 
@@ -126,7 +126,7 @@ Settings for the review gate. The engine runs a read-only reviewer (`claude -p`)
 | `maxBudgetUsd` | number | `2` | Greater than 0. Passed as `--max-budget-usd` |
 | `timeoutSec` | integer | `1200` | At least 1. After it, the reviewer is stopped |
 
-The reviewer may read files and run `git diff`, `git log` and `git show`. It cannot edit. The diff it gets leaves out lockfiles and `.warden/history/`, and is cut at 400 KiB. A finding on a file the change did not touch, or more than 3 lines away from a changed hunk, is dropped (line 0, meaning the whole file, is kept).
+The reviewer may read files and run `git diff`, `git log` and `git show`. It cannot edit. The diff it gets leaves out lockfiles and is cut at 400 KiB. A finding on a file the change did not touch, or more than 3 lines away from a changed hunk, is dropped (line 0, meaning the whole file, is kept).
 
 ## triage
 
@@ -149,7 +149,7 @@ Default from `warden init --write`:
  "docs/**", ".env.example", "docker-compose*.yml"]
 ```
 
-Whatever `scope` says, the fixer may never change `.warden/steps.json`, `.warden/flows/**`, `.warden/warden.json`, `.warden/tools/roles.json`, `.warden/state/**`, `.warden/history/**`, or a lockfile (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock`, `bun.lockb`) at any depth.
+Whatever `scope` says, the fixer may never change `.warden/steps.json`, `.warden/flows/**`, `.warden/warden.json`, `.warden/tools/roles.json`, `.warden/state/**`, or a lockfile (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock`, `bun.lockb`) at any depth.
 
 ## Error messages
 

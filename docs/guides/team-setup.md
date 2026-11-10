@@ -34,15 +34,16 @@ git push
 
 | Path | Commit it? | Why |
 |---|---|---|
-| `.warden/` (except `state/`) | yes | config, flows, tools, context docs and the run history the team shares |
+| `.warden/` (except `state/`) | yes | config, flows, tools and context docs the team shares |
 | `.warden/state/` | no | live runs on one machine. `/warden:init` adds it to `.gitignore`. |
 | `.worktrees/` | no | the task worktrees on one machine. `/warden:init` adds it to `.gitignore`; `warden start --worktree` refuses until it is there. |
-| `.warden/history/<task>/` | yes, by the ship step | the record of each shipped task. It lands in the task's own pull request. |
 | `scripts/warden-setup.sh` | yes | runs in every new task worktree, for example to install packages |
 | `.claude/settings.json` | yes | the team install block, and any shared permission rules |
 | `.claude/settings.local.json` | no | personal. Warden does not write it. |
 
 `warden start` reads `.warden/` from your main branch on the remote (`origin/<main>` after a fetch), not from your working copy. Until it is pushed, `warden start` stops with `commit and push .warden/ to main first`. The same goes for later config changes: they count once they are on the main branch.
+
+Run records do not go in git. Without a database, each machine keeps its own in `.warden/state/_records/`. To share them across the team, set up a database once with `/warden:tools records`. See [State and history](../concepts/state-and-history.md#the-records-database).
 
 ## 3. Protect the main branch
 
@@ -64,6 +65,8 @@ During a run, warden's hooks only allow push, pull request and merge commands in
    ```
 
    The `root` file is written the first time a Claude Code session starts with warden.
+
+5. Set the environment variable your `records` tool reads for its database login. Without it, a finished run stays unsaved on that machine and the site cannot show finished runs.
 
 ## 5. Permissions
 
@@ -117,7 +120,6 @@ Rules:
 - Warden's check gate runs your check commands on the developer's machine, in the task worktree. It does not replace CI. Keep your CI on pull requests as it is.
 - Warden never sets the `CI` variable. If a command needs it (for example to stop a watch mode), set it on the command in `.warden/steps.json`: `{ "name": "test", "run": "pnpm run test", "env": { "CI": "1" } }`.
 - Each check command runs with `/bin/sh -c` in the worktree root, with a time limit of `timeoutSec` (default 900 seconds, at most 7200). It gets `WARDEN_TASK`, `WARDEN_MAIN_ROOT` and `WARDEN_WORKTREE`, and warden's `bin` first on `PATH`.
-- Pull requests from warden carry `.warden/history/<task>/` (JSON and Markdown). Make sure your CI and linters accept it, or exclude `.warden/` from them.
 - If your type check or linter covers `.warden/tools/`, the project's tools must pass it too. Tools use imports without an extension, so a normal tsconfig works.
 - `.warden/state/` must stay out of git. If a check command leaves new or changed files behind, the run blocks with `check left files: ...` until they are in `.gitignore`.
 

@@ -26,11 +26,10 @@ describe("probes", () => {
     expect(editHook(cp, "S1", join(wt, "src/x.ts"), { cwd: cp.main }).denied).toBe(true);
     expect(editHook(cp, "S1", join(cp.main, "src/free.ts")).denied).toBe(false); // outside every run
 
-    // E1: engine state and history.
+    // E1: engine state.
     const state = editHook(cp, "S1", join(stateDir(cp, "T-001"), "run.json"), { tool: "Write" });
     expect(state.denied).toBe(true);
-    expect(state.reason).toBe("warden: state and history are written by the engine only");
-    expect(editHook(cp, "S1", join(wt, ".warden/history/T-001/summary.json"), { tool: "Write" }).denied).toBe(true);
+    expect(state.reason).toBe("warden: state is written by the engine only");
 
     // E3: gate files while a run is live; B3: the same through Bash.
     const steps = editHook(cp, "S1", join(cp.main, ".warden/steps.json"));

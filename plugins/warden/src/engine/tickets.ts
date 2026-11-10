@@ -7,7 +7,7 @@ import { NO_TICKETS, readRoles, TOOLS_MAIN_ENV } from "../commands/tools.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
 import { readJson, writeJsonAtomic } from "../lib/json.ts";
 import { killGroup, pathWithBin } from "../lib/proc.ts";
-import { historyDir, mainRef, stateRoot, taskDir } from "../state/paths.ts";
+import { mainRef, stateRoot, taskDir } from "../state/paths.ts";
 import { chooseBase, readEvents, readRun, runExists } from "../state/store.ts";
 import type {
   DagTicket, FlowJson, OrchestratePlan, OrchestrateTicket, RunJson, ShipOutput, TicketDetail, TicketPhase,
@@ -184,7 +184,7 @@ export function createProblem(main: string, out: Record<string, unknown>, type: 
   return bad !== null ? `ticket: ${bad}`
     : !isPaths(out.changed) ? "changed must be an array of paths"
     : type !== "epic" && !new RegExp(pattern).test(id!) ? `id ${id} does not match taskIdPattern ${pattern}`
-    : existsSync(taskDir(main, id!)) || existsSync(historyDir(main, id!)) ? `id ${id} is already used by a warden run; the tool must skip ids that have .warden/state/<id> or .warden/history/<id>`
+    : existsSync(taskDir(main, id!)) ? `id ${id} is already used by a warden run; the tool must skip ids that have .warden/state/<id>`
     : null;
 }
 

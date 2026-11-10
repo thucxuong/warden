@@ -56,7 +56,7 @@ describe("hooks.json and the common rules", () => {
     const input = JSON.stringify({ session_id: "S1", cwd: main, tool_name: "Write", tool_input: { file_path: join(main, ".warden/state/x.json") } });
     const ok = spawnSync(process.execPath, [cli, "hook", "pre-tool-use"], { input, env, encoding: "utf8" });
     expect(ok.status).toBe(0);
-    expect(reason(ok.stdout.trim())).toBe("warden: state and history are written by the engine only");
+    expect(reason(ok.stdout.trim())).toBe("warden: state is written by the engine only");
 
     const quiet = spawnSync(process.execPath, [cli, "hook", "pre-tool-use"], { input, env: { ...env, WARDEN_ROLE: "reviewer" }, encoding: "utf8" });
     expect(quiet.status).toBe(0);
@@ -70,14 +70,12 @@ describe("hooks.json and the common rules", () => {
 });
 
 describe("PreToolUse: Edit and Write", () => {
-  test("E1: state and history are denied, with a hook.denied event", async () => {
+  test("E1: state is denied, with a hook.denied event", async () => {
     await startFlow(FEATURE);
-    expect(reason(await editAt(join(main, ".warden/state", T, "run.json")))).toBe("warden: state and history are written by the engine only");
-    expect(reason(await editAt(join(wt, ".warden/history", T, "summary.json")))).toBe("warden: state and history are written by the engine only");
-    expect(reason(await editAt(join(main, ".warden/history/OLD/run.json")))).toBe("warden: state and history are written by the engine only");
+    expect(reason(await editAt(join(main, ".warden/state", T, "run.json")))).toBe("warden: state is written by the engine only");
     const denied = readEvents(main, T).filter((e) => e.type === "hook.denied");
-    expect(denied.length).toBe(2);
-    expect(denied[0]!.data).toEqual({ tool: "Edit", reason: "state and history are written by the engine only" });
+    expect(denied.length).toBe(1);
+    expect(denied[0]!.data).toEqual({ tool: "Edit", reason: "state is written by the engine only" });
   });
 
   test("E2: only the fixer edits the fix worktree, and only inside the scope", async () => {
@@ -151,7 +149,6 @@ describe("nested worktrees in <main>/.worktrees (0.8)", () => {
     expect(await editAt(join(wt, ".warden/steps.json"))).toBeNull();
     await startFlow([IMPL, CHECK]);
     expect(reason(await editAt(join(wt, ".warden/steps.json")))).toBe(`warden: gate files cannot change while a run is live (${T}); finish or reset it first`);
-    expect(reason(await editAt(join(wt, ".warden/history", T, "run.json")))).toBe("warden: state and history are written by the engine only");
   });
 
   test("push block and Stop find the run of the nested worktree from its cwd, not the main checkout's run", async () => {
@@ -188,10 +185,9 @@ describe("PreToolUse: Bash", () => {
     expect(await bash("sh scripts/warden-setup.sh")).toBeNull();
   });
 
-  test("B3: state and history always, config files only while a run is live", async () => {
-    const msg = "warden: state, history and gate files are written by the engine only";
+  test("B3: state always, config files only while a run is live", async () => {
+    const msg = "warden: state and gate files are written by the engine only";
     expect(reason(await bash(`rm -rf .warden/state/${T}`, { cwd: main }))).toBe(msg);
-    expect(reason(await bash("echo x > .warden/history/T-9/run.json", { cwd: main }))).toBe(msg);
     expect(await bash("echo x > .warden/steps.json", { cwd: main })).toBeNull();
     await startFlow(FEATURE);
     expect(reason(await bash("echo x > .warden/steps.json"))).toBe(msg);
@@ -251,8 +247,6 @@ describe("PreToolUse: Bash", () => {
     expect(await bash("git push -u origin t-1")).toBeNull();
     expect(await bash("bun .warden/tools/git-pr/bin/pr.ts create --title x")).toBeNull();
     expect(await bash("warden tools pr create --title x")).toBeNull();
-    sh(wt, "add", `.warden/history/${T}`);
-    sh(wt, "commit", "-q", "-m", "chore: run record");
     expect(await bash("git push")).toBeNull();
     commit(wt, { "src/late.ts": "export const late = 1;\n" });
     expect(reason(await bash("git push"))).toBe(`warden: push/PR/merge is allowed only in the ship step after all gates pass for HEAD (${T} at ship)`);
@@ -298,7 +292,7 @@ describe("PreToolUse: Bash", () => {
 });
 
 describe("PreToolUse: Bash, chained and compound commands", () => {
-  const B3 = "warden: state, history and gate files are written by the engine only";
+  const B3 = "warden: state and gate files are written by the engine only";
   const atPlan = `warden: push/PR/merge is allowed only in the ship step after all gates pass for HEAD (${T} at plan)`;
 
   test("B4/B6: a `cd <worktree> &&` or `git -C <worktree>` finds the run, and links the session on warden next", async () => {
@@ -344,9 +338,9 @@ describe("PreToolUse: Bash, chained and compound commands", () => {
 
   test("B3: reads with harmless redirects, and a path segment named like a command, are allowed", async () => {
     await startFlow(FEATURE);
-    expect(await bash("ls .warden/history 2>/dev/null", { cwd: main })).toBeNull();
+    expect(await bash(`ls .warden/state/${T} 2>/dev/null`, { cwd: main })).toBeNull();
     expect(await bash(`cat .warden/state/${T}/run.json 2>&1 | head -3`, { cwd: main })).toBeNull();
-    expect(await bash(`cat .warden/history/cp/run.json &>/dev/null`, { cwd: main })).toBeNull();
+    expect(await bash(`cat .warden/state/cp/run.json &>/dev/null`, { cwd: main })).toBeNull();
     expect(await bash(`sed -n 1,5p .warden/state/${T}/run.json`, { cwd: main })).toBeNull();
     expect(reason(await bash(`echo x > .warden/state/${T}/x 2>&1`, { cwd: main }))).toBe(B3);
   });
@@ -358,12 +352,12 @@ describe("PreToolUse: Bash, chained and compound commands", () => {
     expect(await bash(`git commit -m 'rm the old > step' -- .warden/steps.json`, { cwd: main })).toBeNull();
     expect(reason(await bash(`echo "x" > ".warden/steps.json"`, { cwd: main }))).toBe(B3);
     expect(reason(await bash(`sh -c "echo x > .warden/state/${T}/run.json"`, { cwd: main }))).toBe(B3);
-    expect(reason(await bash(`bash -lc 'rm -rf .warden/history'`, { cwd: main }))).toBe(B3);
+    expect(reason(await bash(`bash -lc 'rm -rf .warden/state'`, { cwd: main }))).toBe(B3);
     // Outside git, and for $(...) or backticks in double quotes, quoted text still counts.
     for (const cmd of [
       `echo "$(rm -rf .warden/state/${T})"`,
       `x="$(cp /tmp/r .warden/state/${T}/run.json)"`,
-      `echo "\`rm .warden/history/x\`"`,
+      `echo "\`rm .warden/state/x\`"`,
       `git commit -m "$(rm -rf .warden/state/${T})"`,
       `"rm" -rf .warden/state/${T}`,
       `'sed' -i s/a/b/ .warden/state/${T}/run.json`,

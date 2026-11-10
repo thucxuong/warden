@@ -1,5 +1,5 @@
 // Live run state on disk (spec 5.1): run.json, the task lock, events.jsonl, sessions.jsonl, session records.
-import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
 import { join } from "node:path";
 import { EXIT, WardenError } from "../lib/exit.ts";
 import { currentBranch } from "../lib/git.ts";
@@ -50,6 +50,21 @@ export function chooseBase(main: string, mainBranch: string): string {
 }
 
 // Every task that has a state dir, in name order. Dirs starting with "_" (sessions, checks) are not tasks.
+// #33: the run has finished and the records database does not have its record yet.
+const UNSAVED = "record-unsaved";
+
+export function markUnsaved(main: string, task: string): void {
+  writeFileSync(join(taskDir(main, task), UNSAVED), "");
+}
+
+export function isUnsaved(main: string, task: string): boolean {
+  return existsSync(join(taskDir(main, task), UNSAVED));
+}
+
+export function clearUnsaved(main: string, task: string): void {
+  rmSync(join(taskDir(main, task), UNSAVED), { force: true });
+}
+
 export function listTasks(main: string): string[] {
   const root = stateRoot(main);
   if (!existsSync(root)) return [];

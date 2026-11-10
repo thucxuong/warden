@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
 import { EXIT, WardenError } from "../../plugins/warden/src/lib/exit.ts";
 import {
-  historyDir,
   inWorktreesDir,
   legacyWorktreesDir,
   mainRef,
@@ -116,10 +115,9 @@ describe("directories", () => {
     expect(inWorktreesDir("src/a.ts")).toBe(false);
   });
 
-  test("state, sessions and history dirs live under .warden", () => {
+  test("state and sessions dirs live under .warden", () => {
     expect(taskDir(repo, "T-1")).toBe(join(repo, ".warden/state/T-1"));
     expect(sessionsDir(repo)).toBe(join(repo, ".warden/state/_sessions"));
-    expect(historyDir(repo, "T-1")).toBe(join(repo, ".warden/history/T-1"));
   });
 
   test("taskDir refuses the reserved name and path tricks", () => {

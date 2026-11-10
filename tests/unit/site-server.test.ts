@@ -143,7 +143,9 @@ describe("request rules", () => {
     expect(body.running).toEqual([]);
     expect(body.recentlyShipped).toEqual([]);
     expect(body.reports.available).toBe(false);
-    expect(((await (await request(opts, "/api/runs")).json()) as { rows: unknown[] }).rows).toEqual([]);
+    expect((body as { recordsError?: string }).recordsError).toBeUndefined(); // no database: the local store answers
+    const runs = await request(opts, "/api/runs");
+    expect(runs.status).toBe(200);
   });
 
   test("bad runs params are 400", async () => {

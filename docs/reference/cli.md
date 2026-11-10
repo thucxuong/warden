@@ -33,6 +33,7 @@ Every `warden` command, its flags, what it prints, and who runs it.
 | [`retro`](#warden-retro) | anyone (legacy alias) | Mark the retro done; same as `warden checks done retro` |
 | [`upgrade`](#warden-upgrade) | the `/warden:upgrade` skill | Show upgrade notes, record the upgrade |
 | [`tools`](#warden-tools) | anyone | List, check or run the project's own tools |
+| [`records`](#warden-records) | the `/warden:upgrade` skill | Load old run records into the project's database |
 | [`site`](#warden-site) | person | Start the local web view |
 | [`orchestrate`](#warden-orchestrate) | the `/warden:orchestrate` skill | Plan and track the tickets of an epic |
 | [`checks`](#warden-checks) | agent | List, run and record periodic checks |
@@ -144,10 +145,11 @@ What it does, in order:
 3. Takes the run's `steps.json` **from the base** (`origin/<base>` when there is a remote), not from your working tree, and sets its `mainBranch` to the base. If `.warden/warden.json` or `.warden/steps.json` is not committed there, it stops: `commit and push .warden/ to <base> first`. A base other than `mainBranch` that is not on `origin` stops it too, with the `git push -u` line to run.
 4. Lints the flow against the check sets of that `steps.json`. A bad flow stops the start.
 5. Refuses if a run for this task already exists: `a run for <task> exists (status <s>); a person can run warden reset <task>`.
-6. With `--worktree`: uses `<repo>/.worktrees/<task>` on the branch, creating the branch from the base when it does not exist. A branch checked out in another worktree is refused. When git does not ignore `.worktrees/`, it stops: `.worktrees/ is not ignored by git: add the line .worktrees/ to .gitignore and commit it, then run start again`.
-7. Saves the flow, the `steps.json` snapshot and the task text in `.warden/state/<task>/`.
-8. Runs `setup.commands` in the worktree. If one fails, the state folder is deleted and the log is kept in the temp folder: `setup failed: <cmd> (exit <n>); log: <path>`.
-9. Enters the first step and starts the engine if that step is engine work.
+6. When `roles.json` has a `records` role, refuses if that tool or its four methods are missing (exit 1). It does not connect, so a database outage does not stop new work. Without the role, finished runs go to `.warden/state/_records/`.
+7. With `--worktree`: uses `<repo>/.worktrees/<task>` on the branch, creating the branch from the base when it does not exist. A branch checked out in another worktree is refused. When git does not ignore `.worktrees/`, it stops: `.worktrees/ is not ignored by git: add the line .worktrees/ to .gitignore and commit it, then run start again`.
+8. Saves the flow, the `steps.json` snapshot and the task text in `.warden/state/<task>/`.
+9. Runs `setup.commands` in the worktree. If one fails, the state folder is deleted and the log is kept in the temp folder: `setup failed: <cmd> (exit <n>); log: <path>`.
+10. Enters the first step and starts the engine if that step is engine work.
 
 Output: the same JSON as [`warden next`](#warden-next). With `--worktree` it also has `"worktree": "<absolute path>"` and `"base": "<branch>"`. The agent then runs `cd <worktree>` as its own command.
 
@@ -178,7 +180,7 @@ Output (`NextResponse`):
     routeBack?: { from, reason, kind, triageReport?, logTail?, findings? };   // why the run came back
     waiting?: { kind: "approve" | "merge-fix" | "human" | "question"; reason: string; since: string };
     fix?: { worktree, branch, verdict, reportPath, logPath, mode, scope, fixNote, mayMerge };  // fix step only
-    ship?: { historyDir: string; leftoversPath: string | null; proofSha: string };            // ship step only
+    ship?: { leftoversPath: string | null; proofSha: string };            // ship step only
   };
 }
 ```
@@ -214,7 +216,7 @@ Output (`DoneResponse`):
 { accepted: boolean; errors: string[]; warnings?: string[]; next: NextResponse }
 ```
 
-`warnings` appears only after the ship step. With a `pr`: when the ticket tool's `link` failed or printed `changed` paths (0.8; link must not change repo files, warden ignores them), and, while the PR is not merged, a note to set the ticket to done after the merge. With `merged: true`: when `set-status <task> done` in the main checkout failed, or printed `changed` paths to commit there (0.9.3). It never undoes the ship; see [write a ticket tool](../guides/write-a-ticket-tool.md#link-rules-optional).
+`warnings` appears only when there is something to say. After the ship step, with a `pr`: when the ticket tool's `link` failed or printed `changed` paths (0.8; link must not change repo files, warden ignores them), and, while the PR is not merged, a note to set the ticket to done after the merge. With `merged: true`: when `set-status <task> done` in the main checkout failed, or printed `changed` paths to commit there (0.9.3). It never undoes the ship; see [write a ticket tool](../guides/write-a-ticket-tool.md#link-rules-optional). After any accepted hand-in, it also lists each finished run whose record could not be saved: `<task>: the run record is not saved yet, warden retries later: <error>`.
 
 | Case | Exit |
 |---|---|
@@ -235,7 +237,7 @@ Every hand-in, accepted or not, is saved as `.warden/state/<task>/outputs/<seq>-
 | `analyze` | `summary` (at least 20 chars), `findings` (at least 1), `followUps`, `filesChanged`. Variant `reproduce` adds `reproduction: {steps (≥1), expected, actual, failingTest (path or null)}`. Variant `diagnose` adds `rootCause: {chain (≥2), cause, evidence (≥1)}`. Variant `spike` adds `notePath` | `filesChanged` equals the files that changed since the step started. Each changed file is allowed for this step. `failingTest` exists. `notePath` is under `docs/` and exists |
 | `plan` | `planMarkdown`, `waves: [{wave, tasks: [{id, title, approach, leverage, unlocks, blockedBy, why?}]}]`, `decisions`, and `brainstorm: {options (≥2, each {name, tradeoffs}), chosen, why}` when the step says brainstorm | No placeholder words in `planMarkdown` (`TBD`, `TODO`, `implement later`, `fill in details`, `add appropriate error handling`, `add validation`, `handle edge cases`, `write tests for the above`, `similar to task N`). Waves go up from 1. Task ids `T<n>` are unique. `blockedBy` names only tasks of earlier waves. `approach` is `reuse`, `configure`, `compose`, `adopt` or `build`; `why` is required for `adopt` and `build`. Each file in `decisions` matches `docs/decisions/<area>/<YYYY-MM-DD>-<slug>.md` and exists. `brainstorm.chosen` is one of the option names |
 | `implement` | `summary`, `filesChanged`, `testsAdded`, `testsReason?` | No uncommitted changes. At least one new commit (unless the run came back for a dirty tree). `filesChanged` equals the files the step's own commits changed. Every file in `testsAdded` is in `filesChanged`. When `testsAdded` is empty and files changed, `testsReason` has at least 10 chars. No gate file changed |
-| `ship` | `pr` (URL, id or null), `merged`, `mergeCommit` (sha or null), `description` | All gates proven for HEAD. `.warden/history/<task>/summary.json` is committed and the run record has no uncommitted changes. `pr` or `mergeCommit` is set. With `merged: true`, `mergeCommit` exists after a fetch. With leftovers, `description` contains `Unresolved review findings`. If the worktree is already gone, only the merge evidence is checked |
+| `ship` | `pr` (URL, id or null), `merged`, `mergeCommit` (sha or null), `description` | All gates proven for HEAD. `pr` or `mergeCommit` is set. With `merged: true`, `mergeCommit` exists after a fetch. With leftovers, `description` contains `Unresolved review findings`. If the worktree is already gone, only the merge evidence is checked |
 | `fix` | `result`: `FIXED`, `CODE`, `GAVE_UP` or `WARDEN_BUG`; `reason`; `rootCauseChain` (≥2 for FIXED and CODE). FIXED adds `notePath`, `ruleId`, `branch?`, `pr?`, `mergeCommit?`, `repairCommands?`; `notePath` and `ruleId` may be left out with the `ruleId` the triage report named, or with the `mergeCommit` of a fix already on the main branch. CODE adds `codeRef` (`path:line — what in the change causes it`). WARDEN_BUG adds `report: {title, body}` | For FIXED: `branch`, when given, is the fix branch; the fix branch changes only files inside `fix.scope` and never a forbidden file; the note is `.warden/fixes/<YYYY-MM-DD>-<task>[-n].md` with the required headings; the new triage rule exists, points at the note, matches a line of the failing log and no line of any passing log. See [gates and self-healing](../concepts/gates-and-self-healing.md) |
 
 ---
@@ -327,7 +329,7 @@ warden reset <task> [--yes]
 
 For a person, in a terminal (exit 6 without a TTY). Deletes the run's live state. Without `--yes` it asks `Delete live state for <task>? [y/N]` on stderr; any answer other than `y` or `yes` cancels (exit 1).
 
-It stops a running engine worker and its checks and reviewer, removes the fix worktrees and triage clean copies of this task (also fix worktrees left next to the repo before 0.8), deletes the `warden-fix/<task>-*` branches, then deletes `.warden/state/<task>/`. The task worktree and its branch stay, so a later `warden start` can reuse them; once the task has shipped, [`warden clean`](#warden-clean) removes them.
+It first tries to save every finished run that is still unsaved. It then stops a running engine worker and its checks and reviewer, removes the fix worktrees and triage clean copies of this task (also fix worktrees left next to the repo before 0.8), deletes the `warden-fix/<task>-*` branches, then deletes `.warden/state/<task>/`. The task worktree and its branch stay, so a later `warden start` can reuse them; once the task has shipped, [`warden clean`](#warden-clean) removes them.
 
 Output: `{"reset":"PG-012"}`. Exit 3 when there is no such run.
 
@@ -446,6 +448,7 @@ warden tools --init
 warden tools --skill
 warden tools --usage [--since YYYY-MM-DD]
 warden tools --verify tickets [--write]
+warden tools --verify records
 warden tools <name|role> [args...]
 ```
 
@@ -458,6 +461,7 @@ Runs the project's own tools from `.warden/tools/`. See [tools and roles](../con
 | `--init` | Writes the missing files of `.warden/tools/` (`index.ts`, `tool.ts`, `roles.json`, `replaces.json`). Never overwrites | `{"written":[...]}` |
 | `--skill` | Writes `.claude/skills/project-tools/SKILL.md` from the tools (0.10): each tool's name, first-level `commands`, summary, usage and the raw commands it covers, so the agent knows they exist. `--check` warns when it is missing or out of date | `{"written":[".claude/skills/project-tools/SKILL.md"]}` |
 | `--verify tickets [--write]` | Checks the `tickets` tool against its contract (0.10), in a throwaway copy that is its own repo, removed afterwards: the checkout's last commit (if any) plus its uncommitted files and the ids of the project's runs, with its `node_modules` linked. Inside it, `WARDEN_MAIN_ROOT` is the copy, so the project never changes. A problem with the copy or with `warden.json` is a `FAIL` row. It checks `dag`, `dag <epic>`, `show`, exit 3 for an unknown id, exit 2 for bad usage, exit 1 and no writes for `create` without flags. `--write`, for tickets kept as repo files only, also creates a ticket, sets it to `doing` twice and to `archived`, and checks `changed` against the files that changed. Exit 1 when any row is `FAIL` | `{"checks":[{status, label, detail}]}` |
+| `--verify records` | Proves the `records` tool keeps its contract, against the real database: save, get, list with filters and pages, and events. It uses a few fixed rows with status `verify`, dated 2000; no page shows them and the next run overwrites them. Exit 1 when any row is `FAIL` | `{"checks":[{status, label, detail}]}` |
 | `--usage [--since YYYY-MM-DD]` | Counts what the agent ran (0.10), from Claude Code's session transcripts that warden linked to this project, all of them or since a local date: `warden tools` calls and failures per tool, raw commands a tool covers that the agent ran anyway, and commands run at least twice, costliest first. Refused commands are left out; secrets in the examples are hidden. Writes nothing. See [usage statistics](../concepts/tools-and-roles.md#usage-statistics). Exit 2 for bad flags or a date that does not exist | `{"since", "sessions":{read, missing}, "tools":[{tool, calls, failed}], "raw":[{tool, prefix, count}], "commands":[{shape, count, avgChars, example}]}` |
 | `<name> [args]` | Runs the tool. A word is a tool name first, then a role | The tool's own output. warden prints nothing on stdout |
 | `<name> -h` | Prints the tool's `usage`, or its `summary` | Text |
@@ -468,13 +472,28 @@ Exit codes: the tool's own exit code (0 to 255). A tool that throws or returns s
 
 ---
 
+## warden records
+
+```
+warden records import
+warden records list [--since YYYY-MM-DD]
+```
+
+Loads an old `.warden/history/` folder in the main checkout into the run records: the project's records database, or `.warden/state/_records/` without one. `/warden:upgrade` uses it for a project that used to commit its run records. It is safe to run twice: a save replaces the ticket's row. It does not remove the folder.
+
+Output: `{"imported":[tickets],"failed":[{ticket, error}]}`. Exit 1 when a ticket could not be saved or the `records` tool does not load, exit 2 for anything else.
+
+`list` prints the summaries of finished runs, newest first, as `{"records":[...]}`. The retro uses it. See [State and history](../concepts/state-and-history.md#the-records-database).
+
+---
+
 ## warden site
 
 ```
 warden site [--port <n>] [--no-open]
 ```
 
-Starts the read-only control plane of the project (what needs you, running runs, epics, tickets, history, docs) at `http://127.0.0.1:<port>`. The port is `--port` (1 to 65535), else `sitePort` in `.warden/warden.json` (default 4400). It prints `warden site: http://127.0.0.1:<port>`, opens that address in the browser, and runs until you stop it.
+Starts the read-only control plane of the project (what needs you, running runs, epics, tickets, history, docs) at `http://127.0.0.1:<port>`. The port is `--port` (1 to 65535), else `sitePort` in `.warden/warden.json` (default 4400). It prints `warden site: http://127.0.0.1:<port>`, opens that address in the browser, and runs until you stop it. Finished runs come from the project's records database; when it starts, it saves any finished run that is still unsaved.
 
 The browser opens only when stdout is a terminal. `--no-open`, a `CI` variable set to anything but `0` or `false`, and `WARDEN_NO_OPEN=1` keep it closed. A failure to open is silent.
 
@@ -497,7 +516,7 @@ Used by the `/warden:orchestrate` skill. Works on the main checkout. Needs a `ti
 |---|---|---|
 | `plan <epic>` | Runs the tickets tool (`dag <epic>`), builds waves, adds each ticket's run state, saves the plan in `.warden/state/_orchestrate/<epic>.json` and prints it | 1 when `errors` is not empty |
 | `status <epic>` | Prints the saved plan with run state read again. Does not ask the tickets tool | 3 when there is no saved plan |
-| `set-status <id> <status>` | Runs the tickets tool (`set-status`). Status is `backlog`, `todo`, `doing`, `review`, `done` or `archived`. Prints `{"id","status","changed":[paths]}`. For an epic with a saved plan set `done`, it also saves the orchestrator's cost to `.warden/history/<epic>/epic.json` and adds that path to `changed` | 2 for a bad status |
+| `set-status <id> <status>` | Runs the tickets tool (`set-status`). Status is `backlog`, `todo`, `doing`, `review`, `done` or `archived`. Prints `{"id","status","changed":[paths]}`. For an epic with a saved plan set `done`, it also saves the orchestrator's cost as a row with status `epic` in the records database; a failed save only prints a warning on stderr | 2 for a bad status |
 | `create ...` | 0.8. Runs the tickets tool's `create` (required since 0.9) in the main checkout; the tool picks the id. Passes the body file as an absolute path. Checks the new id (`^[A-Za-z0-9][A-Za-z0-9._-]*$`, and `taskIdPattern` unless `--type epic`). Prints `{"ticket":{...,"body"},"changed":[paths],"base":"<branch>"}`; the caller adds and commits `changed` on `base`, the branch a run of the ticket starts from. Used by `/warden:compose` for a request without an id and to plan an epic | 2 for bad usage or a missing body file; 3 with `the ticket tool has no create` when the tool answers exit 2; 1 for a bad id or result |
 
 Plan output:

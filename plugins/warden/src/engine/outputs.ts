@@ -240,18 +240,18 @@ function shapeFix(o: Obj, errors: string[]): void {
 // Files the step's own commits changed since startSha. What a merge of (or rebase onto) the main
 // branch brought in is not the step's change.
 function committedSince(run: RunJson, upstream: string): string[] {
-  return ownDiffNames(run.worktree, run.current.startSha, "HEAD", upstream).filter((p) => !isIgnoredPath(p, run.task));
+  return ownDiffNames(run.worktree, run.current.startSha, "HEAD", upstream).filter((p) => !isIgnoredPath(p));
 }
 
 // Files changed since the step started: committed since startSha plus uncommitted, minus what was dirty at the start.
 export function actualChanged(run: RunJson, upstream: string): string[] {
   const paths = new Set([...committedSince(run, upstream), ...porcelain(run.worktree)]);
   for (const path of run.current.startDirty) paths.delete(path);
-  return [...paths].filter((path) => !isIgnoredPath(path, run.task)).sort();
+  return [...paths].filter((path) => !isIgnoredPath(path)).sort();
 }
 
 function uncommitted(run: RunJson): string[] {
-  return porcelain(run.worktree).filter((path) => !isIgnoredPath(path, run.task));
+  return porcelain(run.worktree).filter((path) => !isIgnoredPath(path));
 }
 
 function compareSets(listed: string[], actual: string[], field: string, errors: string[]): void {
@@ -379,11 +379,6 @@ function evidenceShip(input: OutputCheckInput, o: Obj, errors: string[]): void {
   if (existsSync(run.worktree)) {
     const proven = gatesProven(run, flow);
     if (!proven.proven) errors.push(`gates are not proven for HEAD: ${proven.reason}`);
-
-    const history = `.warden/history/${run.task}`;
-    if (lsTree(run.worktree, "HEAD", `${history}/summary.json`).length === 0) errors.push(`the run record is not committed: commit ${history}/`);
-    const pending = porcelain(run.worktree).filter((p) => p.startsWith(`${history}/`));
-    if (pending.length > 0) errors.push(`the run record has uncommitted changes: ${pending.join(", ")}`);
   }
 
   if (o.pr === null && o.mergeCommit === null) errors.push("pr or mergeCommit is required");

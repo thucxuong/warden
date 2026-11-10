@@ -41,6 +41,7 @@ export interface Tool {
   probe?: () => Check[] | Promise<Check[]>;       // run by `warden tools --check`
   commands?: string[];                            // first-level commands, listed in the project tools skill (0.10)
   run: (argv: string[]) => number | Promise<number>; // the exit code
+  records?: RecordStore;                          // only on the tool named by the `records` role
 }
 ```
 
@@ -100,6 +101,7 @@ For the common jobs, the skill has a **recipe** each: what to build, its subcomm
 | `warden tools --init` | `{"written":[...]}` | 0 |
 | `warden tools --skill` | `{"written":[".claude/skills/project-tools/SKILL.md"]}`, see [The project tools skill](#the-project-tools-skill) | 0 |
 | `warden tools --verify tickets [--write]` | `{"checks":[{"status","label","detail"}]}`: the `tickets` tool against its contract, in a throwaway copy that is its own repo (the last commit plus uncommitted files), so the checkout never changes. `--write` also checks `create` and `set-status`: only for tickets kept as repo files | 1 when any row is `FAIL`; 2 for bad flags |
+| `warden tools --verify records` | `{"checks":[{"status","label","detail"}]}`: the `records` tool against its contract, on a few fixed rows with status `verify`, dated 2000, in the real database | 1 when any row is `FAIL` |
 | `warden tools --usage [--since YYYY-MM-DD]` | `{"since","sessions","tools":[...],"raw":[...],"commands":[...]}`, see [Usage statistics](#usage-statistics) | 0; 2 for bad flags |
 
 `--check` has warden's own rows first: `index.ts` loads, each role names a tool in `index.ts`, each tool in `replaces.json` is in `index.ts`, the project tools skill is up to date, and the `tickets` tool has `create` (`role tickets create`: warden calls `create` with no flags, which must exit 1; exit 2 means it is missing). Then it runs each tool's `probe`. A probe returns rows with status `OK`, `FAIL`, `WARN` or `SKIP`; a tool without a probe gets one `SKIP` row. Use a probe to check that a program or a token the tool needs is there. Run `warden tools --check` before you commit a tool change.
@@ -115,11 +117,12 @@ For the common jobs, the skill has a **recipe** each: what to build, its subcomm
 - A role points at a tool, never at another role.
 - When a role and a tool have the same name, the tool wins (`--check` warns about it).
 - `warden tools <role> <args>` runs the tool the role names.
-- Your project may add roles of its own. Warden reads three:
+- Your project may add roles of its own. Warden reads four:
 
 | Role | Used by | What the tool must do |
 |---|---|---|
 | `tickets` | `warden start` (every run), `/warden:orchestrate` and `warden orchestrate create` | `dag [<epic>]`, `show <id>`, `set-status <id> <status>` and `create`, each printing JSON; optionally `link`. See [Write a ticket tool](../guides/write-a-ticket-tool.md). |
+| `records` | `warden start`, the end of a run and the warden site | A `records` object with `save`, `list`, `get` and `events`, for the project's own database. Optional. See [The records role](#the-records-role). |
 | `graph` | the work skill and the ticket agent | `query "<question>"` prints plain text and exits 0. The agent runs it before a broad search of the repo. |
 | `pr` | the push and merge rules of the PreToolUse hook | `create` and `merge` subcommands. Warden treats `warden tools pr create` and `warden tools pr merge` like `gh pr create` and `gh pr merge`: allowed only in the ship step after the gates pass. |
 
@@ -128,6 +131,10 @@ Anything else needs no role. A check in `.warden/steps.json` can simply run `war
 ### The tickets role
 
 Every run starts from a ticket (0.9), so every project needs a `tickets` role; `/warden:init` sets one up. `warden start <task>` reads the task text from `warden tools tickets show <task>` (the ticket's title and body). A ticket is done only once its task is merged into the main branch (0.9.3): after a ship hand-in with `merged: true`, the engine runs `set-status <task> done` in the main checkout, and a warning tells the agent to commit any `changed` files there. With a pull request still open, it says to set the ticket to done after the merge. A failure is a warning and never undoes the ship. Once the ship output is handed in with a `pr`, the engine also runs the optional `link <task> <pr>` in the main checkout (0.8).
+
+### The records role
+
+The `records` role is optional. Without it, finished runs stay in `.warden/state/_records/` on the machine that ran them. With it, they are saved in the project's own database, so the whole team sees them. Warden ships no database code. `/warden:tools records` writes the tool, as the [recipe](../../plugins/warden/skills/tools/recipes/records.md) says, and `warden tools --verify records` proves it keeps the contract. When the role is set, `warden start` checks that the tool loads, but does not connect, so a database outage does not stop new work. See [State and history](state-and-history.md#the-records-database).
 
 ## Raw commands a tool covers
 

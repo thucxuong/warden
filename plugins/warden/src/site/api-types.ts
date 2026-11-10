@@ -67,6 +67,7 @@ export interface HomeResponse {
   needsYou: NeedsYouItem[];        // oldest `since` first
   running: RunningItem[];          // oldest stepStartedAt first
   recentlyShipped: ShippedItem[];  // newest shippedAt first, at most 8
+  recordsError?: string;           // the records database did not answer; finished runs are missing
   reports: ReportsPanel;
 }
 
@@ -184,6 +185,7 @@ export interface RunsResponse {
   rows: RunRow[];
   flows: string[];            // every flow name in the unfiltered set, sorted
   totals: { count: number; durationMs: number; usage: Usage };   // over rows
+  defaultFrom?: ISO;          // the request named no dates: rows start here
 }
 
 // ---- /api/runs/:task ----
@@ -199,7 +201,7 @@ export interface RunDetailResponse {
   changes: ChangesView;
   usage: { total: Usage; steps: StepUsage[]; pricing: string }; // which prices the cost uses, and what was reported
   signals: Signal[];
-  limitations: string[];      // plain lines, e.g. "From the committed history: no logs, no ship step, tokens from summary.json."
+  limitations: string[];      // plain lines, e.g. "From the records database: no logs or step outputs from summary.json."
 }
 
 export interface RunHeader {
@@ -409,7 +411,7 @@ export interface EpicResponse {
   generatedAt: ISO; epic: string;
   rows: EpicRowView[];        // every child ticket's steps, oldest first
   usage: Usage;               // the orchestrator's own cost; unknown when costSource is null
-  costSource: Source | null;  // live: session transcripts on this machine; history: .warden/history/<epic>/epic.json
+  costSource: Source | null;  // live: session transcripts on this machine; history: the records database
   savedAt: ISO | null;        // history only
   pricing: string;            // which prices the cost uses and where it comes from
 }

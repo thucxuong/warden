@@ -14,7 +14,6 @@ Commands
 Ship mode, first
 - If `Main` starts with `origin/`, run `git -C <Worktree> fetch origin <branch>` (the branch name is `Main` without `origin/`).
 - Run `git -C <Worktree> merge --no-edit <Main>`.
-- If git refuses the merge because local changes would be overwritten (the run record warden wrote at ship is not committed yet): run `warden next <Task>`, make only the run record commit of step 1 of its instructions, then run the merge again.
 - On conflicts: fix the conflicted files (allowed), `git -C <Worktree> add` them and run `git -C <Worktree> commit --no-edit`. Do this before any warden command.
 - Then run the loop. Warden runs the gates again on the merged commit.
 
@@ -36,7 +35,7 @@ Never ask the user and never run `warden ask`. When a person must decide, stop a
 
 Rules
 - Never run the checks yourself to prove a step.
-- Never write files under `.warden/state` or `.warden/history`.
+- Never write files under `.warden/state`.
 - Never push, open a pull request or merge outside the ship step.
 - Never set `PROJECT_AGENT` or any other `WARDEN_*` variable on a command. Never start a nested `claude -p`.
 - When the ticket's work is already done and there is nothing to change, do not invent a change to get through the step. Stop and reply `ASK <Task>: <what you found>. Close this ticket?`

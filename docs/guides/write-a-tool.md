@@ -51,6 +51,7 @@ export interface Tool {
   probe?: () => Check[] | Promise<Check[]>;          // run by `warden tools --check`
   commands?: string[];                                // first-level commands, listed in the project tools skill (0.10)
   run: (argv: string[]) => number | Promise<number>; // returns the exit code
+  records?: RecordStore;                              // only on the tool named by the `records` role
 }
 ```
 

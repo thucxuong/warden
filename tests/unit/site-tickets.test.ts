@@ -1,9 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { WardenError } from "../../plugins/warden/src/lib/exit.ts";
 import type { TicketsOk } from "../../plugins/warden/src/site/api-types.ts";
 import { buildEpic } from "../../plugins/warden/src/site/epics.ts";
+import { clearFinishedCache, prepareBoard, prepareEpicEvents } from "../../plugins/warden/src/site/finished.ts";
+import { RECORDS_FILE } from "../helpers/tools-fixture.ts";
 import { siteCtx } from "../../plugins/warden/src/site/text.ts";
 import { buildTickets, singleFlight, type ToolRunner } from "../../plugins/warden/src/site/tickets.ts";
 import { FX_TICKETS, makeSiteFixture, PLUGIN_ROOT, type SiteFixture } from "../helpers/site-fixture.ts";
@@ -81,9 +83,15 @@ describe("board", () => {
 
 describe("epic page (/api/epics/:id)", () => {
   const ctx = () => siteCtx(fx.main, PLUGIN_ROOT, fx.data, fx.now);
+  const epicOf = async (epic: string, tickets: string[]) => {
+    const c = ctx();
+    await prepareBoard(c, tickets, [epic]);
+    await prepareEpicEvents(c, tickets);
+    return buildEpic(c, epic, tickets);
+  };
 
-  test("how each child ticket went, from the run logs, oldest first, with no session text", () => {
-    const epic = buildEpic(ctx(), "FX-100", ["FX-101", "FX-102", "FX-104"]);
+  test("how each child ticket went, from the run logs, oldest first, with no session text", async () => {
+    const epic = await epicOf("FX-100", ["FX-101", "FX-102", "FX-104"]);
     expect([...new Set(epic.rows.map((r) => r.ticket))].sort()).toEqual(["FX-101", "FX-102", "FX-104"]);
     expect(epic.rows.map((r) => r.at)).toEqual(epic.rows.map((r) => r.at).sort());
     const of = (t: string) => epic.rows.filter((r) => r.ticket === t).map((r) => r.label);
@@ -95,20 +103,24 @@ describe("epic page (/api/epics/:id)", () => {
     expect(epic.costSource).toBe("live");
   }, 30_000);
 
-  test("tickets of other epics are left out; the cost comes from the saved total, or is unknown", () => {
-    expect(buildEpic(ctx(), "FX-300", [])).toMatchObject({ costSource: null, rows: [], usage: { known: false } });
-    const dir = join(fx.main, ".warden", "history", "FX-300");
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, "epic.json"), JSON.stringify({
+  test("tickets of other epics are left out; the cost comes from the saved total, or is unknown", async () => {
+    clearFinishedCache();
+    expect(await epicOf("FX-300", [])).toMatchObject({ costSource: null, rows: [], usage: { known: false } });
+    clearFinishedCache();
+    const file = join(fx.main, RECORDS_FILE);
+    const before = readFileSync(file, "utf8");
+    const summary = {
       schema: 1, epic: "FX-300", savedAt: "2026-11-01T10:00:00.000Z", pricesDate: null,
       tokens: { input: 10, output: 1, cacheRead: 0, cacheWrite: 0, costUsd: 0.5, unpriced: false },
-    }));
+    };
+    writeFileSync(file, JSON.stringify([...JSON.parse(before), { ticket: "FX-300", status: "epic", flow: "epic", finishedAt: summary.savedAt, summary, detail: {} }]));
     try {
-      const epic = buildEpic(ctx(), "FX-300", []);
+      const epic = await epicOf("FX-300", []);
       expect(epic).toMatchObject({ costSource: "history", savedAt: "2026-11-01T10:00:00.000Z", usage: { costUsd: 0.5, known: true } });
       expect(epic.pricing).toContain("Estimate using the prices that came with warden.");
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      writeFileSync(file, before);
+      clearFinishedCache();
     }
   });
 });

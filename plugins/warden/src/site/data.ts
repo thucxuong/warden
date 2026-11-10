@@ -1,4 +1,4 @@
-// Reads .warden/state and .warden/history into loaded runs for the site (design 2.3). Every call reads fresh; nothing is written.
+// Reads .warden/state into loaded runs for the site (design 2.3); finished runs come from finished.ts. Every call reads fresh; nothing is written.
 import { closeSync, existsSync, fstatSync, openSync, readdirSync, readFileSync, readSync, realpathSync, statSync } from "node:fs";
 import { basename, join, resolve, sep } from "node:path";
 import { loadStepsJson } from "../config/config.ts";
@@ -6,8 +6,8 @@ import { buildSummary } from "../engine/summary.ts";
 import { head, identity } from "../lib/git.ts";
 import { mdFiles } from "../lib/md-files.ts";
 import { tokensByStep, type TokenTotals } from "../lib/tokens.ts";
-import { historyDir, historyRoot, taskDir } from "../state/paths.ts";
-import { listTasks, readEvents, readRun, readSessionLinks, runExists } from "../state/store.ts";
+import { taskDir } from "../state/paths.ts";
+import { isUnsaved, listTasks, readEvents, readRun, readSessionLinks, runExists } from "../state/store.ts";
 import type {
   EventLine, FlowJson, HistorySummary, ReviewRound, RunJson, SessionLink, StepsJson, TriageReport,
 } from "../types.ts";
@@ -26,8 +26,9 @@ export interface LoadedTask {
   events: EventLine[];
   links: SessionLink[];                 // live only; [] for history
   steps: StepsJson | null;              // the run's steps.json snapshot; null for history or when it does not load
-  dir: string;                          // state/<task> or history/<task>
+  dir: string;                          // state/<task>; nothing is there for a record
   tokens: Record<string, TokenTotals>;  // live: tokensByStep; history: {}
+  texts?: { task: string | null; plan: string | null };  // a record's texts; live runs read them from `dir`
 }
 
 const DOC_ROOTS = ["docs", ".warden"]; // the only places /api/doc reads from
@@ -146,58 +147,41 @@ function loadLive(main: string, task: string, withCommit: boolean, author: () =>
   return { source: "live", run, flow, summary, triage, review, leftovers, events, links, steps: readSteps(dir), dir, tokens };
 }
 
-function loadHistory(main: string, task: string): LoadedTask {
-  const dir = historyDir(main, task);
-  const run = readJsonFile<RunJson>(join(dir, "run.json"));
-  run.status = "shipped"; // the committed snapshot says "shipping"; the site shows it as shipped
-  return {
-    source: "history",
-    run,
-    flow: readJsonFile<FlowJson>(join(dir, "flow.json")),
-    summary: readJsonFile<HistorySummary>(join(dir, "summary.json")),
-    triage: readTriageDir(join(dir, "triage")),
-    review: readReviewDir(join(dir, "review")),
-    leftovers: readText(join(dir, "review", "leftover.md")),
-    events: readJsonl<EventLine>(join(dir, "events.jsonl")),
-    links: [],
-    steps: null,
-    dir,
-    tokens: {},
-  };
-}
-
-function historyTasks(main: string): string[] {
-  const root = historyRoot(main);
-  if (!existsSync(root)) return [];
-  return readdirSync(root, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort();
-}
-
 // Reads git user.name/email once and keeps it: every live run of one request has the same author (2 git spawns each otherwise).
 export function lazyAuthor(main: string): () => Author {
   let value: Author | undefined;
   return () => (value ??= identity(main));
 }
 
-// Live state wins when a task is in both. Null when the task is unknown. Throws when its files are broken.
+// A run on this machine, or null. Throws when its files are broken.
 export function loadTask(main: string, task: string, withCommit: boolean, author: () => Author = lazyAuthor(main)): LoadedTask | null {
-  if (runExists(main, task)) return loadLive(main, task, withCommit, author);
-  if (existsSync(join(historyDir(main, task), "summary.json"))) return loadHistory(main, task);
-  return null;
+  return runExists(main, task) ? loadLive(main, task, withCommit, author) : null;
 }
 
-// Every task in state and history. A task whose files are half-written or broken is left out.
+// Runs the lists read from files: those going, and finished ones the database does not have yet. A saved run is read
+// from the database, so the cost of this stays flat however many tickets this machine has shipped.
 export function loadAll(main: string, author: () => Author = lazyAuthor(main)): LoadedTask[] {
-  const names = [...new Set([...listTasks(main), ...historyTasks(main)])];
   const all: LoadedTask[] = [];
-  for (const name of names) {
+  for (const name of listTasks(main)) {
     try {
-      const loaded = loadTask(main, name, false, author);
-      if (loaded) all.push(loaded);
+      if (!runExists(main, name)) continue;
+      const { status } = readRun(main, name);
+      if ((status === "shipped" || status === "done") && !isUnsaved(main, name)) continue;
+      const loaded = loadLive(main, name, false, author);
+      all.push(loaded);
     } catch {
       continue;
     }
   }
   return all;
+}
+
+export function taskMdOf(loaded: LoadedTask): string | null {
+  return loaded.texts ? loaded.texts.task : readText(join(loaded.dir, "task.md"));
+}
+
+export function planMdOf(loaded: LoadedTask): string | null {
+  return loaded.texts ? loaded.texts.plan : readText(join(loaded.dir, "plan.md"));
 }
 
 // ---- docs ----

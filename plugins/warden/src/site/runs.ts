@@ -7,7 +7,8 @@ import type {
   EventsResponse, LogResponse, PlanView, RunDetailResponse, RunHeader, RunRow, RunsResponse, RunStatus, Source, StepUsage,
 } from "./api-types.ts";
 import { buildChanges } from "./changes.ts";
-import { isInside, loadTask, readLogTail, readText, type LoadedTask } from "./data.ts";
+import { isInside, loadTask, planMdOf, readLogTail, readText, taskMdOf, type LoadedTask } from "./data.ts";
+import { finishedRow } from "./finished.ts";
 import { renderMarkdown } from "./markdown.ts";
 import { resolvePr } from "./pr.ts";
 import { buildReview } from "./review.ts";
@@ -79,13 +80,16 @@ export function allRows(ctx: SiteCtx): RunRow[] {
   const key = "rows";
   if (!ctx.memo.has(key)) {
     const rows: RunRow[] = [];
+    const fromFiles = new Set<string>();
     for (const loaded of ctx.tasks()) {
+      fromFiles.add(loaded.run.task);
       try {
         rows.push(toRow(ctx, loaded));
       } catch {
         continue;
       }
     }
+    for (const record of ctx.finished) if (!fromFiles.has(record.ticket)) rows.push(finishedRow(ctx, record));
     ctx.memo.set(key, rows.sort((a, b) => b.startedAt.localeCompare(a.startedAt)));
   }
   return ctx.memo.get(key) as RunRow[];
@@ -105,6 +109,7 @@ export function listRuns(ctx: SiteCtx, q: RunsQuery = {}): RunsResponse {
   return {
     generatedAt: ctx.generatedAt,
     rows,
+    ...(ctx.defaultFrom !== null && { defaultFrom: ctx.defaultFrom }),
     flows: [...new Set(all.map((r) => r.flow))].sort(),
     totals: { count: rows.length, durationMs: rows.reduce((s, r) => s + r.durationMs, 0), usage: sumUsage(rows.map((r) => r.usage)) },
   };
@@ -113,18 +118,19 @@ export function listRuns(ctx: SiteCtx, q: RunsQuery = {}): RunsResponse {
 // ---- detail ----
 
 function notFound(task: string): HttpError {
-  return new HttpError(404, `no run ${task} on this machine or in .warden/history`);
+  return new HttpError(404, `no run ${task} on this machine or in the records database`);
 }
 
 function load(ctx: SiteCtx, task: string, withCommit = true): LoadedTask {
-  const loaded = loadTask(ctx.main, task, withCommit, ctx.author);
-  if (!loaded) throw notFound(task);
-  return loaded;
+  const loaded = loadTask(ctx.main, task, withCommit, ctx.author) ?? ctx.record;
+  if (loaded) return loaded;
+  if (ctx.recordsError !== null) throw new HttpError(503, ctx.recordsError);
+  throw notFound(task);
 }
 
 function planView(loaded: LoadedTask, waitingKind: string | null): PlanView {
   const { events, flow, dir } = loaded;
-  const markdown = readText(join(dir, "plan.md"));
+  const markdown = planMdOf(loaded);
   const planIds = new Set(flow.steps.filter((s) => s.type === "plan").map((s) => s.id));
   const accepted = events.filter((e) => e.type === "output.accepted" && e.step !== undefined && planIds.has(e.step)).pop();
   let output: PlanOutput | null = null;
@@ -199,10 +205,10 @@ export function runDetail(ctx: SiteCtx, task: string): RunDetailResponse {
   }));
   const usage = usageOf(loaded);
   const limitations: string[] = [];
-  if (!live) limitations.push("From the committed history: no logs, no outputs, no ship step; tokens from summary.json.");
+  if (!live) limitations.push("From the records database: no logs or step outputs.");
   if (live && !known) limitations.push("No transcripts on this machine: tokens are n/a.");
   else if (going) limitations.push("Tokens of the running step are what is recorded so far.");
-  const taskMd = readText(join(loaded.dir, "task.md"));
+  const taskMd = taskMdOf(loaded);
   return {
     generatedAt: ctx.generatedAt,
     run: header,

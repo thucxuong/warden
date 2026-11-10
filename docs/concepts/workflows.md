@@ -27,7 +27,7 @@ Every step has an `id` (lowercase, for example `implement`) and a `type`. The ty
 | `check` | engine | Run the commands of one check set from `.warden/steps.json`. Pass only on exit code 0. | Nothing. |
 | `review` | engine | An independent AI review of the branch diff. | Nothing. |
 | `approve` | person | A person types `approve` or `reject: <why>`. Has a `prompt`, shown to the person. | Nothing. |
-| `ship` | agent | Deliver the proven commit unchanged: commit the run record, open the PR or merge, hand in. | Only the run record (`.warden/history/<task>/`). |
+| `ship` | agent | Deliver the proven commit unchanged: open the PR or merge, hand in. | Nothing. |
 
 ### Gate files and locked config
 
@@ -35,10 +35,10 @@ Two lists of files come up on many pages. They overlap, but they are not the sam
 
 | Term | Files | Rule |
 |---|---|---|
-| **Gate files** | `.warden/steps.json`, `.warden/flows/**`, `.warden/warden.json`, `.warden/triage-rules.json`, `.warden/state/**`, `.warden/history/**` | No step may change them in the task's worktree. (The ship step only commits the run record the engine wrote.) |
+| **Gate files** | `.warden/steps.json`, `.warden/flows/**`, `.warden/warden.json`, `.warden/triage-rules.json`, `.warden/state/**` | No step may change them in the task's worktree. |
 | **Locked config** | `.warden/steps.json`, `.warden/flows/`, `.warden/warden.json`, `.warden/triage-rules.json`, `.warden/tools/roles.json` | Nobody may edit them, in the main checkout or any run's worktree, while any run is live. The hook message calls them gate files: `gate files cannot change while a run is live (<task>); finish or reset it first`. |
 
-`.warden/state/` and `.warden/history/` are written only by the engine, at any time. See [Hooks](../reference/hooks.md).
+`.warden/state/` is written only by the engine, at any time. See [Hooks](../reference/hooks.md).
 
 There is also an internal `fix` step. The engine inserts it when a check fails for a reason that is not (only) the change. You cannot put it in a flow. See [Gates and self-healing](gates-and-self-healing.md#the-fixer).
 

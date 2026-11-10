@@ -5,7 +5,7 @@
 // the lock briefly themselves, so do not call it from inside withLock.
 import { join } from "node:path";
 import { DEFAULT_COMMAND_TIMEOUT_SEC } from "../config/config.ts";
-import { dirtyOutsideHistory } from "../engine/proof.ts";
+import { dirtyFiles } from "../engine/proof.ts";
 import * as proc from "../lib/proc.ts";
 import { taskDir } from "../state/paths.ts";
 import { appendEvent, readRun, withLock, writeRun } from "../state/store.ts";
@@ -78,8 +78,8 @@ export async function runCheck(set: { commands: CommandDef[] }, ctx: GateContext
     });
     await recordEvent(ctx, "gate.command", { name: cmd.name, exit, durationMs, log }, run.current.id);
 
-    // Uncommitted history (5.4) and live state are not left files.
-    const left = dirtyOutsideHistory(run.worktree);
+    // Live state is not a left file.
+    const left = dirtyFiles(run.worktree);
     if (left.length > 0) return { passed: false, failedIndex: index, exit, log, leftFiles: left };
     if (exit !== 0) return { passed: false, failedIndex: index, exit, log, leftFiles: [] };
   }

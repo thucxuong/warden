@@ -280,7 +280,7 @@ export interface NextResponse {
     planPath?: string;             // absolute
     taskPath: string;              // absolute path of state/<task>/task.md
     fix?: { worktree: string; branch: string; verdict: Verdict; reportPath: string; logPath: string; mode: "normal" | "diagnose"; scope: string[]; fixNote: string | null; mayMerge: boolean };
-    ship?: { historyDir: string; leftoversPath: string | null; proofSha: string };
+    ship?: { leftoversPath: string | null; proofSha: string };
     waiting?: RunJson["waiting"];
   };
 }
@@ -366,7 +366,7 @@ export interface StepSummary {
 }
 
 export interface HistorySummary {
-  schema: 1; task: string; flow: string; status: "shipping" | RunStatus;   // committed history: always "shipping"; live summaries: run.status
+  schema: 1; task: string; flow: string; status: "shipping" | RunStatus;   // records imported from before 0.16: "shipping"; live summaries: run.status
   startedAt: string; endedAt: string; durationMs: number;
   steps: StepSummary[];
   rounds: { review: number; fixer: number; checkRuns: number; codeStrikesTotal: number };
@@ -391,6 +391,24 @@ export interface ProjectTool {
   probe?: () => ToolCheck[] | Promise<ToolCheck[]>; // run by `warden tools --check`
   commands?: string[];                            // 0.10: first-level commands, for the project tools skill
   run: (argv: string[]) => number | Promise<number>; // the exit code
+  records?: RecordStore;                          // #33: on the tool named by the `records` role
+}
+
+// #33: the `records` role contract (the project's tool.ts holds the same shapes).
+export interface RunRecord {
+  ticket: string; status: string; flow: string; finishedAt: string;
+  summary: Record<string, unknown>;   // only what the lists show
+  detail: Record<string, unknown>;    // events, plan, reviews
+}
+export type RecordSummary = Omit<RunRecord, "detail">;
+export interface RecordFilters { status?: string[]; flow?: string; from?: string; to?: string; tickets?: string[] }
+export interface RecordPage { records: RecordSummary[]; cursor: string | null }
+export interface TicketEvents { ticket: string; events: unknown[] }
+export interface RecordStore {
+  save(record: RunRecord): Promise<void>;
+  list(filters: RecordFilters, limit: number, cursor: string | null): Promise<RecordPage>;
+  get(ticket: string): Promise<RunRecord | null>;
+  events(tickets: string[]): Promise<TicketEvents[]>;
 }
 
 // ---------------------------------------------------------------------------

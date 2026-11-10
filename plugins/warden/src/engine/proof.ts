@@ -1,33 +1,23 @@
 // Gate proofs (spec 5.6): a proof names the commit a check or review passed on.
-// It stays valid while only the run record (.warden/history/**) changes on top of it.
-import { diffNames, head, porcelain } from "../lib/git.ts";
+import { head, porcelain } from "../lib/git.ts";
 import type { FlowJson, Proof, RunJson } from "../types.ts";
-
-function isHistory(path: string): boolean {
-  return path.startsWith(".warden/history/");
-}
 
 function isState(path: string): boolean {
   return path.startsWith(".warden/state/");
 }
 
-// Porcelain paths apart from history and live state.
-export function dirtyOutsideHistory(worktree: string): string[] {
-  return porcelain(worktree).filter((path) => !isHistory(path) && !isState(path));
+// Porcelain paths apart from live state.
+export function dirtyFiles(worktree: string): string[] {
+  return porcelain(worktree).filter((path) => !isState(path));
 }
 
-// Rule 1: the proof's sha is HEAD, or everything since then is history.
+// Rule 1: the proof's sha is HEAD.
 export function shaCoversHead(worktree: string, sha: string, headSha = head(worktree)): boolean {
-  if (sha === headSha) return true;
-  try {
-    return diffNames(worktree, sha, headSha).every(isHistory);
-  } catch {
-    return false; // the proven commit is gone (for example after a reset)
-  }
+  return sha === headSha;
 }
 
 export function proofValid(worktree: string, proof: Proof): boolean {
-  return shaCoversHead(worktree, proof.sha) && dirtyOutsideHistory(worktree).length === 0;
+  return shaCoversHead(worktree, proof.sha) && dirtyFiles(worktree).length === 0;
 }
 
 // The check and review steps after the latest implement: the gates a ship needs proofs for.
@@ -42,7 +32,7 @@ export function gatesProven(run: RunJson, flow: FlowJson): { proven: boolean; re
   if (ids.length === 0) return { proven: true, reason: "" };
 
   const headSha = head(run.worktree);
-  if (dirtyOutsideHistory(run.worktree).length > 0) {
+  if (dirtyFiles(run.worktree).length > 0) {
     return { proven: false, reason: "working tree differs from the proven commit" };
   }
   for (const id of ids) {

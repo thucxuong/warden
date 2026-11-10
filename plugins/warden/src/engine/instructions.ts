@@ -39,8 +39,7 @@ function stepHeading(input: InstructionsInput, step: FlowStep | null): string {
 function stepBody(input: InstructionsInput, step: FlowStep | null): string {
   const { run, main } = input;
   const variant = step?.type === "analyze" ? step.variant : undefined;
-  const ship = run.current.type === "ship" ? { worktree: run.worktree } : {};
-  const lines = [catalogText(run.current.type, run.task, variant, ship)];
+  const lines = [catalogText(run.current.type, run.task, variant)];
   if (step?.type === "plan") {
     lines.push("", step.brainstorm
       ? "This step says brainstorm: the output must have a `brainstorm` object, shaped as in the example in \"output\"."

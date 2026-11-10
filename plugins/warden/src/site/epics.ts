@@ -1,13 +1,11 @@
 // /api/epics/:id and the orchestrator part of an epic's cost. How the epic's tickets went comes from their run logs in
 // .warden; only the orchestrator's cost needs a transcript or the epic.json saved when the epic was set done.
-import { liveOrchestratorTokens, readEpicHistory } from "../engine/epic.ts";
+import { epicHistoryOf, liveOrchestratorTokens } from "../engine/epic.ts";
 import { pricesDate } from "../lib/prices.ts";
 import type { TokenTotals } from "../lib/tokens.ts";
 import type { EventLine } from "../types.ts";
 import type { EpicResponse, EpicRowKind, EpicRowView, ISO, Source, Usage } from "./api-types.ts";
-import type { LoadedTask } from "./data.ts";
-import { resolvePr } from "./pr.ts";
-import { memo, pricingNote, shippedAtOf, toUsage, ZERO_TOKENS, type SiteCtx } from "./text.ts";
+import { memo, pricingNote, toUsage, ZERO_TOKENS, type SiteCtx } from "./text.ts";
 
 interface OrchestratorCost { source: Source | null; savedAt: ISO | null; pricesDate: string | null; tokens: TokenTotals | null }
 
@@ -15,7 +13,7 @@ function orchestratorCost(ctx: SiteCtx, epic: string): OrchestratorCost {
   return memo(ctx, `epic:${epic}`, () => {
     const tokens = liveOrchestratorTokens(ctx.main, epic);
     if (tokens) return { source: "live", savedAt: null, pricesDate: pricesDate(), tokens };
-    const saved = readEpicHistory(ctx.main, epic);
+    const saved = epicHistoryOf(ctx.epicCosts.get(epic));
     if (saved) return { source: "history", savedAt: saved.savedAt, pricesDate: saved.pricesDate, tokens: saved.tokens };
     return { source: null, savedAt: null, pricesDate: pricesDate(), tokens: null };
   });
@@ -60,18 +58,14 @@ function rowOf(e: EventLine): { kind: EpicRowKind; label: string } | null {
   }
 }
 
-// The saved log of a shipped run ends before its ship step, so "Shipped" comes from the merge.
-function rowsOf(ctx: SiteCtx, loaded: LoadedTask): EpicRowView[] {
-  const ticket = loaded.run.task;
+// A record imported from before #33 has a log that ends before its ship step, so "Shipped" comes from its finish time.
+function rowsOf(ticket: string, events: EventLine[], finishedAt: ISO | null): EpicRowView[] {
   const rows: EpicRowView[] = [];
-  for (const e of loaded.events) {
+  for (const e of events) {
     const row = rowOf(e);
     if (row) rows.push({ at: e.ts, ticket, ...row });
   }
-  if (loaded.source === "history") {
-    const at = shippedAtOf(loaded, resolvePr(ctx, loaded).mergedAt);
-    if (at) rows.push({ at, ticket, kind: "done", label: "Shipped" });
-  }
+  if (finishedAt !== null && !events.some((e) => e.type === "run.shipped")) rows.push({ at: finishedAt, ticket, kind: "done", label: "Shipped" });
   return rows;
 }
 
@@ -79,7 +73,13 @@ function rowsOf(ctx: SiteCtx, loaded: LoadedTask): EpicRowView[] {
 export function buildEpic(ctx: SiteCtx, epic: string, tickets: string[]): EpicResponse {
   const { source, savedAt, pricesDate: date } = orchestratorCost(ctx, epic);
   const wanted = new Set(tickets);
-  const rows = ctx.tasks().filter((t) => wanted.has(t.run.task)).flatMap((t) => rowsOf(ctx, t));
+  const live = ctx.tasks().filter((t) => wanted.has(t.run.task));
+  const liveIds = new Set(live.map((t) => t.run.task));
+  const rows = [
+    ...live.flatMap((t) => rowsOf(t.run.task, t.events, null)),
+    ...ctx.finished.filter((r) => wanted.has(r.ticket) && !liveIds.has(r.ticket))
+      .flatMap((r) => rowsOf(r.ticket, ctx.epicEvents.get(r.ticket) ?? [], r.finishedAt)),
+  ];
   rows.sort((a, b) => a.at.localeCompare(b.at));
   return {
     generatedAt: ctx.generatedAt, epic, costSource: source, savedAt,

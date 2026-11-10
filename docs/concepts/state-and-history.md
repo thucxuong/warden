@@ -1,18 +1,21 @@
 # State and history
 
-Warden keeps a run's live state in `.warden/state/` (never committed) and writes a run record to `.warden/history/` that ships with the change.
+Warden keeps a run's live state in `.warden/state/` (never committed). When the run ships or finishes, warden saves one record: in your project's own database when it has one, otherwise in `.warden/state/_records/` on this machine. Nothing about a run is committed to the repo.
 
 ## Two places, two jobs
 
-| | `.warden/state/` | `.warden/history/<task>/` |
+| | `.warden/state/` | The run records |
 |---|---|---|
-| What | The live run: where it is, every event, every log. | A snapshot of the run, written when it enters its ship step. |
-| Where | Always in the **main checkout**, even when the task runs in a worktree. | In the task's **worktree**, then committed on the task branch. |
-| Committed | No. `/warden:init` adds `.warden/state/` to `.gitignore`. | Yes, in the ship step, as `chore(<task>): run record`. It reaches the main branch with the PR. |
-| Who writes it | Only the engine and the hooks. | Only the engine writes it; the ship step commits it. |
-| Changed by the agent | Never. The hooks deny it. | Never edited, only committed. |
+| What | The live run: where it is, every event, every log. | One row per finished ticket: its totals, plan, reviews and events. |
+| Where | Always in the **main checkout**, even when the task runs in a worktree. | Your project's own database, reached through your `records` tool. Without one, `.warden/state/_records/` in the main checkout. |
+| Committed | No. `/warden:init` adds `.warden/state/` to `.gitignore`. | No. |
+| Who writes it | Only the engine and the hooks. | Only the engine. |
+| Who can see it | The machine that ran the ticket. | Everyone who can reach the database. |
+| Changed by the agent | Never. The hooks deny it. | Never. |
 
 The "main checkout" is the folder where you cloned the repo. Warden finds it with `git rev-parse --git-common-dir`, so every worktree of the repo sees the same live state.
+
+`.warden/` holds what controls the work (config, rules, checks, tools) and the git-ignored state.
 
 ## Worktrees
 
@@ -26,7 +29,7 @@ A worktree is a second working folder for the same git repo, on its own branch. 
 - Fix branches get their own worktree, `<task>-fix-<n>`, in the same folder. Triage's clean copies, `<task>-clean-<n>`, go there too and are removed after each use.
 - After a task ships, `warden clean` removes its worktree and branch (see [below](#removing-finished-worktrees)).
 
-Run records keep the absolute worktree path, so a run started before 0.8 goes on in its old folder next to the repo.
+`run.json` keeps the absolute worktree path, so a run started before 0.8 goes on in its old folder next to the repo.
 
 Tools in the main checkout that do not follow `.gitignore` need `.worktrees/` in their ignore list, and a worktree also finds the main checkout's `node_modules`. See [Troubleshooting](../troubleshooting.md#tools-in-the-main-checkout-see-worktrees).
 
@@ -50,6 +53,8 @@ One folder per task, plus a few shared folders that start with `_`.
 | `<task>/sessions.jsonl` | The Claude Code sessions and subagents linked to the task, for token counts. |
 | `<task>/gate.log`, `setup-<i>.log` | The engine worker's log and the setup logs. |
 | `<task>/.lock` | Held while a warden command changes the run. |
+| `<task>/record-unsaved` | Marks a finished run whose record is not in the database yet. See [When the save fails](#when-the-save-fails). |
+| `_records/` | The run records, when the project has no records database: `<ticket>.json` with what the lists show and `<ticket>.detail.json` with the rest. |
 | `_sessions/` | One record per Claude Code session (and subagent), written by the hooks. |
 | `_checks/` | Results, logs and locks of periodic checks. See [Checks and retro](checks-and-retro.md). |
 | `_orchestrate/<epic>.json` | The cached plan of an epic. See [Orchestration](orchestration.md). |
@@ -57,29 +62,38 @@ One folder per task, plus a few shared folders that start with `_`.
 
 See [Project files](../reference/project-files.md) for every file warden reads or writes.
 
-## What is in the run record
+## The records database
 
-When the run enters its ship step and all gates are proven, the engine writes `.warden/history/<task>/` into the worktree:
+A records database is optional. Without one, each machine keeps only the runs it finished, in `.warden/state/_records/`, and the site shows those. With one, the whole team shares every finished run. Warden ships no database code: your project writes one tool for its own database, and the `records` role in `.warden/tools/roles.json` names it. The tool has a `records` object with four methods: `save(record)`, `list(filters, limit, cursor)`, `get(ticket)` and `events(tickets)`. The [recipe](../../plugins/warden/skills/tools/recipes/records.md) says how to write it; `/warden:tools records` does it for you.
 
-| File | What it holds |
+It is one table, one row per ticket. New data warden adds goes inside the JSON, so an upgrade needs no change to the table.
+
+| Column | What it holds |
 |---|---|
-| `run.json` | The run, with status `shipping` ("written at ship entry"). |
-| `flow.json`, `task.md`, `plan.md` | The flow, the task text, the plan. |
-| `events.jsonl` | The events up to the ship step. |
-| `triage/<n>.json` | The triage reports. |
-| `review/<round>-<try>.json`, `review/leftover.md` | The review rounds and the leftovers, if any. |
-| `summary.json` | Totals: time, tokens, cost, rounds, verdicts, findings, author, commit, branch. |
+| `ticket` | The ticket id. The key of the row. |
+| `status` | `shipped` or `done`. |
+| `flow` | The flow the run used. |
+| `finished_at` | When the run shipped or finished. |
+| `summary` (JSON) | Only what the lists show: title, time, tokens, cost, author, pull request. |
+| `detail` (JSON) | The run, the flow, the totals per step, the task text, the plan, triage reports, review rounds, leftovers and every event. |
 
-Logs, the reviewer's raw output and the `steps.json` copy are not copied. A flow without a ship step (such as `do`) has no run record; its data stays in `.warden/state/<task>/`.
+Logs, step outputs, the reviewer's raw output and the `steps.json` copy are not saved. They stay in `.warden/state/<task>/` on the machine that ran the ticket.
 
-The ship step commits the record with:
+An orchestrated epic's saved cost is a row too, with status `epic`. See [Orchestrate an epic](../guides/orchestrate-an-epic.md).
 
-```bash
-git -C <worktree> add .warden/history/<task>
-git -C <worktree> commit -m 'chore(<task>): run record'
-```
+`warden start` refuses when the role or the tool is missing. It does not connect, so a database outage does not stop new work. To prove the tool keeps the contract, run `warden tools --verify records`. It uses a few fixed rows with status `verify`, dated 2000, which no page shows.
 
-`warden next` gives the exact command. Committing the record does not spoil the proofs: changes under `.warden/history/` are allowed on top of the proven commit.
+`warden records import` loads an old `.warden/history/` folder from a version that committed its run records.
+
+### When the record is saved
+
+Warden saves the record when a run ships or finishes (the `run.shipped` and `run.done` events), right after the hand-in. This covers flows with no ship step, such as `do`.
+
+### When the save fails
+
+A failed save never blocks shipping. Warden leaves a `record-unsaved` file in the run's git-ignored `.warden/state/<task>/` folder, and `warden done` prints a warning. Until the record is saved, the site reads that run from its files on this machine.
+
+Warden tries again on the next `warden done`, when an engine worker exits, on `warden reset`, and when `warden site` starts.
 
 ## Run statuses
 
@@ -95,7 +109,7 @@ git -C <worktree> commit -m 'chore(<task>): run record'
 
 ## Time, tokens and cost per task
 
-`summary.json` (and the [warden site](../guides/lead-overview.md), for live runs too) shows, per step and in total:
+The record (and the [warden site](../guides/lead-overview.md), for live runs too) has, per step and in total:
 
 | Field | How warden gets it |
 |---|---|
@@ -112,11 +126,12 @@ Sessions are linked to a task by the hooks, for example when a session runs `war
 
 `warden reset <task>` is for a person, in a terminal. It asks for confirmation (skip it with `--yes`), then:
 
+- tries once more to save every finished run that is still unsaved (if this run's own save fails again, its record is lost with the folder);
 - stops a running engine worker and the commands and reviewer it started;
 - removes the task's fix worktrees, fix branches and triage clean copies;
 - deletes `.warden/state/<task>/`.
 
-The task's own worktree and branch stay, so a later `warden start` reuses them. See [Blocked and waiting runs](../guides/blocked-and-waiting-runs.md).
+The task's own worktree and branch stay, so a later `warden start` reuses them. A row already in the records database stays too. See [Blocked and waiting runs](../guides/blocked-and-waiting-runs.md).
 
 ## Removing finished worktrees
 

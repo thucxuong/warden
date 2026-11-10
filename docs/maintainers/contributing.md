@@ -55,10 +55,11 @@ To run a command against the checkout from a terminal, use the wrapper: `plugins
 | `plugins/warden/bin/warden` | The shell wrapper. Finds Bun (1.4 or newer), sets `WARDEN_ROOT` and `WARDEN_DATA`, runs `src/cli.ts`. Must stay executable (mode 755 in git). |
 | `plugins/warden/src/cli.ts` | Entry point: `COMMANDS` (the only names it imports), `HELP` (one usage line each), error to exit code |
 | `plugins/warden/src/commands/` | One file per command, each exports `run(args, ctx)` |
-| `plugins/warden/src/engine/` | The state machine (`machine.ts`), step catalog, output checks, flow lint, proofs, history, tickets |
+| `plugins/warden/src/engine/` | The state machine (`machine.ts`), step catalog, output checks, flow lint, proofs, tickets |
 | `plugins/warden/src/gates/` | Check runner, triage, triage rules, error signatures, review, findings |
 | `plugins/warden/src/hooks/` | One handler per hook event; `resolve.ts` finds the run a session or path belongs to |
 | `plugins/warden/src/state/` | Paths and the run store (atomic writes, task lock, events) |
+| `plugins/warden/src/records/` | Run records: building a record, the project's store, `warden tools --verify records` |
 | `plugins/warden/src/config/` | Loading and checking `warden.json`, `steps.json`, triage rules |
 | `plugins/warden/src/lib/` | Git, processes, tokens, reports (GitHub issues through `gh`), small helpers |
 | `plugins/warden/src/site/` | The local `warden site` server: the read-only JSON API and the static file server |

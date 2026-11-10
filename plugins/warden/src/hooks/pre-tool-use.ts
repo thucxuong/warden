@@ -19,7 +19,7 @@ const EDIT_TOOLS = ["Edit", "Write", "MultiEdit", "NotebookEdit"];
 // The hook.denied event is best effort: a busy task lock must never turn a deny into an allow.
 const DENY_LOCK_WAIT_MS = 1000;
 
-// The gate files a live run's checks depend on (E3). State and history are E1.
+// The gate files a live run's checks depend on (E3). State is E1.
 const CONFIG_GATE_GLOBS = [
   ".warden/steps.json", ".warden/flows/**", ".warden/warden.json", ".warden/triage-rules.json", ".warden/tools/roles.json",
 ];
@@ -88,8 +88,8 @@ function mergeInProgress(worktree: string): boolean {
 export function editDecision(main: string, target: string, fixer: boolean): Decision | null {
   const match = runForPath(main, target);
   const inState = relInside(resolve(main, ".warden", "state"), target) !== null;
-  if (inState || pathForms(target).some((form) => form.includes("/.warden/history/"))) {
-    return { reason: "state and history are written by the engine only", run: match?.run ?? stateRun(main, target) };
+  if (inState) {
+    return { reason: "state is written by the engine only", run: match?.run ?? stateRun(main, target) };
   }
 
   if (match?.inFix) {
@@ -141,7 +141,7 @@ const WARDEN_ENV_NAMES = [
 const CLAUDE_PRINT = /(^|[;&|(\s])claude\b[^;&|\n]*\s(-p|--print)(?=\s|$)/;
 // `script` as the command word of a simple command, not the word in prose or JSON.
 const SCRIPT_CMD = /^[\s(]*(?:(?:exec|env|sudo|command|nohup|time)\s+)*(?:\w+=\S*\s+)*(?:\S*\/)?script(?:\s|$)/;
-const ENGINE_PATHS = [".warden/state", ".warden/history"];
+const ENGINE_PATHS = [".warden/state"];
 const CONFIG_PATHS = [".warden/steps.json", ".warden/warden.json", ".warden/triage-rules.json", ".warden/flows", ".warden/tools/roles.json"];
 const CONFIG_PATH_ARG = /[^\s'"<>|;&()]*\.warden\/(?:steps\.json|warden\.json|triage-rules\.json|flows|tools\/roles\.json)[^\s'"<>|;&()]*/g;
 // Redirects that write no file: fd duplication (2>&1, >&2) and /dev/null.
@@ -348,7 +348,7 @@ function isMerge(cmd: string, branches: string[], cwd: string, main: string): bo
   return MERGE_COMMANDS.some((re) => re.test(cmd)) || prToolCommand(main, "merge").test(cmd) || mergesIntoMain(cmd, branches, cwd);
 }
 
-// B3: a pipeline that writes and names state, history or (while a run is live) gate config.
+// B3: a pipeline that writes and names state or (while a run is live) gate config.
 // A `warden …` call counts only for its redirects. A `cd` earlier in the command counts as part of
 // the paths. The fixer may write config files only inside its own fix worktree.
 function writesEngineFiles(cmd: string, live: RunJson[], fixer: boolean, cwd: string): boolean {
@@ -442,7 +442,7 @@ function bashDecision(call: HookCall, cmd: string, run: RunJson | null): string 
   const changesWarden = WARDEN_ENV_NAMES.some((name) => cmd.includes(name)) || CLAUDE_PRINT.test(cmd) || (runsScript && /warden|cli\.ts/.test(cmd));
   if (changesWarden) return "this command changes how warden itself runs; ask the user to do it";
   if (writesEngineFiles(cmd, liveRuns(main), fixer, ctx.cwd)) {
-    return "state, history and gate files are written by the engine only";
+    return "state and gate files are written by the engine only";
   }
 
   if (agentIdOf(call) !== undefined && RUN_COMMAND.exec(cmd)?.[1] === "ask") {

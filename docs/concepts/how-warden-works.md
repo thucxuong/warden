@@ -68,10 +68,11 @@ The `/warden:work` skill runs this loop for the agent. `/warden:compose` picks a
 2. Fetches the main branch and reads `.warden/steps.json` from it. Your `.warden/` folder must be committed and pushed to the main branch first.
 3. Checks the flow with the flow linter. A bad flow never creates a worktree.
 4. Refuses when a run for this task already exists.
-5. With `--worktree`, creates or reuses a worktree for the task's branch, in `.worktrees/<task>` inside the repo (git must ignore that folder). Without it, uses the current branch, which must not be the main branch.
-6. Copies the flow and `steps.json` into the run's state folder. The run uses these copies until it ends, so editing the files later does not change a live run.
-7. Runs the setup commands from `steps.json` in the worktree. If one fails, the run is not created and the log is kept in the temp folder.
-8. Enters the first step.
+5. Refuses when the project has no `records` tool. It does not connect to the database, so an outage does not stop new work.
+6. With `--worktree`, creates or reuses a worktree for the task's branch, in `.worktrees/<task>` inside the repo (git must ignore that folder). Without it, uses the current branch, which must not be the main branch.
+7. Copies the flow and `steps.json` into the run's state folder. The run uses these copies until it ends, so editing the files later does not change a live run.
+8. Runs the setup commands from `steps.json` in the worktree. If one fails, the run is not created and the log is kept in the temp folder.
+9. Enters the first step.
 
 Every run starts from a ticket (0.9). The task text comes from the project's ticket tool (`show <id>` of the `tickets` role): the ticket's title and body. Without a `tickets` role, `warden start` refuses and says how to add a ticket tool. For a request without a ticket, `/warden:compose` creates one first.
 
@@ -101,7 +102,7 @@ At an agent step, `instructions` holds these sections, in this order (empty ones
    - An implement step with no tests needs a `testsReason` of at least 10 characters.
    - A plan must not contain placeholders such as `TBD` or `TODO`, and every decision file it lists must exist.
    - Each step type may change only certain files. A plan step, for example, may only write `docs/knowledge/`, `docs/decisions/`, `docs/archived/` and `docs/INDEX.md`.
-   - A ship output needs proven gates for HEAD and a committed run record.
+   - A ship output needs proven gates for HEAD.
 
 Every hand-in, accepted or not, is saved under `.warden/state/<task>/outputs/`. The errors of a rejected one are in its `output.rejected` event in `.warden/state/<task>/events.jsonl`, so you can see what went wrong.
 
@@ -135,7 +136,7 @@ Warden installs five Claude Code hooks. They do nothing in a project without `.w
 |---|---|
 | SessionStart | Prints one line per live run (where it stopped, what it waits for), restarts dead workers, and adds notes: upgrades, due checks, report news, stopped orchestrations. |
 | UserPromptSubmit | Turns the words `approve`, `reject: <why>` and `retry` (optionally followed by a task id) into the matching engine action. Answers a `warden ask` question with the user's message. Never blocks the prompt. |
-| PreToolUse | Checks every Edit, Write and Bash call. It denies writes to `.warden/state/` and `.warden/history/`, edits a step may not make, changes to the locked config files (`steps.json`, `flows/`, `warden.json`, `triage-rules.json`, `tools/roles.json`; see [Workflows](workflows.md#gate-files-and-locked-config)) while a run is live, push, PR and merge commands before the gates pass, `warden approve|retry|reset`, setting warden's own variables (`PROJECT_AGENT`, a few `WARDEN_*` names, `CLAUDE_PLUGIN_ROOT`, `CLAUDE_PLUGIN_DATA`; the list is in [Hooks](../reference/hooks.md)), and nested `claude -p`. It also links the session to the task, for token counts. |
+| PreToolUse | Checks every Edit, Write and Bash call. It denies writes to `.warden/state/`, edits a step may not make, changes to the locked config files (`steps.json`, `flows/`, `warden.json`, `triage-rules.json`, `tools/roles.json`; see [Workflows](workflows.md#gate-files-and-locked-config)) while a run is live, push, PR and merge commands before the gates pass, `warden approve|retry|reset`, setting warden's own variables (`PROJECT_AGENT`, a few `WARDEN_*` names, `CLAUDE_PLUGIN_ROOT`, `CLAUDE_PLUGIN_DATA`; the list is in [Hooks](../reference/hooks.md)), and nested `claude -p`. It also links the session to the task, for token counts. |
 | Stop | Keeps the agent working while its run is active, so it does not end the turn in the middle of a step. It lets the turn end when the agent asks the user a question, while a fixer subagent is still out, in an orchestrating session, and after three blocks in a row. |
 | SubagentStop | Links a subagent's own transcript to the task, for token counts. |
 

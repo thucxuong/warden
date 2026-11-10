@@ -114,6 +114,7 @@ Next: set up your project with the [Quick start](quickstart.md).
    - the `.warden/` folder
    - `scripts/warden-setup.sh`
    - the lines `.warden/state/` and `.worktrees/` in `.gitignore`
+   - the `warden_records` table in your project's database, if you no longer want the run records
    - the task worktrees, in `<your repo>/.worktrees/` (before 0.8, in `<your repo>.worktrees/` next to your repo): remove each with `git worktree remove <path>`
    - any `.worktrees` entry you added to your tools' ignore lists
    - from versions before 0.8, the `<your repo>.worktrees` entry under `permissions.additionalDirectories` in `.claude/settings.local.json`

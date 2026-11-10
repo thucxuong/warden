@@ -15,7 +15,7 @@ import type { Ctx, ProjectTool, ToolCheck } from "../types.ts";
 export const TOOL_NAME = /^[a-z][a-z0-9-]{0,40}$/;
 const TOOL_FILES = ["index.ts", "tool.ts", "roles.json", "replaces.json"];
 const STATUSES = ["OK", "FAIL", "WARN", "SKIP"];
-const USAGE = "warden tools [--check [<name>] | --init | --skill | --usage [--since YYYY-MM-DD] | --verify tickets [--write]] | warden tools <name|role> [args...]";
+const USAGE = "warden tools [--check [<name>] | --init | --skill | --usage [--since YYYY-MM-DD] | --verify tickets [--write] | --verify records] | warden tools <name|role> [args...]";
 
 export type Roles = Record<string, string>;
 // Tool name -> the raw commands it covers, as the words of a command ("gh pr"). Used by --usage and the project tools
@@ -344,6 +344,12 @@ async function runTool(tool: ProjectTool, argv: string[]): Promise<number> {
 
 // `warden tools --verify tickets [--write]` (0.10): the tickets contract, checked in a throwaway copy.
 async function verify(root: string, rest: string[], pluginRoot: string): Promise<number> {
+  if (rest[0] === "records" && rest.length === 1) {
+    const { verifyRecords } = await import("../records/verify.ts");
+    const checks = await verifyRecords(mainRoot(root));
+    console.log(JSON.stringify({ checks }));
+    return checks.some((c) => c.status === "FAIL") ? EXIT.REJECTED : EXIT.OK;
+  }
   const write = rest[1] === "--write";
   if (rest[0] !== "tickets" || rest.length > (write ? 2 : 1)) throw new WardenError(`usage: ${USAGE}`, EXIT.USAGE);
   const { verifyTickets } = await import("./tools-verify.ts"); // engine/tickets.ts imports this module

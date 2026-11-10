@@ -15,8 +15,6 @@ async function atShipWithWorktreeGone(): Promise<void> {
   await implement();
   await drive();
   await next(ctx, T, spawn);
-  sh(wt, "add", `.warden/history/${T}`);
-  sh(wt, "commit", "-q", "-m", "chore: run record");
   sh(main, "merge", "-q", "--ff-only", "t-1");
   sh(main, "worktree", "remove", "--force", wt);
   sh(main, "branch", "-q", "-d", "t-1");

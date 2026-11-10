@@ -4,6 +4,11 @@ import { join, resolve } from "node:path";
 
 export const TEMPLATES = resolve(import.meta.dir, "../../plugins/warden/templates/tools");
 export const BACKLOG_TOOL = resolve(import.meta.dir, "../fixtures/tools/backlog-tickets.ts");
+export const RECORDS_TOOL = resolve(import.meta.dir, "../fixtures/tools/records-file.ts");
+// The rows of the fixture records database, in a project's git-ignored state folder.
+export const RECORDS_FILE = ".warden/state/test-records.json";
+export const RECORDS_ENTRY = `  { name: "recordsdb", summary: "records in one JSON file", run: () => 2, records: fileRecords(import.meta.dir + "/../state/test-records.json") },`;
+export const RECORDS_HEAD = `import { fileRecords } from ${JSON.stringify(RECORDS_TOOL)};`;
 
 // `entries` is the text inside the barrel's array; `head` goes above it (imports, helpers).
 export function barrel(entries: string, head = 'import { command } from "./tool";'): string {
@@ -26,8 +31,11 @@ export function writeRoles(root: string, roles: Record<string, string>): void {
 export function ticketToolFiles(): Record<string, string> {
   return {
     ".warden/tools/tool.ts": readFileSync(join(TEMPLATES, "tool.ts"), "utf8"),
-    ".warden/tools/index.ts": barrel(`  { name: "backlog", summary: "Markdown tickets in backlog/", run: command(${JSON.stringify(`bun '${BACKLOG_TOOL}'`)}) },`),
-    ".warden/tools/roles.json": JSON.stringify({ tickets: "backlog" }),
+    ".warden/tools/index.ts": barrel(
+      `  { name: "backlog", summary: "Markdown tickets in backlog/", run: command(${JSON.stringify(`bun '${BACKLOG_TOOL}'`)}) },\n${RECORDS_ENTRY}`,
+      `import { command } from "./tool";\n${RECORDS_HEAD}`,
+    ),
+    ".warden/tools/roles.json": JSON.stringify({ tickets: "backlog", records: "recordsdb" }),
   };
 }
 

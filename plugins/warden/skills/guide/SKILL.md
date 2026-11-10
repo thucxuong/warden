@@ -31,7 +31,7 @@ No run yet: if `warden next` lists your task among the live runs, run `cd <its w
 ## Rules
 
 - Never run the checks to prove a step. The engine runs them on the exact commit.
-- Never write under `.warden/state/` or `.warden/history/`.
+- Never write under `.warden/state/`.
 - Never push, open a pull request or merge outside the ship step.
 - Never run `warden approve`, `warden retry` or `warden reset`. They are for a person. Ask the user to type `approve` or `retry` in the chat.
 - Never set `PROJECT_AGENT`, any `WARDEN_*` or any `CLAUDE_PLUGIN_*` variable on a command. Never start a nested `claude -p`.
@@ -56,7 +56,6 @@ At an agent step, run `warden ask "<question>"` (from outside the worktree: `war
 | `<path>: not allowed in <type> step` | Undo that change. Plan steps and the generic and diagnose analyze steps may only write `docs/decisions/`, `docs/knowledge/`, `docs/archived/` and `docs/INDEX.md`, and move any file in `docs/` to the same path under `docs/archived/`; a spike may write all of `docs/`. |
 | `planMarkdown line N: placeholder "..."` | Write the real content in place of the placeholder. |
 | `engine work is running; run: warden wait` | Run `warden wait`. |
-| `the run record is not committed` | At ship, commit `.warden/history/<task>/` first, as step 1 of the instructions says. |
 | `gates are not proven for HEAD` | Something changed after the gates. Run `warden next`; the gates run again. |
 | `pr or mergeCommit is required` | At ship, give the pull request or the merge commit. |
 | `description: must contain the "## Unresolved review findings" section` | Put the leftovers file text in the description under that heading. |
@@ -69,7 +68,7 @@ A hook refusal starts with `warden:`. Do not try another way around it.
 |---|---|
 | `approve, retry and reset are for a person` | Ask the user to type `approve` or `retry`. |
 | `this command changes how warden itself runs` | Drop the variable or `claude -p`. Ask the user if it is really needed. |
-| `state, history and gate files are written by the engine only` (Bash) / `state and history are written by the engine only` (Edit, Write) | Do not touch those files. |
+| `state and gate files are written by the engine only` (Bash) / `state is written by the engine only` (Edit, Write) | Do not touch those files. |
 | `<type> step does not change code` | This step allows no code edits. Hand in, or finish the step it allows. |
 | `gate files cannot change while a run is live` | Wait until the run ends, or ask a person to reset it. |
 | `push/PR/merge is allowed only in the ship step after all gates pass for HEAD` | Keep going with `warden next` until the ship step. |

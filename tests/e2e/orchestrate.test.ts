@@ -1,5 +1,6 @@
 // End-to-end test (spec-0.3 section 15): the ticket tool, the plan and one orchestrated start.
 // Runs bin/warden as a subprocess in its own temp repo; see helpers.ts.
+import { RECORDS_ENTRY, RECORDS_HEAD } from "../helpers/tools-fixture.ts";
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -26,14 +27,18 @@ describe("orchestrate", () => {
     mkdirSync(join(cp.main, ".warden", "tools", "backlog"), { recursive: true });
     copyFileSync(BACKLOG, join(cp.main, ".warden", "tools", "backlog", "tickets.ts"));
     writeFileSync(join(cp.main, ".warden", "tools", "index.ts"), [
-      'import { command, type Tool } from "./tool";', "",
+      'import { command, type Tool } from "./tool";', RECORDS_HEAD, "",
       "const tools: Tool[] = [",
       '  { name: "backlog", summary: "Markdown tickets in backlog/", run: command("bun .warden/tools/backlog/tickets.ts") },',
+      RECORDS_ENTRY,
       "];", "export default tools;", "",
     ].join("\n"));
-    writeFileSync(join(cp.main, ".warden", "tools", "roles.json"), JSON.stringify({ tickets: "backlog" }) + "\n");
+    writeFileSync(join(cp.main, ".warden", "tools", "roles.json"), JSON.stringify({ tickets: "backlog", records: "recordsdb" }) + "\n");
     const listed = warden(cp, ["tools"]);
-    expect(listed.json, listed.err).toEqual({ tools: [{ name: "backlog", summary: "Markdown tickets in backlog/" }], roles: { tickets: "backlog" } });
+    expect(listed.json, listed.err).toEqual({
+      tools: [{ name: "backlog", summary: "Markdown tickets in backlog/" }, { name: "recordsdb", summary: "records in one JSON file" }],
+      roles: { tickets: "backlog", records: "recordsdb" },
+    });
 
     // One epic and six tickets: T-001, T-002 | T-003, T-004 | T-005, T-006.
     commitFiles(cp.main, {

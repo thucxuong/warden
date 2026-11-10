@@ -15,7 +15,7 @@ import { startReportSync } from "../lib/reports.ts";
 import { readJson, writeJsonAtomic } from "../lib/json.ts";
 import * as proc from "../lib/proc.ts";
 import { legacyWorktreesDir, mainRef, mainRoot, sessionsDir, taskDir, worktreesDir } from "../state/paths.ts";
-import { appendEvent, listTasks, readEvents, readRun, runExists, withLock, writeRun } from "../state/store.ts";
+import { appendEvent, listTasks, readEvents, readRun, runExists, withLock, writeRun, markUnsaved } from "../state/store.ts";
 import {
   DEFAULT_LIMITS,
   type CheckStep, type Ctx, type DoneResponse, type EventType, type FixOutput, type FlowJson, type Gates, type Limits,
@@ -24,7 +24,6 @@ import {
 } from "../types.ts";
 import { lintFlow } from "./flow-lint.ts";
 import { isAgentStep, isGateStep, isIgnoredPath, outputSpec, stepTitle } from "./catalog.ts";
-import { writeHistory, historyDirFor } from "./history.ts";
 import { buildInstructions } from "./instructions.ts";
 import { fixOnRef, readTriageReport, statePath, validateOutput } from "./outputs.ts";
 import { gatesProven } from "./proof.ts";
@@ -72,10 +71,17 @@ function load(ctx: Ctx, main: string, task: string): S {
 
 function event(s: S, type: EventType, step?: string, data?: Record<string, unknown>): void {
   appendEvent(s.main, s.run.task, type, { ...(step !== undefined && { step }), ...(data !== undefined && { data }) });
+  if (type === "run.shipped" || type === "run.done") markUnsaved(s.main, s.run.task);
+}
+
+// Saves finished runs to the project's records database (#33). A failure stays marked for the next try, never blocks.
+// Imported here because the record builder reads the site's views, which import this module.
+async function flushRecords(main: string): Promise<string[]> {
+  return (await import("../records/record.ts")).flushRecords(main);
 }
 
 function dirty(run: RunJson): string[] {
-  return porcelain(run.worktree).filter((path) => !isIgnoredPath(path, run.task));
+  return porcelain(run.worktree).filter((path) => !isIgnoredPath(path));
 }
 
 export function effectiveLimits(flow: FlowJson): Limits {
@@ -430,7 +436,10 @@ export async function runWorker(ctx: Ctx, task: string, gates: Gates): Promise<v
   const main = mainRoot(ctx.cwd);
   for (;;) {
     const job = await claimJob(ctx, main, task);
-    if (!job) return;
+    if (!job) {
+      await flushRecords(main);
+      return;
+    }
     try {
       await runJob(ctx, main, task, job, gates);
     } catch (err) {
@@ -567,7 +576,7 @@ async function reviewJob(ctx: Ctx, main: string, task: string, gates: Gates): Pr
   await apply(ctx, main, task, (t) => applyReview(t, round, startSha));
 }
 
-// Ship prep (5.6): re-run the gates when they no longer prove HEAD, else write the run record.
+// Ship prep (5.6): re-run the gates when they no longer prove HEAD.
 async function shipPrepJob(ctx: Ctx, main: string, task: string): Promise<void> {
   await apply(ctx, main, task, (s) => {
     const proven = gatesProven(s.run, s.flow);
@@ -575,8 +584,7 @@ async function shipPrepJob(ctx: Ctx, main: string, task: string): Promise<void> 
       rerunGates(s, proven.reason, true);
       return;
     }
-    const dir = writeHistory(main, s.run, s.flow);
-    event(s, "history.written", s.run.current.id, { dir });
+    event(s, "history.written", s.run.current.id);
   });
 }
 
@@ -785,6 +793,7 @@ export async function done(
   const warnings = [
     result.link ? await linkPr(ctx, main, task, result.link) : null,
     result.shipped ? await markTicketDone(ctx, main, task, result.shipped) : null,
+    ...(result.accepted ? await flushRecords(main) : []),
   ].filter((w) => w !== null);
   return { accepted: result.accepted, errors: result.errors, ...(warnings.length > 0 && { warnings }), next: nextResponse(ctx, main, task) };
 }
@@ -1058,6 +1067,7 @@ export async function reset(ctx: Ctx, task: string): Promise<{ reset: string }> 
   const main = mainRoot(ctx.cwd);
   const dir = taskDir(main, task);
   if (!existsSync(dir)) throw new WardenError(`no such run: ${task}`, EXIT.NOT_FOUND);
+  await flushRecords(main); // the last chance for a finished run that is still unsaved
   await withLock(main, task, () => {
     stopEngineWork(main, task);
     rmSync(dir, { recursive: true, force: true });
@@ -1277,7 +1287,6 @@ function nextResponse(ctx: Ctx, main: string, task: string): NextResponse {
     }
     if (run.current.type === "ship") {
       context.ship = {
-        historyDir: historyDirFor(run),
         leftoversPath: run.leftovers ? join(dir, run.leftovers) : null,
         proofSha: run.proofs[run.proofs.length - 1]?.sha ?? (existsSync(run.worktree) ? head(run.worktree) : ""),
       };

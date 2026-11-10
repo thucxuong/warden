@@ -69,6 +69,7 @@ export function HistoryPage() {
         </>
       ) : q.isError ? <ErrorState error={q.error} onRetry={() => void q.refetch()} /> : (
         <>
+          {q.data.defaultFrom && <p className="mb-3 text-xs text-muted-foreground" data-testid="default-range">Showing the last 30 days. Set a From date to see older tickets.</p>}
           <Totals data={q.data} />
           <Card className="gap-0 py-0 shadow-card">
             {q.data.rows.length === 0 ? <EmptyState text="No runs match these filters." icon={Rocket} className="m-4" /> : <HistoryTable rows={sortByShipped(q.data.rows)} />}

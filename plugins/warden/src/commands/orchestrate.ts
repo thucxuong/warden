@@ -57,8 +57,12 @@ export async function run(args: string[], ctx: Ctx): Promise<number> {
   if (sub === "set-status") {
     const out = setTicketStatus(main, ctx.root, first, second as TicketStatus);
     // An orchestrated epic set done: its orchestrator's steps and cost are saved with it.
-    const saved = second === "done" && existsSync(cacheFile(main, first)) ? saveEpicHistory(main, first) : null;
-    printJson(saved ? { ...out, changed: [...out.changed, saved] } : out);
+    try {
+      if (second === "done" && existsSync(cacheFile(main, first))) await saveEpicHistory(main, first);
+    } catch (err) {
+      console.error(`warden: the epic's cost is not saved: ${err instanceof Error ? err.message.split("\n")[0] : String(err)}`);
+    }
+    printJson(out);
     return EXIT.OK;
   }
   if (sub === "status") {

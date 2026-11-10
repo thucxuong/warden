@@ -12,7 +12,7 @@ For a project without a tracker. One tool file, `.warden/tools/backlog.ts`, name
 - `dag` reads every file. Without an epic it lists every ticket whose `type` is not `epic`; with one, the tickets whose `epic` is that id. A missing `blocked_by` is `[]`.
 - `show <id>` adds the body. An id with no file is exit 3.
 - `set-status <id> <status>` rewrites only the `status` line. When the status is already that value, it writes nothing and prints `changed: []`.
-- `create` needs `--title`, `--type` and `--body-file`; without one it is exit 1 and writes nothing (exit 2 tells warden the tool has no `create`). The new ticket is `todo`, its body is the text of the body file. Its id is one more than the highest number used by a ticket file or by a folder in `.warden/state/` or `.warden/history/`, with the same prefix and width. The first id is in the form of `taskIdPattern` in `.warden/warden.json` (for `^PG-\d{3}$`: `PG-001`).
+- `create` needs `--title`, `--type` and `--body-file`; without one it is exit 1 and writes nothing (exit 2 tells warden the tool has no `create`). The new ticket is `todo`, its body is the text of the body file. Its id is one more than the highest number used by a ticket file or by a folder in `.warden/state/`, with the same prefix and width. The first id is in the form of `taskIdPattern` in `.warden/warden.json` (for `^PG-\d{3}$`: `PG-001`).
 - `changed` lists every file the call wrote, as repo paths (`backlog/PG-004.md`), and nothing else.
 - An unknown subcommand is exit 2. Print one JSON value on stdout; messages go to stderr.
 

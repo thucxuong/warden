@@ -129,5 +129,10 @@ function resolve(ctx: SiteCtx, loaded: LoadedTask): ResolvedPr {
     }
     if (loaded.run.status !== "shipped") return { pr: NONE, mergedAt: null };
   }
-  return fromGit(ctx, loaded) ?? { pr: NONE, mergedAt: null };
+  const found = fromGit(ctx, loaded);
+  if (found) return found;
+  const saved = loaded.source === "history" ? lastShipped(loaded.events) : undefined;
+  const pr = typeof saved?.data?.pr === "string" && saved.data.pr !== "" ? saved.data.pr : null;
+  if (pr === null) return { pr: NONE, mergedAt: null };
+  return { pr: { ...prLink(pr, ctx.remoteUrl()), merged: null, mergeCommit: null, source: "ship-event" }, mergedAt: null };
 }

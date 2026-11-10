@@ -28,7 +28,7 @@ A few words used everywhere are in the [Glossary](#glossary) at the end of this 
 - [How warden works](concepts/how-warden-works.md): runs, steps, the engine, the `warden next` / `warden done` loop, and the hooks that keep it honest.
 - [Workflows](concepts/workflows.md): the templates `do`, `feature`, `bugfix` and `chore`, the step types, and custom flows.
 - [Gates and self-healing](concepts/gates-and-self-healing.md): the check gate, proofs on the commit, triage, the fixer, the review gate and leftovers.
-- [State and history](concepts/state-and-history.md): `.warden/state` versus `.warden/history`, worktrees, what is committed, time and tokens per task.
+- [State and history](concepts/state-and-history.md): `.warden/state` versus the run records, worktrees, what is committed, time and tokens per task.
 - [Reports](concepts/reports.md): telling the warden maintainers about a problem, report statuses, answering their questions.
 - [Checks and retro](concepts/checks-and-retro.md): periodic checks, which run by themselves and which are offered, and the retro.
 - [Tools and roles](concepts/tools-and-roles.md): your project's own tools in `.warden/tools/` and the `tickets`, `graph` and `pr` roles.
@@ -104,8 +104,8 @@ Design notes and build specs from earlier versions are kept in [internal/](inter
 | Leftovers | Blocking findings still open after the last review round. The ship step lists them in the pull request description. | [Gates and self-healing](concepts/gates-and-self-healing.md#findings) |
 | Waiting | A run that needs a person's decision or answer. | [Blocked and waiting runs](guides/blocked-and-waiting-runs.md) |
 | Blocked | A run that hit something a person must fix, then `retry`. | [Blocked and waiting runs](guides/blocked-and-waiting-runs.md#blocked-runs) |
-| Run record | The snapshot of a run in `.warden/history/<task>/`, committed at the ship step. | [State and history](concepts/state-and-history.md) |
-| Gate files | Files no step may change: `steps.json`, `flows/`, `warden.json`, `triage-rules.json`, `state/`, `history/` under `.warden/`. | [Workflows](concepts/workflows.md#gate-files-and-locked-config) |
+| Run record | One row per finished ticket, saved when the run ships or finishes: in your project's records database, or in `.warden/state/_records/` without one. Never committed. | [State and history](concepts/state-and-history.md) |
+| Gate files | Files no step may change: `steps.json`, `flows/`, `warden.json`, `triage-rules.json`, `state/` under `.warden/`. | [Workflows](concepts/workflows.md#gate-files-and-locked-config) |
 | Locked config | Config files nobody may edit while any run is live: `steps.json`, `flows/`, `warden.json`, `triage-rules.json`, `tools/roles.json` under `.warden/`. | [Workflows](concepts/workflows.md#gate-files-and-locked-config) |
 | Tool, role | A tool is a command your project keeps in `.warden/tools/`. A role (`tickets`, `graph`, `pr`) tells warden which tool to use for a job. | [Tools and roles](concepts/tools-and-roles.md) |
 | Check (periodic) | A recurring job in `.warden/checks/`, such as the retro. Not the same as a `check` step. | [Checks and retro](concepts/checks-and-retro.md) |

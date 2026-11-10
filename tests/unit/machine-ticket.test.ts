@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { archive, done, next, start } from "../../plugins/warden/src/engine/machine.ts";
 import { readEvents } from "../../plugins/warden/src/state/store.ts";
 import { T, IMPL, CHECK, REVIEW, SHIP, main, wt, ctx, spawn, run, drive, implement, installMachineFixture } from "../helpers/machine-fixture.ts";
-import { barrel, writeTools } from "../helpers/tools-fixture.ts";
+import { barrel, writeTools, RECORDS_ENTRY, RECORDS_HEAD } from "../helpers/tools-fixture.ts";
 import { commit, sh } from "../helpers/repo.ts";
 
 setDefaultTimeout(60_000);
@@ -35,7 +35,7 @@ const TOOLS = barrel(`  {
   },`, 'import { existsSync, readFileSync, writeFileSync } from "node:fs";\nimport { join } from "node:path";');
 
 function setUpTickets(tools = TOOLS): void {
-  writeTools(main, tools, { tickets: "backlog" });
+  writeTools(main, `${RECORDS_HEAD}\n${tools.replace("const tools: Tool[] = [\n", `const tools: Tool[] = [\n${RECORDS_ENTRY}\n`)}`, { tickets: "backlog", records: "recordsdb" });
   commit(main, { [TICKET]: "status: doing\n" });
   sh(wt, "merge", "-q", "--ff-only", "main");
 }
@@ -62,7 +62,7 @@ describe("ticket status (0.9.3: done once merged)", () => {
     expect(ticketEvents()).toEqual([]);
     const nx = await next(ctx, T, spawn);
     expect(nx.status).toBe("agent");
-    expect(nx.instructions).toContain(`run \`git -C ${wt} add .warden/history/${T}\`, then \`git -C ${wt} commit -m 'chore(${T}): run record'\``);
+    expect(nx.instructions).toContain("Open the PR or merge");
   });
 
   test("a merged ship sets the ticket done in the main checkout and says to commit the changed file there", async () => {
@@ -130,8 +130,6 @@ async function shipWith(tools: string, output = SHIP_OUTPUT, ticket = true) {
   await startTicketRun(ticket);
   await implement();
   await drive();
-  sh(wt, "add", `.warden/history/${T}`);
-  sh(wt, "commit", "-q", "-m", "chore: run record");
   return done(ctx, T, output, spawn);
 }
 

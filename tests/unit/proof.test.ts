@@ -46,13 +46,8 @@ describe("proofValid", () => {
     expect(proofValid(repo, proof())).toBe(true);
   });
 
-  test("valid after a history-only commit", () => {
-    commit({ ".warden/history/T-1/summary.json": "{}\n" });
-    expect(proofValid(repo, proof())).toBe(true);
-  });
-
   test("invalid after a code commit", () => {
-    commit({ ".warden/history/T-1/summary.json": "{}\n", "src/b.ts": "b\n" });
+    commit({ "src/b.ts": "b\n" });
     expect(proofValid(repo, proof())).toBe(false);
   });
 
@@ -64,15 +59,10 @@ describe("proofValid", () => {
     expect(proofValid(repo, proof())).toBe(false);
   });
 
-  test("dirty only in history -> valid", () => {
-    write(".warden/history/T-1/run.json", "{}\n");
-    expect(proofValid(repo, proof())).toBe(true);
-  });
-
   test("0.9.3: a ticket file changed on top of the proof is a change like any other", () => {
     write("backlog/T-1.md", "status: done\n");
     expect(proofValid(repo, proof())).toBe(false);
-    commit({ ".warden/history/T-1/summary.json": "{}\n" }); // commits the ticket file too
+    commit({}); // commits the ticket file too
     expect(proofValid(repo, proof())).toBe(false);
   });
 

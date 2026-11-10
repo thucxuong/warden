@@ -1,5 +1,6 @@
 // End-to-end test (spec section 11, "E2E"): the happy path of the feature template.
 // Runs bin/warden as a subprocess in its own temp repo; see helpers.ts.
+import { RECORDS_FILE } from "../helpers/tools-fixture.ts";
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -59,7 +60,6 @@ describe("happy path (feature template)", () => {
     expect(waited.code).toBe(0);
     expect(waited.json.status).toBe("agent");
     expect(waited.json.step.id).toBe("ship");
-    expect(waited.json.context.ship.historyDir).toContain(".warden/history/T-001");
     const run = readRun(cp, "T-001");
     expect(run.gate).toBeNull();
     expect(run.proofs.map((p) => [p.stepId, p.kind, p.sha])).toEqual([
@@ -70,28 +70,29 @@ describe("happy path (feature template)", () => {
     const types = eventTypes(cp, "T-001");
     for (const t of ["run.started", "gate.passed", "review.round", "history.written"]) expect(types).toContain(t);
 
-    // 3.4 History exists (uncommitted, in the ticket worktree). Commit it.
-    const historyFiles = ["run.json", "flow.json", "task.md", "events.jsonl", "plan.md", "summary.json"];
-    for (const f of historyFiles) expect(existsSync(join(wt, ".warden", "history", "T-001", f))).toBe(true);
-    git(wt, "add", ".warden/history/T-001");
-    git(wt, "commit", "-q", "-m", "chore(T-001): run record");
-
-    // Push is allowed now (proofs are valid for HEAD apart from history); so is the merge into main.
+    // Push is allowed now (proofs are valid for HEAD); so is the merge into main.
     expect(bashHook(cp, "S1", "git push origin t-001", { cwd: wt }).denied).toBe(false);
     expect(bashHook(cp, "S1", `git -C ${cp.main} merge --no-ff t-001`, { cwd: wt }).denied).toBe(false);
     git(cp.main, "merge", "--no-ff", "-q", "-m", "merge T-001", "t-001");
     const mergeCommit = headOf(cp.main);
     expect(git(cp.main, "rev-list", "--parents", "-n", "1", "HEAD").split(" ")).toHaveLength(3); // a real merge commit
 
-    // 3.5 Ship output accepted: shipped. summary.json (status shipping) is on main after the merge.
+    // 3.5 Ship output accepted: shipped. 
     const shipped = done(cp, "T-001", { pr: null, merged: true, mergeCommit, description: "Adds a greeting." });
     expect(shipped.code).toBe(0);
     expect(shipped.json.accepted).toBe(true);
     expect(shipped.json.next.status).toBe("shipped");
     expect(readRun(cp, "T-001").status).toBe("shipped");
-    const summary = JSON.parse(readFileSync(join(cp.main, ".warden", "history", "T-001", "summary.json"), "utf8"));
-    expect(summary).toMatchObject({ task: "T-001", flow: "feature", status: "shipping", branch: "t-001" });
-    expect(summary.rounds).toMatchObject({ review: 1, fixer: 0 });
+    // Nothing about the run is in the repo; the record is in the project's database, with the merge in it.
+    expect(existsSync(join(cp.main, ".warden", "history"))).toBe(false);
+    expect(existsSync(join(wt, ".warden", "history"))).toBe(false);
+    expect(git(cp.main, "log", "--format=%s")).not.toContain("run record");
+    const rows = JSON.parse(readFileSync(join(cp.main, RECORDS_FILE), "utf8"));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ ticket: "T-001", status: "shipped", flow: "feature", summary: { merged: true, mergeCommit, rounds: { review: 1, fixer: 0 } } });
+    expect(rows[0].summary.events).toBeUndefined();
+    expect(rows[0].detail.events.map((e: { type: string }) => e.type)).toContain("run.shipped");
+    expect(rows[0].detail.planMd).toContain("Plan");
     expect(eventTypes(cp, "T-001")).toContain("run.shipped");
 
     // status lists it only with --all

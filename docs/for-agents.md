@@ -16,7 +16,7 @@ The short form ships with the plugin as the [`/warden:guide`](reference/skills.m
 | Never | Why |
 |---|---|
 | Run the checks to prove a step | The engine runs them on the exact commit (its git SHA). Your run proves nothing. |
-| Write under `.warden/state/` or `.warden/history/` | Only the engine writes there. Hooks refuse it. |
+| Write under `.warden/state/` | Only the engine writes there. Hooks refuse it. |
 | Push, open a pull request or merge outside the ship step | Hooks refuse it until all gates pass for HEAD. |
 | Run `warden approve`, `warden retry` or `warden reset` | They are for a person. The hook refuses them and they need a terminal anyway (exit 6). |
 | Set `PROJECT_AGENT`, any `WARDEN_*` or `CLAUDE_PLUGIN_*` variable on a command, or start `claude -p` | That changes how warden itself runs. Hooks refuse warden's own variables (the list is in [Hooks](reference/hooks.md), rule B2) and nested `claude -p`. |
@@ -95,7 +95,7 @@ Usually the user starts with `/warden:compose <what to do>` or `/warden:compose 
 | `analyze` (spike) | Answer the question in one note, pass it as `notePath`. | `docs/` |
 | `plan` | Follow the plan skill. Hand in `PlanOutput`. No placeholders such as `TBD` or `TODO`. | `docs/knowledge/`, `docs/decisions/`, `docs/archived/`, `docs/INDEX.md` |
 | `implement` | Make the change with tests. Commit all of it. When back from a gate, fix exactly what it reports. | Anything but gate files |
-| `ship` | Commit the run record, open the PR or merge as the project says, hand in `ShipOutput`, then run `warden clean` from the main checkout. Never remove the worktree before the hand-in. | `.warden/history/<task>/` |
+| `ship` | Open the PR or merge as the project says, put any leftovers in the description, hand in `ShipOutput`, then run `warden clean` from the main checkout. Never remove the worktree before the hand-in. | Nothing. |
 | `fix` | Hand the step to the `warden:fixer` agent in the foreground, wait, and pass its JSON to `warden done`. | Nothing. The fixer works in its own fix worktree. |
 | `check`, `review` | Nothing. The engine runs them. `warden done` refuses. | Nothing |
 | `approve` | Nothing. A person types `approve` or `reject: <why>`. | Nothing |
@@ -175,7 +175,6 @@ With several live runs, the user adds the task id: `approve APP-12`, `retry APP-
 | `task Tn: blockedBy Tm is not a task of an earlier wave` | Move `Tm` to an earlier wave, or drop the link. |
 | `decisions: <file> does not exist` | Write the decision file, or drop it from the list. |
 | `reproduction.failingTest: <path> does not exist` | Write the test at that path. |
-| `the run record is not committed: commit .warden/history/<task>/` | Do step 1 of the ship instructions first. |
 | `gates are not proven for HEAD: ...` | The code changed after the gates. Run `warden next`; the gates run again. |
 | `pr or mergeCommit is required` | Give the pull request or the merge commit. |
 | `description: must contain the "## Unresolved review findings" section` | Put the leftovers file text in the description under that heading. |
@@ -191,7 +190,7 @@ Each hook refusal starts with `warden:`.
 |---|---|
 | `approve, retry and reset are for a person. Ask the user to type "approve" / "retry".` | Do that. |
 | `this command changes how warden itself runs; ask the user to do it` | Remove the variable (`PROJECT_AGENT`, `WARDEN_ROLE`, `WARDEN_CLAUDE_BIN`, `WARDEN_DATA`, `WARDEN_ROOT`, `WARDEN_TEST_MODE`, `CLAUDE_PLUGIN_ROOT`, `CLAUDE_PLUGIN_DATA`) or `claude -p` from the command. |
-| `state, history and gate files are written by the engine only` (Bash) / `state and history are written by the engine only` (Edit, Write) | Leave those files alone. |
+| `state and gate files are written by the engine only` (Bash) / `state is written by the engine only` (Edit, Write) | Leave those files alone. |
 | `<type> step does not change code (<task> at <step>)` | This step allows no such edit. Hand in what the step asks for. |
 | `gate files cannot change while a run is live (<task>); finish or reset it first` | Change them after the run, or ask a person to reset it. |
 | `push/PR/merge is allowed only in the ship step after all gates pass for HEAD (<task> at <step>)` | Keep going with `warden next` until the ship step. |

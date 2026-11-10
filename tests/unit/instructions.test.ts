@@ -73,6 +73,10 @@ const headings = (text: string) => {
 
 // 0.8 ends the ship text with warden clean. The spec in docs/internal stays as it was written.
 const SHIP_0_7 = "4) Hand in the ship output with `warden done` BEFORE you remove the worktree or the branch.";
+// #33: the run record is no longer step 1, so the rest move up.
+const shipNow = (text: string) => text.replace(SHIP_0_7, SHIP_0_8)
+  .replace("1) Commit the run record: `git add .warden/history/<task> && git commit -m 'chore(<task>): run record'`. 2) Open", "1) Open")
+  .replace(" 3) If there are leftovers", " 2) If there are leftovers").replace(" 4) Hand in", " 3) Hand in").replace(" 5) Then run", " 4) Then run");
 const SHIP_0_8 = "4) Hand in the ship output with `warden done`; never remove the worktree or the branch before that. 5) Then run `warden clean` from the main checkout: it removes the worktree and the branch once the branch is merged.";
 
 describe("catalog", () => {
@@ -87,9 +91,9 @@ describe("catalog", () => {
       const line = spec.split("\n").find((l) => l.startsWith(`- **${label}:** "`));
       expect(line).toBeDefined();
       const text = line!.slice(`- **${label}:** "`.length, -1);
-      expect(catalogText(type, "<task>", variant)).toBe(type === "ship" ? text.replace(SHIP_0_7, SHIP_0_8) : text);
+      expect(catalogText(type, "<task>", variant)).toBe(type === "ship" ? shipNow(text) : text);
     }
-    expect(catalogText("ship", T)).toContain(`git add .warden/history/${T} && git commit -m 'chore(${T}): run record'`);
+    expect(catalogText("ship", T)).not.toContain("run record");
     expect(catalogText("check", T)).toBe("");
   });
 
@@ -108,18 +112,9 @@ describe("catalog", () => {
     expect(editAllowed("plan", undefined, "src/a.ts", T)).toBe(false);
     expect(editAllowed("implement", undefined, "src/a.ts", T)).toBe(true);
     expect(editAllowed("implement", undefined, ".warden/triage-rules.json", T)).toBe(false);
-    expect(editAllowed("ship", undefined, `.warden/history/${T}/run.json`, T)).toBe(true);
+    expect(editAllowed("ship", undefined, `.warden/history/${T}/run.json`, T)).toBe(false);
     expect(editAllowed("ship", undefined, "src/a.ts", T)).toBe(false);
     expect(editAllowed("fix", undefined, "scripts/x.sh", T)).toBe(false);
-  });
-
-  test("ship step 1 commits the run record as git -C commands, the worktree path quoted", () => {
-    const text = catalogText("ship", T, undefined, { worktree: "/w/t 1" });
-    expect(text).toContain(
-      `1) Commit the run record: run \`git -C '/w/t 1' add .warden/history/${T}\`, then \`git -C '/w/t 1' commit -m 'chore(${T}): run record'\``,
-    );
-    expect(text).toContain("Any other change sends the run back to the gates.");
-    expect(editAllowed("ship", undefined, "backlog/T-1.md", T)).toBe(false); // 0.9.3: the ticket is set to done only after the merge
   });
 
   test("output spec per type", () => {

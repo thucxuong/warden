@@ -98,7 +98,7 @@ A `tool.ts` written before 0.8 has no `CreateResult` or `LinkResult`; add the tw
    - `dag` lists every ticket whose `type` is not `epic`; `dag <epic>` lists the tickets whose `epic` is that id. A missing `blocked_by` is `[]`.
    - `show <id>` adds the body; an id with no file is exit 3.
    - `set-status` rewrites only the `status` line, and writes nothing (`changed: []`) when the status is already that value.
-   - `create` needs `--title`, `--type` and `--body-file` (exit 1 and no writes without one). The new ticket is `todo`. Its id is one more than the highest number used by a ticket file or by a folder in `.warden/state/` or `.warden/history/`, with the same prefix and width; the first one is in the form of `taskIdPattern` (for `^PG-\d{3}$`: `PG-001`).
+   - `create` needs `--title`, `--type` and `--body-file` (exit 1 and no writes without one). The new ticket is `todo`. Its id is one more than the highest number used by a ticket file or by a folder in `.warden/state/`, with the same prefix and width; the first one is in the form of `taskIdPattern` (for `^PG-\d{3}$`: `PG-001`).
    - `changed` lists every file the call wrote, as repo paths, and nothing else.
 
 2. **List it in `.warden/tools/index.ts`.**
