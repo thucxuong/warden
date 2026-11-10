@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.15.2 — 2026-11-10
+
+- The review step no longer fails when Claude Code runs in verbose mode (`"verbose": true` in the user settings). The reviewer then prints all its events as one JSON list, and warden marked even a clean review as malformed, so the run was blocked with `reviewer unavailable: malformed`. Warden now reads the final result from that list. (#35)
+
 ## 0.15.1 — 2026-11-10
 
 Reports used to reach the maintainers only after a background triage run on the maintainer's machine, started by a "doorbell". The doorbell broke silently when Claude Code updated itself, so reports sat on the `reports` branch and no GitHub issue was made.
