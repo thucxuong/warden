@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.15.1 — 2026-11-10
 
 Reports used to reach the maintainers only after a background triage run on the maintainer's machine, started by a "doorbell". The doorbell broke silently when Claude Code updated itself, so reports sat on the `reports` branch and no GitHub issue was made.
 
@@ -10,6 +10,7 @@ Reports used to reach the maintainers only after a background triage run on the 
 - `warden report reply` posts the answer as a comment on the issue. The automatic answer run is gone: session start shows the question and the agent answers it.
 - Removed: the doorbell, `scripts/wa-register.ts`, the `reports` branch transport, and the maintainer commands `warden report inbox`, `set` and `ask`. `/wa-triage` now works on the issues directly with `gh`.
 - Reports that already have a verdict are not sent again. Reports still `sent` from before this version get their issue at the next sync.
+- Orchestrate: a ticket whose project rules require a review by a named agent (for example a database-engineer review) can get it. The ticket agent asks for it, the orchestrator runs that agent, and its answer goes back to the ticket.
 
 ## 0.15.0 — 2026-11-09
 

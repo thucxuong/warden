@@ -247,7 +247,7 @@ warden report --kind bug --title "warden wait never returns after review" --body
 
 - Kind is `bug` or `enhancement`. The body is one argument; for a long body use `--file <path>`.
 - No repository names, links, secrets, credentials or customer data.
-- It prints `{"id": "R-xxxx-NNNN", "status": "sent"}`. Tell the user the id.
+- It opens a public GitHub issue with `gh` and prints `{"id": "R-xxxx-NNNN", "status": "sent", "issue": <n>}`. Tell the user the id. With `"waiting"`, it could not send yet: tell the user why in one line (usually `gh auth login`).
 - The row goes to `.warden/reports.md` in the main checkout. Commit it there only when the main checkout is on the main branch and nothing else is staged: `git -C <main> commit -m "chore: warden report <id>" -- .warden/reports.md`. Never on a task branch. Do not push unless the user asks.
 
 When a report needs more information, session start shows the question. Answer it from the project's code, config and logs, in one argument:

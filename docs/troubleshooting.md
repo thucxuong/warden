@@ -23,7 +23,7 @@ When something is off and no message explains it:
 | No `warden:` lines at all at session start | Not a git repo, or an unsupported git layout (the common git dir does not end in `/.git`). Warden stays quiet there. | Open the project at its git checkout. |
 | `warden: updated to <v>; this project is on <old>. ...` every session | The project files are still on the old version. | Let the agent run `/warden:upgrade`, then commit. See [Upgrading](getting-started/upgrading.md). |
 | `warden: version <v> is available; this session runs <old>. ...` | A newer warden is in your local marketplace copy. | In a terminal: `claude plugin update warden@<marketplace>` (or `/plugin`), then `/reload-plugins`. |
-| `warden: reports from this machine reach warden only on this machine. ...` | This machine cannot send reports on. They stay in its outbox. | Nothing breaks. See [Reports](concepts/reports.md). |
+| `warden: <n> report(s) wait to reach the warden maintainers: ...` | The GitHub CLI (`gh`) is not installed or not logged in, so the reports could not be sent. They wait in the outbox. | Install `gh` and run `gh auth login`. Warden sends them at a later session start. See [Reports](concepts/reports.md). |
 
 ## Setting up
 
@@ -186,6 +186,8 @@ Add a dependency check to the project's checks, for example ESLint's `import/no-
 |---|---|---|
 | `--kind must be bug or enhancement` / `--title is required` / `the report body is empty` | A missing part of the report. | Give all three. |
 | `report <id> has no open question` | `reply` only answers a `needs-info` question. | Nothing to answer. |
+| `the answer was not sent: ...` | `gh` is missing, logged out, or GitHub could not be reached. | Fix what it says, then run `reply` again. |
+| `"waiting": "..."` in the output of `warden report` | The report is saved but its issue could not be opened yet. | Fix what it says (usually `gh auth login`). Session start tries again. |
 | `the answer must be at most 4000 characters` | The answer is too long. | Shorten it. |
 | The new row went to a task branch | Before 0.6.1 the row was written in the current worktree. | Upgrade. Rows now go to `.warden/reports.md` in the main checkout. |
 

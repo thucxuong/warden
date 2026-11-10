@@ -56,7 +56,6 @@ test("reports and project health", async ({ page }) => {
   const reports = page.getByTestId("report-item");
   await expect(reports.filter({ hasText: "Which version?" })).toHaveCount(1);
   await expect(reports.filter({ hasText: "Which version?" }).getByTestId("command-block")).toContainText("warden report reply R-ab12-0001");
-  await expect(page.locator('[data-testid="report-item"] [data-testid="signal-badge"]', { hasText: "Job gone" })).toHaveCount(1);
 
   await expect(page.getByTestId("upgrade-notice")).toBeVisible();
   await expect(page.getByTestId("health-tools-row").filter({ hasText: "api key" })).toContainText("FAIL");
@@ -67,7 +66,7 @@ test("reports and project health", async ({ page }) => {
   await expect(page.getByTestId("leftover-worktrees").getByTestId("command-block")).toContainText("warden clean");
 });
 
-test("the page never shows the answer runner's secrets", async ({ page }) => {
+test("the page never shows a stray outbox file's secrets", async ({ page }) => {
   await expect(page.getByTestId("report-item").first()).toBeVisible();
   expect(await page.content()).not.toContain("SECRET_TOKEN");
 });

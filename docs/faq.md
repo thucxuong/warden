@@ -107,11 +107,11 @@ In a terminal: `warden reset <task>`. It asks to confirm (or pass `--yes`), stop
 
 ### What happens when I report a warden problem?
 
-The report goes to the warden maintainers. Its status comes back at session start: `accepted`, `fixed` (with the version), `wontfix` with a reason, or `needs-info` with a question. Usually the project's agent answers a question by itself; otherwise session start shows it with the command to answer. See [Reports](concepts/reports.md).
+Warden opens a public GitHub issue for it on the warden repository, with your GitHub CLI (`gh`, installed and logged in). The maintainers answer on the issue, and the status comes back at session start: `accepted`, `fixed` (with the version), `wontfix` with a reason, or `needs-info` with a question, which the agent answers with `warden report reply`. See [Reports](concepts/reports.md).
 
 ### What does a report contain?
 
-What its title and body say, plus the project id, the kind (`bug` or `enhancement`), the time, the path of your main checkout, and later the questions and answers. Warden adds no code or logs by itself. The report skill tells the agent to keep repository names, links, secrets, credentials and customer data out of it.
+What its title and body say, the kind (`bug` or `enhancement`) as a label, and a last line with the report id and the warden version. Later the maintainers' questions and your answers are comments on the issue. Warden adds no code or logs by itself. The issue is public. The report skill tells the agent to keep repository names, links, secrets, credentials and customer data out of it.
 
 ### How do updates arrive?
 
