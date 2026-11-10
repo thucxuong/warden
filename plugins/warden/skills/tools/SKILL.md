@@ -97,7 +97,6 @@ export const e2e: Tool = {
 | Role | Used by | What the tool must do |
 |---|---|---|
 | `tickets` | `warden start` (every run starts from a ticket), `/warden:orchestrate` and `warden orchestrate create` | `dag [<epic>]`, `show <id>`, `set-status <id> <status>` and `create`; optionally `link`, below |
-| `records` | `warden start`, shipping and the warden site | a `records` object with `save`, `list`, `get` and `events`, in the project's own database. Optional: without it, finished runs stay in `.warden/state/_records/` on this machine. `recipes/records.md` says how; prove it with `warden tools --verify records` |
 | `graph` | the work skill and the ticket agent | `query "<question>"` prints plain text and exits 0 |
 | `pr` | the push and merge rules | `create` and `merge` subcommands. Warden treats them as the pull request and merge commands |
 
@@ -129,7 +128,6 @@ Warden reads only the roles above. When a project needs one of these jobs, write
 | `ci` | `recipes/ci.md` | CI runs of a branch, with the failing step's log | `gh run`, `az pipelines` |
 | `doctor` | `recipes/doctor.md` | is the project's setup healthy, and how to fix what is not | none |
 | `tickets` | `ticket-tool-recipe.md` | the `tickets` role | `az boards`, `jira` |
-| `records` | `recipes/records.md` | the `records` role: finished runs in the project's database | none |
 
 ## Raw commands a tool covers
 

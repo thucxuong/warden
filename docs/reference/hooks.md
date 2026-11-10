@@ -121,8 +121,8 @@ Rules, in order. The first match decides. warden reads the command text; a hered
 
 | # | The command | Decision and message |
 |---|---|---|
-| B1 | Runs `warden approve`, `warden retry` or `warden reset` | Deny: `approve, retry and reset are for a person. Ask the user to type "approve" / "retry".` |
-| B2 | Mentions `PROJECT_AGENT`, `WARDEN_ROLE`, `WARDEN_CLAUDE_BIN`, `WARDEN_DATA`, `WARDEN_ROOT`, `WARDEN_TEST_MODE`, `CLAUDE_PLUGIN_ROOT` or `CLAUDE_PLUGIN_DATA`; or runs `claude -p` / `claude --print`; or runs `script` together with `warden` | Deny: `this command changes how warden itself runs; ask the user to do it` |
+| B1 | Runs `warden approve`, `warden retry`, `warden reset`, `warden handoff` or `warden db release` | Deny: `approve, retry, reset, handoff and db release are for a person. Ask the user to type "approve" / "retry", or to run the command in a terminal.` |
+| B2 | Mentions `PROJECT_AGENT`, `WARDEN_ROLE`, `WARDEN_CLAUDE_BIN`, `WARDEN_DATA`, `WARDEN_ROOT`, `WARDEN_TEST_MODE`, `WARDEN_DB_URL`, `CLAUDE_PLUGIN_ROOT` or `CLAUDE_PLUGIN_DATA`; or runs `claude -p` / `claude --print`; or runs `script` together with `warden` | Deny: `this command changes how warden itself runs; ask the user to do it` |
 | B3 | Writes (with `>`, `tee`, `rm`, `mv`, `cp`, `sed -i`, `git rm`, `git checkout`, `git restore` and similar) and names `.warden/state`; or, while a run is live, names a gate config file (`steps.json`, `warden.json`, `triage-rules.json`, `flows`, `tools/roles.json` under `.warden/`). The fixer may write config files inside its own fix worktree | Deny: `state and gate files are written by the engine only` |
 | B4 | A subagent runs `warden ask` | Deny: `a subagent cannot ask the user; stop and give the question back to the caller (a ticket agent replies ASK <Task>: <question>)` |
 | B5 | Push, PR or merge (list below) while the run is at a fix step | Allowed only for the `warden:fixer` agent, and only when the command names the fix branch. A merge (or a push to the main branch or the run's base branch) also needs `PROJECT_AGENT=1` in Claude Code's environment. Else deny: `only the warden:fixer subagent pushes the fix branch` |

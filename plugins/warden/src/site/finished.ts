@@ -9,7 +9,7 @@ import type { LoadedTask } from "./data.ts";
 import { prLink } from "./pr.ts";
 import { isGoing, person, toUsage, type SiteCtx } from "./text.ts";
 
-const FRESH_MS = 30_000;
+let freshMs = 60_000;            // warden.json sitePollSeconds: how long a database answer is reused
 const USUAL_FRESH_MS = 300_000;  // past timings change slowly
 const PAGE = 200;
 const USUAL_TICKETS = 200;       // enough for the newest samples of every step kind
@@ -18,14 +18,20 @@ export const FINISHED = ["shipped", "done"];
 
 const cache = new Map<string, { at: number; value: Promise<unknown> }>();
 
+export function setFinishedFreshness(ms: number): void {
+  freshMs = ms;
+}
+
 export function clearFinishedCache(): void {
   cache.clear();
 }
 
-// One promise per question, so that requests at the same moment share one query. A failure is not kept.
+// One promise per question, so that requests at the same moment share one query. A failure is not kept, and answers
+// older than the longest freshness are dropped, so a long-running site does not grow.
 function cached<T>(key: string, freshMs: number, make: () => Promise<T>): Promise<T> {
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < freshMs) return hit.value as Promise<T>;
+  for (const [k, v] of cache) if (Date.now() - v.at >= Math.max(USUAL_FRESH_MS, freshMs)) cache.delete(k);
   const value = make();
   cache.set(key, { at: Date.now(), value });
   value.catch(() => cache.delete(key));
@@ -44,9 +50,9 @@ async function listUpTo(main: string, filters: RecordFilters, max: number): Prom
   return out;
 }
 
-function summaries(main: string, filters: RecordFilters, max: number, freshMs = FRESH_MS): Promise<RecordSummary[]> {
+function summaries(main: string, filters: RecordFilters, max: number, fresh = freshMs): Promise<RecordSummary[]> {
   if (max === 0 || filters.tickets?.length === 0) return Promise.resolve([]);
-  return cached(`${main}\0list\0${JSON.stringify([filters, max])}`, freshMs, () => listUpTo(main, filters, max));
+  return cached(`${main}\0list\0${JSON.stringify([filters, max])}`, fresh, () => listUpTo(main, filters, max));
 }
 
 // A database problem never hides live runs: the page says what failed and shows the rest.
@@ -77,9 +83,11 @@ export function prepareSignals(ctx: SiteCtx): Promise<void> {
   return attempt(ctx, () => loadUsual(ctx));
 }
 
-// The range a request reads when it names no dates; null when it names one.
+// The range a request reads when it names no dates; null when it names one. Whole minutes, so that requests a few
+// seconds apart ask the same question and share the cached answer.
 export function defaultFrom(ctx: SiteCtx, from: number | undefined, to: number | undefined): number | null {
-  return from === undefined && to === undefined ? ctx.now - DEFAULT_RANGE_MS : null;
+  if (from !== undefined || to !== undefined) return null;
+  return Math.floor((ctx.now - DEFAULT_RANGE_MS) / 60_000) * 60_000;
 }
 
 // History adds up every row in the range for its totals, so it reads all the range's summaries, a page at a time.
@@ -114,7 +122,7 @@ export function prepareEpicEvents(ctx: SiteCtx, tickets: string[]): Promise<void
   if (tickets.length === 0) return Promise.resolve();
   return attempt(ctx, async () => {
     const store = await recordStore(ctx.main);
-    const list = await cached<TicketEvents[]>(`${ctx.main}\0events\0${tickets.join(",")}`, FRESH_MS, () => store.events(tickets));
+    const list = await cached<TicketEvents[]>(`${ctx.main}\0events\0${tickets.join(",")}`, freshMs, () => store.events(tickets));
     ctx.epicEvents = new Map(list.map((e) => [e.ticket, e.events as EventLine[]]));
   });
 }
@@ -122,7 +130,7 @@ export function prepareEpicEvents(ctx: SiteCtx, tickets: string[]): Promise<void
 export function prepareRecord(ctx: SiteCtx, task: string): Promise<void> {
   return attempt(ctx, async () => {
     const store = await recordStore(ctx.main);
-    const record = await cached<RunRecord | null>(`${ctx.main}\0get\0${task}`, FRESH_MS, () => store.get(task));
+    const record = await cached<RunRecord | null>(`${ctx.main}\0get\0${task}`, freshMs, () => store.get(task));
     ctx.record = record ? loadedFromRecord(ctx.main, record) : null;
   });
 }

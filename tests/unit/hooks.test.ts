@@ -165,12 +165,17 @@ describe("nested worktrees in <main>/.worktrees (0.8)", () => {
 });
 
 describe("PreToolUse: Bash", () => {
-  test("B1: approve, retry and reset are for a person", async () => {
-    const msg = 'warden: approve, retry and reset are for a person. Ask the user to type "approve" / "retry".';
-    for (const cmd of ["warden approve T-1", "cd x && warden retry", "bun /opt/w/src/cli.ts reset T-1 --yes", "/opt/w/bin/warden approve T-1"]) {
+  test("B1: approve, retry, reset, handoff and db release are for a person", async () => {
+    const msg = 'warden: approve, retry, reset, handoff and db release are for a person. Ask the user to type "approve" / "retry", or to run the command in a terminal.';
+    for (const cmd of [
+      "warden approve T-1", "cd x && warden retry", "bun /opt/w/src/cli.ts reset T-1 --yes", "/opt/w/bin/warden approve T-1",
+      "warden handoff T-1", "bun /opt/w/src/cli.ts db release T-1", "/opt/w/bin/warden handoff T-1",
+    ]) {
       expect(reason(await bash(cmd))).toBe(msg);
     }
     expect(await bash("warden status")).toBeNull();
+    expect(await bash("warden start T-1 --flow chore")).toBeNull();
+    expect(await bash("warden db status")).toBeNull();
   });
 
   test("B2: commands that change how warden runs", async () => {

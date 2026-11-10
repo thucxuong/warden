@@ -109,6 +109,18 @@ describe("PG-302 timeline", () => {
     expect(gates[5]!.review).toEqual({ round: 1, blocking: 0, minor: 0 });
     expect(t.steps.find((s) => s.key === "check#2")!.gateKeys).toEqual(["check#2/1", "check#2/2"]);
   });
+
+  test("a teammate's run (#33): logs and tails come from the files the team database sent", () => {
+    const files = new Map([["checks/3/typecheck.log", "a\nb\nerror TS2322\n"], ["checks/3/lint.log", "clean\n"]]);
+    const windows = windowsOf(PG302, FEATURE);
+    const db = { files, logs: new Set(["checks/3/typecheck.log", "checks/3/lint.log"]), cut: new Set<string>(), by: "bob", mine: false, saved: false };
+    const team = buildGates({ events: PG302, windows, run: run(), live: true, dir: "/nowhere", db, triage: TRIAGE, now: Date.now() });
+    expect(team[3]!.commands.map((c) => c.log)).toEqual([
+      { path: "checks/3/lint.log", available: true, tail: null }, // passed: no tail, as on this machine
+      { path: "checks/3/format.log", available: false, tail: null }, // not sent
+      { path: "checks/3/typecheck.log", available: true, tail: "a\nb\nerror TS2322" },
+    ]);
+  });
 });
 
 // ---- smaller event lists ----

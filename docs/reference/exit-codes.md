@@ -14,7 +14,7 @@ Every command exits with one of these codes. When a command fails, stderr has a 
 | 3 | NOT_FOUND | Something the command needs does not exist: the run, the file, the check, the tool, the git repo | Check the id or path, or set up what is missing |
 | 4 | BUSY | Another warden process holds the task, or engine work is running | Usually: run `warden wait`. Or try again in a moment |
 | 5 | PORT_IN_USE | `warden site` could not use the port | Pass `--port <n>` |
-| 6 | NOT_HUMAN | `approve`, `retry` or `reset` was run without a terminal | A person runs it in a terminal, or types the word in the chat |
+| 6 | NOT_HUMAN | `approve`, `retry`, `reset`, `handoff` or `db release` was run without a terminal | A person runs it in a terminal, or types the word in the chat |
 | 127 | NO_BUN | Bun is missing or older than 1.4 (from the `warden` wrapper script) | Install or upgrade Bun, then restart Claude Code |
 
 `warden tools <name>` is the exception: it exits with the tool's own code (0 to 255). A tool that throws, or returns something that is not a whole number from 0 to 255, gives 1.
@@ -26,8 +26,10 @@ Every command exits with one of these codes. When a command fails, stderr has a 
 | Command | Typical cause |
 |---|---|
 | `done` | The output was not accepted (see `errors`); or the step is a check or review (`check steps are run by the engine`); or there is no agent step to hand in |
-| `start` | Task id does not match `taskIdPattern`; `.warden/` is not committed on the main branch; the project has no `records` tool; the flow is invalid; a run for the task exists; setup failed; the worktree path or branch is taken; `.worktrees/` is not gitignored |
-| `records import` | A ticket could not be saved, or the project has no `records` tool |
+| `start` | Task id does not match `taskIdPattern`; `.warden/` is not committed on the main branch; another checkout has a live run on the ticket (team database; ask them to run `warden handoff`); the flow is invalid; a run for the task exists; setup failed; the worktree path or branch is taken; `.worktrees/` is not gitignored |
+| `records import` | A ticket could not be saved |
+| `handoff` | No team database; the run is finished, or a gate or fix step runs; the push failed; the run did not reach the database |
+| `db status`, `db migrate` | The database did not answer; or `migrate` without `--yes` lists steps still to run |
 | `flow check` | At least one flow has lint errors |
 | `flow save` | Lint errors, or the saved flow exists and `--force` was not given |
 | `approve` | The run is not waiting at an approve step |

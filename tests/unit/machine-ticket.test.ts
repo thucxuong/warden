@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { archive, done, next, start } from "../../plugins/warden/src/engine/machine.ts";
 import { readEvents } from "../../plugins/warden/src/state/store.ts";
 import { T, IMPL, CHECK, REVIEW, SHIP, main, wt, ctx, spawn, run, drive, implement, installMachineFixture } from "../helpers/machine-fixture.ts";
-import { barrel, writeTools, RECORDS_ENTRY, RECORDS_HEAD } from "../helpers/tools-fixture.ts";
+import { barrel, writeTools } from "../helpers/tools-fixture.ts";
 import { commit, sh } from "../helpers/repo.ts";
 
 setDefaultTimeout(60_000);
@@ -35,7 +35,7 @@ const TOOLS = barrel(`  {
   },`, 'import { existsSync, readFileSync, writeFileSync } from "node:fs";\nimport { join } from "node:path";');
 
 function setUpTickets(tools = TOOLS): void {
-  writeTools(main, `${RECORDS_HEAD}\n${tools.replace("const tools: Tool[] = [\n", `const tools: Tool[] = [\n${RECORDS_ENTRY}\n`)}`, { tickets: "backlog", records: "recordsdb" });
+  writeTools(main, tools, { tickets: "backlog" });
   commit(main, { [TICKET]: "status: doing\n" });
   sh(wt, "merge", "-q", "--ff-only", "main");
 }

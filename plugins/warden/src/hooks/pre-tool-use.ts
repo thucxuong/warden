@@ -131,11 +131,13 @@ export function editDecision(main: string, target: string, fixer: boolean): Deci
 // ---------------------------------------------------------------------------
 
 const HUMAN_ONLY = [
-  /(^|[;&|(\s])(warden|[\w./-]*cli\.ts)\s+(approve|retry|reset)\b/,
-  /bin\/warden\s+(approve|retry|reset)\b/,
+  // handoff and db release (#33) move a ticket between machines.
+  /(^|[;&|(\s])(warden|[\w./-]*cli\.ts)\s+(approve|retry|reset|handoff|db\s+release)\b/,
+  /bin\/warden\s+(approve|retry|reset|handoff|db\s+release)\b/,
 ];
 const WARDEN_ENV_NAMES = [
   "PROJECT_AGENT", "WARDEN_ROLE", "WARDEN_CLAUDE_BIN", "WARDEN_DATA", "WARDEN_ROOT", "WARDEN_TEST_MODE",
+  "WARDEN_DB_URL", // #33: the agent never points warden at another database, nor types its login
   "CLAUDE_PLUGIN_ROOT", "CLAUDE_PLUGIN_DATA",
 ];
 const CLAUDE_PRINT = /(^|[;&|(\s])claude\b[^;&|\n]*\s(-p|--print)(?=\s|$)/;
@@ -436,7 +438,7 @@ function bashDecision(call: HookCall, cmd: string, run: RunJson | null): string 
   const fixer = isFixer(call.input);
 
   if (HUMAN_ONLY.some((re) => re.test(cmd))) {
-    return 'approve, retry and reset are for a person. Ask the user to type "approve" / "retry".';
+    return 'approve, retry, reset, handoff and db release are for a person. Ask the user to type "approve" / "retry", or to run the command in a terminal.';
   }
   const runsScript = splitCommands(cmd).some((part) => SCRIPT_CMD.test(part));
   const changesWarden = WARDEN_ENV_NAMES.some((name) => cmd.includes(name)) || CLAUDE_PRINT.test(cmd) || (runsScript && /warden|cli\.ts/.test(cmd));

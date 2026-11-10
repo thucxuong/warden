@@ -68,11 +68,13 @@ The `/warden:work` skill runs this loop for the agent. `/warden:compose` picks a
 2. Fetches the main branch and reads `.warden/steps.json` from it. Your `.warden/` folder must be committed and pushed to the main branch first.
 3. Checks the flow with the flow linter. A bad flow never creates a worktree.
 4. Refuses when a run for this task already exists.
-5. Refuses when the project has no `records` tool. It does not connect to the database, so an outage does not stop new work.
+5. With a team database, claims the ticket, and refuses when another checkout has a live run on it (its owner hands it over with `warden handoff`). When the database does not answer, the run starts anyway with a warning. See [State and history](state-and-history.md#claims).
 6. With `--worktree`, creates or reuses a worktree for the task's branch, in `.worktrees/<task>` inside the repo (git must ignore that folder). Without it, uses the current branch, which must not be the main branch.
 7. Copies the flow and `steps.json` into the run's state folder. The run uses these copies until it ends, so editing the files later does not change a live run.
 8. Runs the setup commands from `steps.json` in the worktree. If one fails, the run is not created and the log is kept in the temp folder.
 9. Enters the first step.
+
+With a team database, a run handed over from another machine (`warden handoff`) is not started again: `warden start <task>` alone continues it at the same step, on its own flow and branch. See [State and history](state-and-history.md#moving-a-run-to-another-machine).
 
 Every run starts from a ticket (0.9). The task text comes from the project's ticket tool (`show <id>` of the `tickets` role): the ticket's title and body. Without a `tickets` role, `warden start` refuses and says how to add a ticket tool. For a request without a ticket, `/warden:compose` creates one first.
 

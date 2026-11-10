@@ -30,6 +30,8 @@ export interface WardenJson {
   sitePort: number;             // default 4400
   lastRetro: string | null;     // YYYY-MM-DD
   site?: unknown;               // 0.7: settings for `warden site` (site.thresholds); never validated here, copied as it is
+  secrets?: string[];           // 0.16: env var names whose values are hidden before anything goes to the database
+  sitePollSeconds?: number;     // 0.16: how often warden site refreshes and reads the database, 5 to 3600; default 60
 }
 
 // ---------------------------------------------------------------------------
@@ -208,6 +210,10 @@ export interface RunJson {
   fix: { n: number; worktree: string; branch: string; baseSha: string; verdict: Verdict; report: string; mayMerge: boolean } | null;  // baseSha = mainRef sha the fix branch started from
   leftovers: string | null;        // state-relative path to review/leftover.md
   ticket?: true;                   // 0.6.1: started from a ticket (every run since 0.9); the engine marks it done once merged (0.9.3)
+  // 0.16 (#33): handed over to whoever runs warden start next, on any machine. sha: the temporary commit that holds
+  // the unfinished work (null: nothing was uncommitted); parent: the commit before it. released: a person freed it
+  // (warden db release) because its machine was gone, so it goes on from the last pushed branch.
+  handoff?: { by: string; at: string; sha: string | null; parent: string | null; released?: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -222,7 +228,8 @@ export type EventType =
   | "run.blocked" | "run.retry" | "history.written" | "run.shipped" | "run.done" | "run.archived"
   | "session.linked" | "stop.blocked" | "hook.denied"
   | "gate.discarded" | "fix.landed" | "git.fetch-failed" | "proof.stale"
-  | "ticket.status" | "ticket.linked" | "question.asked" | "question.answered" | "retry.merged-main";
+  | "ticket.status" | "ticket.linked" | "question.asked" | "question.answered" | "retry.merged-main"
+  | "run.handed-off" | "run.continued";
 
 export interface EventLine {
   seq: number;                     // 1.. per task, strictly increasing
@@ -391,10 +398,9 @@ export interface ProjectTool {
   probe?: () => ToolCheck[] | Promise<ToolCheck[]>; // run by `warden tools --check`
   commands?: string[];                            // 0.10: first-level commands, for the project tools skill
   run: (argv: string[]) => number | Promise<number>; // the exit code
-  records?: RecordStore;                          // #33: on the tool named by the `records` role
 }
 
-// #33: the `records` role contract (the project's tool.ts holds the same shapes).
+// #33: finished runs, in .warden/state/_records/ and, with a database, in warden_records.
 export interface RunRecord {
   ticket: string; status: string; flow: string; finishedAt: string;
   summary: Record<string, unknown>;   // only what the lists show

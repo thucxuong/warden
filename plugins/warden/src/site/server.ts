@@ -8,8 +8,9 @@ import { buildHome } from "./home.ts";
 import { renderMarkdown } from "./markdown.ts";
 import { flushRecords } from "../records/record.ts";
 import { runExists } from "../state/store.ts";
-import { defaultFrom, prepareEpicEvents, prepareHome, prepareRecord, prepareRuns, prepareSignals } from "./finished.ts";
+import { defaultFrom, prepareEpicEvents, prepareHome, prepareRecord, prepareRuns, prepareSignals, setFinishedFreshness } from "./finished.ts";
 import { HttpError, listRuns, parseRunsQuery, runDetail, runEvents, runLog } from "./runs.ts";
+import { dbUrl } from "../central/url.ts";
 import { runSignals, siteThresholds, usualTimes } from "./signals.ts";
 import { serveStatic } from "./static.ts";
 import { siteCtx, TASK_ID, type SiteCtx } from "./text.ts";
@@ -62,9 +63,26 @@ function docRoute(main: string, url: URL): Response {
   return error(result.status, result.status === 400 ? "bad path" : "not found");
 }
 
+// #33: with a database, whether it answers; with a remote one, teammates' live runs join this machine's. Both are
+// read at most once per poll interval. Nothing loads without a database.
+async function prepareTeam(ctx: SiteCtx, withState: boolean): Promise<void> {
+  if (dbUrl() === null) return;
+  const freshMs = ctx.pollSeconds * 1000;
+  setFinishedFreshness(freshMs);
+  if (withState) ctx.teamDb = await (await import("../central/health.ts")).teamDbState(ctx.main, freshMs);
+  try {
+    const { runs, error } = await (await import("../central/team.ts")).teamRuns(ctx.main, freshMs);
+    ctx.team = runs;
+    if (error !== null && ctx.recordsError === null) ctx.recordsError = error;
+  } catch (err) { // a url warden cannot use: the page still shows this machine's runs
+    if (ctx.recordsError === null) ctx.recordsError = `team database: ${err instanceof Error ? err.message.split("\n")[0] : String(err)}`;
+  }
+}
+
 async function api(opts: ServerOptions, url: URL): Promise<Response> {
   const path = url.pathname.replace(/\/+$/, "") || "/api";
   const ctx = siteCtx(opts.main, opts.root, opts.data, (opts.now ?? Date.now)());
+  if (path !== "/api/docs" && path !== "/api/doc") await prepareTeam(ctx, path === "/api/home");
   if (path === "/api/home") {
     await prepareHome(ctx);
     return json(buildHome(ctx));
@@ -101,7 +119,20 @@ async function api(opts: ServerOptions, url: URL): Promise<Response> {
     if (parts.length > 2 || task === null || task === undefined || !TASK_ID.test(task) || task === "_sessions" || sub === null) {
       return error(404, `no run ${task ?? ""} on this machine or in the records database`);
     }
-    if (!runExists(opts.main, task)) await prepareRecord(ctx, task);
+    if (!runExists(opts.main, task) && sub !== "events") {
+      // Not on this disk: its files from the team database, with the end of each log (the log view: that log
+      // whole), else its record.
+      const team = dbUrl() === null ? null : await import("../central/team.ts");
+      let fromDb = null;
+      try {
+        fromDb = team ? await team.teamRun(opts.main, task, sub === "log" ? url.searchParams.get("path") : null) : null;
+      } catch (err) {
+        if (team && err instanceof team.TeamRunError) return error(503, err.message);
+        throw err;
+      }
+      if (fromDb) ctx.team = [...ctx.team.filter((t) => t.run.task !== task), fromDb];
+      else if (!ctx.team.some((t) => t.run.task === task)) await prepareRecord(ctx, task);
+    }
     if (sub === undefined) return json(runDetail(ctx, task));
     if (sub === "events") return json(runEvents(ctx, task));
     if (sub === "log") return json(runLog(ctx, task, url.searchParams.get("path"), url.searchParams.get("lines")));

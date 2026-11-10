@@ -73,7 +73,9 @@ Each doc folder (`context`, `rules`, `decisions`, `knowledge`, `checks`, `retros
 | `projectId` | string | — | Matches `^[a-z][a-z0-9-]{1,40}$`. Used in report records and temp folder names |
 | `taskIdPattern` | string | — | A JavaScript regular expression that starts with `^` and ends with `$`. `warden start` refuses a task id that does not match |
 | `sitePort` | integer | `4400` | 1 to 65535. The port of `warden site` |
+| `sitePollSeconds` | integer | `60` | 0.16. 5 to 3600. How often `warden site` refreshes the open pages; it reads the database at most once in that time |
 | `lastRetro` | string or null | — | Old key (before 0.2). Still read when `.warden/checks/retro.md` is missing; `warden upgrade --done` removes it |
+| `secrets` | string array | — | 0.16. Names of env vars that hold secrets, such as `["DATABASE_URL"]`. With a database, each of their values (4 characters or more) is replaced with `***` before anything is sent, also where JSON escaping changed it (quotes, backslashes). Each name must be an env var name |
 | `site` | object | — | 0.7. Settings of `warden site`; its only key is `thresholds`, the limits of the warning signals (see below). Only the site reads it: a bad value never breaks a run, and `warden upgrade --done` keeps it as it is |
 
 `site.thresholds` (every key optional; a bad value falls back to its default and shows under Project health):
@@ -223,22 +225,29 @@ When `retro.md` is missing, warden still lists a `retro` check built from the ol
 
 ## Run records
 
-Finished runs are not committed. Each one is a row in the project's records database, saved through the tool named by the `records` role when the run ships or finishes. Without that role, they are files in `.warden/state/_records/`. See [State and history](../concepts/state-and-history.md#the-records-database) and the [recipe](../../plugins/warden/skills/tools/recipes/records.md).
+Finished runs are not committed. When a run ships or finishes, warden saves its record as two files in `.warden/state/_records/`. When `WARDEN_DB_URL` is set (in the shell or in the project's git-ignored `.env`, never committed), the sync process copies each record to the `warden_records` table, and every other file of `.warden/state/` to `warden_files`. See [State and history](../concepts/state-and-history.md#the-team-database).
 
 ```sql
-warden_records (ticket, status, flow, finished_at, summary json, detail json)
+warden_records (ticket, status, flow, finished_at, summary json, detail json, warden_version)
 ```
 
 | Column | Content |
 |---|---|
 | `ticket` | The ticket id, or the epic id on an epic's row. One row per ticket |
-| `status` | `shipped` or `done`. An epic's saved cost has `epic`. `warden tools --verify records` writes rows with `verify` |
+| `status` | `shipped` or `done`. An epic's saved cost has `epic` |
 | `flow` | The flow name. `epic` on an epic's row |
 | `finished_at` | When the run shipped or finished. Indexed |
 | `summary` | What the lists show: title, start, duration, step, rounds, verdicts, tokens, cost, author, pull request, step timings |
 | `detail` | The run, the flow, the totals below, the task text, the plan, triage reports, review rounds, leftovers and every event |
+| `warden_version` | The warden version that wrote the row. `warden_files` has it too |
 
-Logs, raw reviewer output, step outputs and the `steps.json` copy are not saved. They stay on the machine that ran the ticket.
+The other tables, made by `warden db migrate`:
+
+```sql
+warden_files  (path, ticket, machine, src_size, content, updated_at, warden_version)   -- every other file of .warden/state, as text
+warden_claims (ticket, machine, label, claimed_at)                                     -- who has a live run on a ticket (team database)
+warden_meta   (key, value)                                                             -- layout number, oldest warden that may write, project id
+```
 
 The totals, in `detail.summary`:
 
@@ -290,12 +299,14 @@ Live state. It is gitignored and lives in the main checkout only, even for runs 
     outputs/<seq>-<step>.json             every hand-in, accepted or not
     fix/<n>.json, fix/<n>-repair-<i>.log  fixer outputs and repair logs
     .lock                  the task lock
-    record-unsaved         the run finished, but its record is not in the database yet
-  _records/                finished runs, when there is no records database: <ticket>.json and <ticket>.detail.json
+    record-unsaved         the run finished, but its record is not saved yet
+  _records/                finished runs: <ticket>.json and <ticket>.detail.json
   _sessions/               one record per Claude Code session (and per subagent)
   _checks/<name>.json      periodic check results; <name>.log and <name>.lock while running
   _orchestrate/<epic>.json the cached orchestrate plan
   _reports.json            report statuses already told at session start
+  _sync/                   only with a database: machine.json, index.json, pid, status.json, sync.log
+  _sync/handed-off/        a copy of each run this machine handed over with warden handoff
 ```
 
 Folder names that start with `_` are not tasks.

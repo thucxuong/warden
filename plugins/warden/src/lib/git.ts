@@ -283,3 +283,37 @@ export function hunkRanges(diff: string): Map<string, FileHunks> {
   closeRange(newLine - 1);
   return files;
 }
+
+// ---- handover (#33) ----
+
+// Commits everything git does not ignore as one commit, skipping hooks. Returns its sha, or null when nothing changed.
+export function commitAll(cwd: string, message: string): string | null {
+  gitOk(cwd, ["add", "-A"]);
+  if (git(cwd, ["diff", "--cached", "--quiet"]).code === 0) return null;
+  gitOk(cwd, ["commit", "--no-verify", "-q", "-m", message]);
+  return head(cwd);
+}
+
+// Pushes `from` to origin's branch. lease: the sha origin must have now (a forced push that undoes exactly that).
+export function pushBranch(cwd: string, from: string, branch: string, lease?: string): { ok: boolean; error: string } {
+  const args = ["push", "-q", "origin"];
+  if (lease !== undefined) args.splice(1, 0, `--force-with-lease=refs/heads/${branch}:${lease}`);
+  args.push(`${from}:refs/heads/${branch}`);
+  const result = git(cwd, args, FETCH_TIMEOUT_MS);
+  return { ok: result.code === 0, error: result.stderr.trim() };
+}
+
+// Fetches origin's branch into origin/<branch>. Null when it is not there.
+export function fetchBranch(main: string, branch: string): string | null {
+  const result = git(main, ["fetch", "-q", "origin", `+refs/heads/${branch}:refs/remotes/origin/${branch}`], FETCH_TIMEOUT_MS);
+  return result.code === 0 ? `origin/${branch}` : null;
+}
+
+// Moves the branch to ref and keeps the files as they are: what a commit added is uncommitted again.
+export function resetKeep(cwd: string, ref: string): void {
+  gitOk(cwd, ["reset", "-q", ref]);
+}
+
+export function fastForward(cwd: string, ref: string): boolean {
+  return git(cwd, ["merge", "-q", "--ff-only", ref]).code === 0;
+}

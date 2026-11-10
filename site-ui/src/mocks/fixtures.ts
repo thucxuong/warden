@@ -209,7 +209,7 @@ export function runsResponse(params: URLSearchParams, rows: RunRow[] = allRuns):
 const wait = (task: string) => seedOf(task)!;
 
 export const home: HomeResponse = {
-  project: { id: "fx", root: "/Users/dana/src/fx", mainBranch: "main", pluginVersion: "0.7.0" },
+  project: { id: "fx", root: "/Users/dana/src/fx", mainBranch: "main", pluginVersion: "0.7.0", pollSeconds: 60, teamDb: null },
   generatedAt,
   needsYou: [
     {

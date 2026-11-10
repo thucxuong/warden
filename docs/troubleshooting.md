@@ -57,7 +57,7 @@ When something is off and no message explains it:
 | `ticket tool failed (exit <n>): ...` / `ticket tool printed no JSON` | The project's `tickets` tool broke. | Run `warden tools tickets show <id>` and fix the tool. See [Write a ticket tool](guides/write-a-ticket-tool.md). |
 | `no tickets tool: set "tickets" in .warden/tools/roles.json. ...` (exit 3) | Every run starts from a ticket (0.9), and orchestrate reads tickets too: both need a `tickets` role. | Add a ticket tool with `/warden:tools`, or follow the 0.9.0 upgrade note (`/warden:upgrade`). Without a tracker, the [ticket tool guide](guides/write-a-ticket-tool.md) has a complete tool that keeps tickets as Markdown files. |
 | `the ticket tool has no create: ...` (exit 3), or `role tickets create` is `FAIL` in `warden tools --check` | The tickets tool answers exit 2 for `create`, which is required since 0.9. | Add `create` as the [ticket tool guide](guides/write-a-ticket-tool.md#create-rules-required-since-09) says. |
-| `the records role names <name>, which is not in .warden/tools/index.ts` / `tool <name>: records is missing: <methods>` / `tool <name>: the tool has no records object` | The `records` role names a tool that is not listed, or that has no full `records` object. | Fix the tool, then run `warden tools --verify records`. |
+| `<ticket> has a live run by <user@host> since <time>. Ask them to run warden handoff <ticket>; ...` | With a team database, another checkout has a live run on this ticket. Nobody takes a teammate's ticket. | Ask them to run `warden handoff <ticket>`. If their machine is gone, run `warden db release <ticket>`. Then `warden start <ticket>` continues the run here. See [State and history](concepts/state-and-history.md#moving-a-run-to-another-machine). |
 
 ## The step loop
 
@@ -79,7 +79,7 @@ These come from the PreToolUse hook. They are tripwires, not a sandbox: they cat
 
 | Message | Cause | Fix |
 |---|---|---|
-| `approve, retry and reset are for a person. ...` | The agent tried a human-only command. | Type `approve` or `retry` in the chat, or run the command in a terminal. |
+| `approve, retry, reset, handoff and db release are for a person. ...` | The agent tried a human-only command. | Type `approve` or `retry` in the chat, or run the command in a terminal. |
 | `this command changes how warden itself runs; ask the user to do it` | The command names one of warden's own variables (`PROJECT_AGENT`, `WARDEN_ROLE`, `WARDEN_CLAUDE_BIN`, `WARDEN_DATA`, `WARDEN_ROOT`, `WARDEN_TEST_MODE`, `CLAUDE_PLUGIN_ROOT`, `CLAUDE_PLUGIN_DATA`), runs `claude -p`, or runs `script` around warden. | Remove that part. Set `PROJECT_AGENT` only when you start Claude Code yourself. |
 | `state and gate files are written by the engine only` (Bash) / `state is written by the engine only` (Edit, Write) | A write that names `.warden/state`, or (Bash only) a locked config file while a run is live. | Leave those files to the engine. |
 | `gate files cannot change while a run is live (<task>); finish or reset it first` | An edit to the locked config: `.warden/steps.json`, `.warden/flows/`, `.warden/warden.json`, `.warden/triage-rules.json`, or `.warden/tools/roles.json` while any run is live. | Change them when no run is live. |
@@ -120,7 +120,7 @@ See [Gates and self-healing](concepts/gates-and-self-healing.md).
 | `gates are not proven for HEAD: <reason>` | The commit or the tree changed after the gates. | Run `warden next`. The gates run again on the new commit. |
 | `mergeCommit: <sha> not found` | The merge commit is not in the repo yet. | Give the right SHA, or fetch first. |
 | `the ticket was not set to done: <error>. ...` (a `warden done` warning after ship) | The `tickets` tool failed when warden set the merged ticket to done. The ship is done. | Fix the tool, then set the ticket to done by hand. |
-| `<task>: the run record is not saved yet, warden retries later: <error>` (a `warden done` warning) | The records database could not save the finished run. The ship is done. | Fix the database or its login. Warden tries again on the next `warden done`, when an engine worker exits, on `warden reset` and when the site starts. |
+| `<task>: the run record is not saved yet, warden retries later: <error>` (a `warden done` warning) | Warden could not write the finished run to `.warden/state/_records/`. The ship is done. | Fix the cause the error names (often a full disk or a folder warden cannot write). Warden tries again on the next `warden done`, when an engine worker exits, on `warden reset` and when the site starts. |
 | `<task> is not merged yet, so its ticket is not done: ...` (a `warden done` warning after ship) | The ship opened a pull request. A ticket is done only once its task is merged. | After the merge, run `warden tools tickets set-status <task> done` in the main checkout. |
 | The worktree was removed before the ship hand-in | The ship instructions say to hand in first. | Run `warden done <task> --json '...'` from the main checkout. With the worktree gone, warden checks only the merge evidence. |
 | `<task>: kept <path>: <branch> is not merged into <ref> (a pull request still open?)` from `warden clean` | The branch is not on the main branch yet, or it was squash-merged. | Merge the pull request and run `warden clean` again. After a squash merge, remove it by hand: `git worktree remove <path>` and `git branch -D <branch>`. |
@@ -145,8 +145,8 @@ See [Blocked and waiting runs](guides/blocked-and-waiting-runs.md).
 | `.warden/tools/index.ts: ...` / `.warden/tools/roles.json: ...` (or a `replaces.json` row in `warden tools --check`) | The tool list, the roles file or `replaces.json` (the raw commands each tool covers) is broken. Each line names the problem. While `replaces.json` is broken, `warden tools --usage` counts no raw commands and the project tools skill lists none. | Fix the file, then `warden tools --check`. See [Write a tool](guides/write-a-tool.md). |
 | `warden tools: no tool or role named add` (or `fixes`, `applied`, `list`) (exit 3) | Those subcommands were removed in 0.6.0. | `warden tools` lists the tools, `warden tools --init` writes the starting files, `/warden:tools` writes a tool. See [Upgrading](getting-started/upgrading.md#removed-in-060). |
 | `/warden:fix` or `/warden:status` is not found | Those skills are gone. | For tools use `/warden:tools`; for status run `warden status`. |
-| `warden: the epic's cost is not saved: <error>` (on stderr) | The records database could not save the epic's cost. The epic's status is set. | Fix the database, then run `warden orchestrate set-status <epic> done` again. |
-| `records database: <error>` on the site | The site could not read the records database. History and finished run pages show this; Home and live tickets keep working and say what is missing. | Fix the database or its login. `warden tools --verify records` shows what fails. |
+| `warden: the epic's cost is not saved: <error>` (on stderr) | Warden could not save the epic's cost. The epic's status is set. | Fix the cause, then run `warden orchestrate set-status <epic> done` again. |
+| `records database: <error>` or `team database: <error>` on the site | The site could not read the database named by `WARDEN_DB_URL`. History and finished run pages show this; Home and live tickets keep working and say what is missing. | Fix the database or its login. `warden db status` shows what fails. |
 | `run warden orchestrate plan <epic> first` (exit 3) | `status` needs a plan. | Run `warden orchestrate plan <epic>`. |
 | `a run is live in the main checkout (<task>); run checks after it` (exit 4) | Command checks run in the main checkout, which a live run uses. | Run the check after that run. |
 | `check <name> is already running` (exit 4) | One run of a check at a time. | Wait for it. |
@@ -154,6 +154,23 @@ See [Blocked and waiting runs](guides/blocked-and-waiting-runs.md).
 | `write docs/retros/<date>.md first` | The retro check is done only once its note exists. | Write the retro note, then `warden checks done retro`. |
 | `warden docs check` prints `"ok": false` | A `.warden` doc file has no `INDEX.md` line, an `INDEX.md` line names a missing file, or a file is over 200 lines. | Fix each line of `problems`. |
 | `warden site: port <n> is in use; pass --port` (exit 5) | Something else uses the port (4400 by default). | `warden site --port <other>`. |
+
+## Team database
+
+These only appear when `WARDEN_DB_URL` is set. See [State and history](concepts/state-and-history.md#the-team-database).
+
+| Message | Cause | Fix |
+|---|---|---|
+| `WARDEN_DB_URL is not a database url: use sqlite:<path> or postgres://...` / `warden supports sqlite: and postgres:// only` | The value is not a URL warden can use. | Fix it in your shell or in `.env`. |
+| `WARDEN_DB_URL: keep the SQLite file outside the repo, for example sqlite:~/.warden/<project>.db (it is <file>)` | The `sqlite:` path is inside the main checkout. A relative path is from there. | Use a path outside the repo, such as `sqlite:~/.warden/<project>.db`. |
+| `<task> has a <job> running: hand it over once it ends (warden wait <task>)` / `<task> is in a fix step: ...` (from `warden handoff`) | A gate or a fix step runs. | Wait until it ends, then run `warden handoff` again. |
+| `the run did not reach the team database; run warden handoff again` | The database did not take the run's state. The ticket is still yours. | Check `warden db status`, then run `warden handoff` again. |
+| `warden: runs are not sent to the database: <why>. They stay in local files and go up once this is fixed (warden db status).` (at session start) | The sync process may not write: the database is not set up or not migrated, it needs a newer warden, or it belongs to another project. Runs go on in local files. | Run `warden db status`. For a team database that needs a new layout, run `/warden:upgrade`. For a newer warden, update the plugin. For another project's database, fix `WARDEN_DB_URL`. |
+| `warden: the database did not answer at <time> (<error>). Runs stay in local files and go up when it answers.` (at session start) | The last sync could not reach the database. | Nothing is lost. Check the database and your network; the sync process sends the files once it answers. |
+| `warden: the team database did not answer, so <ticket> is not claimed; someone else could start it too (<error>)` (from `warden start`) | The run started without a claim. | Make sure nobody else works on that ticket. The next start of it claims it. |
+| `warden: <ticket> is not claimed in the team database: <why>` (from `warden start`) | This warden may not write to the database yet (see above). The run started without a claim. | As above: `warden db status`, then `/warden:upgrade` or a plugin update. |
+| `the database at <url> did not answer: <error>` (exit 1, from `warden db`) | `warden db status` or `migrate` could not reach the database. | Check the URL, the login and that the database runs. |
+| `warden db migrate` lists steps and exits 1 | The database needs a newer layout. It changed nothing. | Back up a team database, then run `warden db migrate --yes`, or let `/warden:upgrade` do it. |
 
 ## Tools in the main checkout see worktrees
 

@@ -114,6 +114,9 @@ export function validateWardenJson(value: unknown, file = "warden.json"): Warden
   const lastRetro = root.lastRetro === undefined || root.lastRetro === null
     ? null
     : c.matching(root.lastRetro, "$.lastRetro", /^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD or null");
+  const secrets = root.secrets === undefined ? undefined : c.stringArray(root.secrets, "$.secrets");
+  secrets?.forEach((name, i) => c.matching(name, `$.secrets[${i}]`, /^[A-Za-z_][A-Za-z0-9_]*$/, "an env var name"));
+  const sitePollSeconds = root.sitePollSeconds === undefined ? undefined : c.integer(root.sitePollSeconds, "$.sitePollSeconds", 5, 3600);
   c.done();
 
   return {
@@ -125,6 +128,8 @@ export function validateWardenJson(value: unknown, file = "warden.json"): Warden
     lastRetro: lastRetro!,
     // 0.7: `warden site` checks this key itself, so a typo there never breaks hooks or runs. Kept so upgrade --done keeps it.
     ...(root.site !== undefined && { site: root.site }),
+    ...(secrets !== undefined && { secrets }),
+    ...(sitePollSeconds !== undefined && { sitePollSeconds }),
   };
 }
 

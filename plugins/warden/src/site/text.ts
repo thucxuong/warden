@@ -2,11 +2,12 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { loadStepsJson } from "../config/config.ts";
+import { loadStepsJson, loadWardenJson } from "../config/config.ts";
 import type { EventLine, FlowJson, HistorySummary, RecordSummary, ReviewRound, RunJson } from "../types.ts";
 import type { Sample } from "./signals.ts";
-import type { ISO, Person, StepKind, StepRef, Usage, WaitKind } from "./api-types.ts";
-import { lazyAuthor, loadAll, readText, taskMdOf, type Author, type LoadedTask } from "./data.ts";
+import type { ISO, Person, StepKind, StepRef, TeamDbState, Usage, WaitKind } from "./api-types.ts";
+import { lazyAuthor, loadAll, runText, taskMdOf, type Author, type LoadedTask } from "./data.ts";
+import { processAlive } from "../lib/proc.ts";
 
 export const TASK_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 export const FIX_STEP = /^fix-(\d+)$/;
@@ -22,18 +23,23 @@ export interface SiteCtx {
   now: number;
   generatedAt: ISO;
   mainBranch: string | null;   // steps.json mainBranch; null when it does not load
-  tasks(): LoadedTask[];       // runs read from files on this machine
+  tasks(): LoadedTask[];       // runs read from files on this machine, then teammates' live runs
+  team: LoadedTask[];          // #33: teammates' live runs, from a remote database (central/team.ts)
   finished: RecordSummary[];   // the finished runs this page asked the database for (finished.ts)
   usualSamples: Sample[];      // past step timings from the database
   epicCosts: Map<string, Record<string, unknown>>;  // saved orchestrator cost by epic
   epicEvents: Map<string, EventLine[]>;             // event logs of an epic's finished tickets
   record: LoadedTask | null;   // the one full record a run page asked for
   recordsError: string | null; // why the database could not answer
+  pollSeconds: number;         // warden.json sitePollSeconds: page refresh, and how long database answers are reused
+  teamDb: TeamDbState | null;  // #33: whether the database answers; null without WARDEN_DB_URL
   defaultFrom: ISO | null;     // start of the range History used because the request named no dates
   remoteUrl(): string | null;  // git config remote.origin.url
   author(): Author;            // git user.name/email of main, read once per request
   memo: Map<string, unknown>;  // per-request cache for the other modules
 }
+
+export const DEFAULT_POLL_SECONDS = 60;
 
 export function siteCtx(main: string, root: string, data: string, now = Date.now()): SiteCtx {
   let tasks: LoadedTask[] | null = null;
@@ -45,14 +51,27 @@ export function siteCtx(main: string, root: string, data: string, now = Date.now
   } catch {
     mainBranch = null;
   }
-  return {
+  let pollSeconds = DEFAULT_POLL_SECONDS;
+  try {
+    pollSeconds = loadWardenJson(join(main, ".warden", "warden.json")).sitePollSeconds ?? DEFAULT_POLL_SECONDS;
+  } catch { /* the default */ }
+  const ctx: SiteCtx = {
     main, root, data, now, generatedAt: iso(now), mainBranch,
-    tasks: () => (tasks ??= loadAll(main, author)),
+    tasks: () => (tasks ??= mergeTeam(loadAll(main, author), ctx.team)),
+    team: [],
     finished: [], usualSamples: [], epicCosts: new Map(), epicEvents: new Map(), record: null, recordsError: null, defaultFrom: null,
+    pollSeconds, teamDb: null,
     author,
     remoteUrl: () => (remote === undefined ? (remote = gitRead(main, ["config", "--get", "remote.origin.url"])?.trim() || null) : remote),
     memo: new Map(),
   };
+  return ctx;
+}
+
+// A ticket this machine has on disk wins over the team copy of it.
+function mergeTeam(local: LoadedTask[], team: LoadedTask[]): LoadedTask[] {
+  const here = new Set(local.map((t) => t.run.task));
+  return [...local, ...team.filter((t) => !here.has(t.run.task))];
 }
 
 export function memo<T>(ctx: SiteCtx, key: string, make: () => T): T {
@@ -155,8 +174,14 @@ export function sumUsage(list: Usage[]): Usage {
 }
 
 // Live: transcripts on this machine or a reviewer cost. History: always known (from summary.json).
+// A gate runs on the machine of the run. A teammate's counts as alive: their run.json says when it ends.
+export function gateAlive(loaded: LoadedTask, gate: { pid: number; pidStart: string }): boolean {
+  return loaded.db ? true : processAlive(gate.pid, gate.pidStart);
+}
+
 export function usageKnown(loaded: LoadedTask): boolean {
   if (loaded.source === "history") return true;
+  if (loaded.db) return loaded.db.saved || loaded.db.windowTokens !== undefined;
   return loaded.links.some((l) => existsSync(l.transcriptPath)) || loaded.review.some((r) => r.costUsd !== null);
 }
 
@@ -229,7 +254,7 @@ function fixBranchOf(loaded: LoadedTask): string | null {
   const fix = loaded.run.fix;
   if (!fix) return null;
   try {
-    const text = readText(join(loaded.dir, "fix", `${fix.n}.json`));
+    const text = runText(loaded, `fix/${fix.n}.json`);
     const pr = text === null ? null : (JSON.parse(text) as { pr?: unknown }).pr;
     if (typeof pr === "string" && pr.trim() !== "") return pr;
   } catch {

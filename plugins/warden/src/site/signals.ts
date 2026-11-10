@@ -238,7 +238,7 @@ function bounceDetail(events: EventLine[]): { count: number; detail: string } {
 export function signalsFor(input: SignalInput): Signal[] {
   const { loaded, now, thresholds: t } = input;
   const { run, events, flow } = loaded;
-  const alive = input.alive ?? processAlive;
+  const alive = loaded.db ? () => true : (input.alive ?? processAlive);
   if (loaded.source !== "live" || !isGoing(run)) return [];
   const T_ = run.task;
   const out: Signal[] = [];

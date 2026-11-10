@@ -59,7 +59,8 @@ To run a command against the checkout from a terminal, use the wrapper: `plugins
 | `plugins/warden/src/gates/` | Check runner, triage, triage rules, error signatures, review, findings |
 | `plugins/warden/src/hooks/` | One handler per hook event; `resolve.ts` finds the run a session or path belongs to |
 | `plugins/warden/src/state/` | Paths and the run store (atomic writes, task lock, events) |
-| `plugins/warden/src/records/` | Run records: building a record, the project's store, `warden tools --verify records` |
+| `plugins/warden/src/records/` | Run records: building a record, the local store in `.warden/state/_records/`, and which store to read |
+| `plugins/warden/src/central/` | The team database (`WARDEN_DB_URL`): the URL, the connection, migrations, the sync process, claims, and the reads for the site |
 | `plugins/warden/src/config/` | Loading and checking `warden.json`, `steps.json`, triage rules |
 | `plugins/warden/src/lib/` | Git, processes, tokens, reports (GitHub issues through `gh`), small helpers |
 | `plugins/warden/src/site/` | The local `warden site` server: the read-only JSON API and the static file server |
@@ -102,6 +103,7 @@ To run a command against the checkout from a terminal, use the wrapper: `plugins
 - The fake reviewer is `tests/fixtures/bin/claude`. A test uses it with `WARDEN_TEST_MODE=1` and `WARDEN_CLAUDE_BIN=<path>`; outside test mode, warden ignores `WARDEN_CLAUDE_BIN`.
 - `WARDEN_POLL_MS` shortens the `warden wait` poll, in test mode only.
 - Report tests set `WARDEN_REPORTS_REPO` and put a fake `gh` on `PATH`, so they never open a real issue.
+- `tests/unit/central.test.ts` runs every database test on SQLite, and on Postgres in Docker (`postgres:17-alpine`) when Docker is there. Without Docker, the Postgres runs are skipped with a note. `WARDEN_TEST_PG=<url>` uses an existing Postgres instead.
 - `tests/helpers/repo.ts` builds a template repo once per file and copies it per test, and puts the real git binary first on the PATH on macOS. Use it for tests that need git.
 - When you add a skill, add it to `expectedSkills` (and its frontmatter fields to `expectedExtras`) in `tests/unit/skills.test.ts`.
 

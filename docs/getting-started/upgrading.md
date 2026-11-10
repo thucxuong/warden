@@ -69,7 +69,9 @@ The agent offers the upgrade once your current request is done. It runs `/warden
 
 4. The agent shows you the diff. Check it.
 
-5. After you confirm, the agent runs:
+5. When the project has a database (`WARDEN_DB_URL` is set), the agent runs `warden db migrate`. When the database is up to date, or `WARDEN_DB_URL` is not set, it goes on. When steps are pending, it shows you the message. A team database is shared, so back it up first; the agent runs `warden db migrate --yes` only after you say yes. Until the database is migrated, a machine whose warden does not match keeps working in local files and sends them later. A local database migrates by itself, after a copy of its file. See [Migrations](../concepts/state-and-history.md#migrations).
+
+6. After you confirm, the agent runs:
 
    ```bash
    warden upgrade --done
@@ -78,7 +80,7 @@ The agent offers the upgrade once your current request is done. It runs `/warden
 
    The first sets `wardenVersion` in `.warden/warden.json` to the installed version. The second refreshes `.warden/reports.md`.
 
-6. The agent commits the change, including `.warden/reports.md`, with the message `chore: warden upgrade to <version>`. Push it and merge it like any other change (with branch protection, through a pull request).
+7. The agent commits the change, including `.warden/reports.md`, with the message `chore: warden upgrade to <version>`. Push it and merge it like any other change (with branch protection, through a pull request).
 
 One person upgrades the project. Teammates get the new files when they pull the main branch, and the new plugin through their own update.
 
@@ -88,9 +90,11 @@ Each version that ships has a note in the plugin's `upgrades/` folder, named `v<
 
 Skipping versions is fine: `warden upgrade --notes` joins the notes of every version in between, in order.
 
-## Run records move to your own database in 0.16.0
+## Run records leave the repo in 0.16.0
 
-From 0.16.0, the ship step no longer commits a run record, and `.warden/history/` is gone. Finished runs stay in `.warden/state/_records/` on the machine that ran them, or go to a database your project sets up with `/warden:tools records` so the whole team shares them. `/warden:upgrade` loads the old records with `warden records import`, then removes `.warden/history/` from the repo. With a database, each teammate needs its login in their environment. See [State and history](../concepts/state-and-history.md#the-records-database).
+From 0.16.0, the ship step no longer commits a run record, and `.warden/history/` is gone. Finished runs stay in `.warden/state/_records/` on the machine that ran them. `/warden:upgrade` loads the old records with `warden records import`, then removes `.warden/history/` from the repo. The import also saves every finished run in `.warden/state/` that has no record yet, such as runs that finished before 0.16.
+
+The upgrade also asks whether the team wants one place for all its runs, live and finished, in a database. If yes, each person sets `WARDEN_DB_URL` in their shell or in the project's git-ignored `.env`, and the upgrade sets the database up. With a team database, `warden start` refuses a ticket another machine is running: its owner hands it over with `warden handoff`, or a person frees it with `warden db release` when that machine is gone. See [State and history](../concepts/state-and-history.md#the-team-database).
 
 ## Every run starts from a ticket in 0.9.0
 

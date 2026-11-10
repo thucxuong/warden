@@ -35,8 +35,9 @@ What it does:
 4. Asks you, one question at a time: the task id format (a regex such as `^PG-\d{3}$`), the project id, a yes or no on the checks and setup script, and whether to add the team install block to `.claude/settings.json`.
 5. Writes everything with `warden init --write --file <payload>`.
 6. Sets up the ticket tool, because every run starts from a ticket. It asks where your tickets live. Without a tracker, the agent writes `.warden/tools/backlog.ts` (tickets are Markdown files in `backlog/<ID>.md`, as in [Write a ticket tool](../guides/write-a-ticket-tool.md)), makes it the `tickets` role and runs `warden tools --check`. For a tracker, it tells you to run `/warden:tools` afterwards.
-7. Optionally runs each check once and reports the result.
-8. Tells you what to `git add`, commit and push to the main branch, and suggests branch protection.
+7. Optionally sets up a database for the team: it explains `WARDEN_DB_URL`, asks which env vars hold secrets (they go in `"secrets"` in `.warden/warden.json`), then runs `warden db migrate --yes` and `warden db status`. See [State and history](../concepts/state-and-history.md#the-team-database).
+8. Optionally runs each check once and reports the result.
+9. Tells you what to `git add`, commit and push to the main branch, and suggests branch protection.
 
 See [quick start](../getting-started/quickstart.md) and [project files](project-files.md).
 
@@ -157,7 +158,7 @@ See [project files](project-files.md#doc-folders).
 /warden:tools e2e
 ```
 
-Writes or changes a tool in `.warden/tools/`. Without a name, it lists the tools and asks what you need. It adds the tool to `index.ts`, tries it, sets a role in `roles.json` when warden should use it, and runs `warden tools --check` before you commit. `/warden:tools records` sets up the database every project needs for its run records.
+Writes or changes a tool in `.warden/tools/`. Without a name, it lists the tools and asks what you need. It adds the tool to `index.ts`, tries it, sets a role in `roles.json` when warden should use it, and runs `warden tools --check` before you commit.
 
 See [write a tool](../guides/write-a-tool.md) and [write a ticket tool](../guides/write-a-ticket-tool.md).
 
@@ -167,8 +168,9 @@ Applies the upgrade notes after warden was updated. Session start offers it when
 
 1. `warden upgrade --notes` prints the notes for every version in between.
 2. The agent applies each note exactly and shows you the diff.
-3. After you confirm: `warden upgrade --done`, then `warden report --status --write`.
-4. It commits with `chore: warden upgrade to <version>`.
+3. When the project has a database, it runs `warden db migrate`. When steps are pending, it shows them, asks you to back up a team database, and runs `warden db migrate --yes` only after you say yes.
+4. After you confirm: `warden upgrade --done`, then `warden report --status --write`.
+5. It commits with `chore: warden upgrade to <version>`.
 
 See [upgrading](../getting-started/upgrading.md).
 

@@ -2,13 +2,13 @@
 
 Use the warden site to supervise your project's work: what needs a person, what is running, how the epics progress, what shipped, how many tokens it took, and where something looks wrong.
 
-The **warden site** is a small web app that warden serves on your own machine. It reads `.warden/state/` (live runs on this machine), the run records (every finished task: from your project's records database, or this machine's own without one), git, and your project's ticket tool. Nothing is sent anywhere else, and the site changes no run: it has no buttons that change one. The only thing it writes is, when it starts, any finished run that an earlier database problem left unsaved. When a run needs you, the site shows the exact command to type.
+The **warden site** is a small web app that warden serves on your own machine. It reads `.warden/state/` (live runs on this machine), the run records (every finished task: from the team database when `WARDEN_DB_URL` is set, or this machine's own without one), git, and your project's ticket tool. The site sends nothing anywhere, and it changes no run: it has no buttons that change one. The only thing it writes is, when it starts, any finished run that an earlier problem left unsaved. When a run needs you, the site shows the exact command to type.
 
 ## What you need
 
 - Claude Code with the warden plugin installed, and Bun. See [Installation](../getting-started/installation.md).
 - Read access to the project's repo, with the latest main branch pulled.
-- If the project has a records database: its login, in the environment variable its `records` tool reads. Without it, History and finished runs show an error.
+- If the project has a team database: `WARDEN_DB_URL` in your shell or in the project's `.env`. Without it, you see only this machine's runs. See [Team setup](team-setup.md#one-database-for-the-team-optional).
 - At least one Claude Code session started on this machine since warden was installed. That session writes the file the `warden` alias reads.
 - The `warden` alias in your shell, from [Installation](../getting-started/installation.md#verify-the-install) step 3.
 
@@ -44,17 +44,31 @@ If the port is taken, it prints `warden site: port 4400 is in use; pass --port` 
 
 ## See your team's work
 
-Live runs are only on the machine that runs them. Finished work reaches you through your project's records database: when a task ships or finishes, warden saves its record there, so anyone who can reach the database sees it with `warden site`. Without a database, each machine sees only the runs it finished.
+Without a database, each machine sees only its own runs. With a team database, each machine sends its runs there within about a second, so `warden site` shows the whole team:
 
-Logs and step outputs stay on the machine that ran the ticket.
+- Finished runs (recently shipped on Home, History, run pages) come from the database.
+- Teammates' live runs show next to yours, read from the database at most once per `sitePollSeconds` (see [The pages](#the-pages)). Your own live runs come from your files.
+- A teammate's run shows its logs, plan, outputs, log tails and token counts like your own runs, read from the team database. Lists load no logs; a run page loads the end of each log, and the log view the whole log. Their machine counts a live run's tokens from its transcripts and sends them about every 15 seconds; a finished run uses its saved record.
+- A run sent by a newer warden that yours cannot read is named in a note instead of hidden. Update warden to see it.
+
+With `WARDEN_DB_URL` set, the top bar shows a database badge. Hover over it for the details.
+
+| Badge | Meaning |
+|---|---|
+| Team database / Local database | The database answers, and this machine's runs reach it |
+| Database not reachable | The database does not answer |
+| Database blocked | It answers, but this warden may not write to it: for example it needs a migration or a newer warden |
+| Database: runs not sent | The database answers, but this machine's sync could not send its last changes. Runs wait in local files |
+
+A local database (a `sqlite:` file, or Postgres on your own machine) gives the database pages but no teammates' live runs. See [State and history](../concepts/state-and-history.md#the-team-database).
 
 ## The pages
 
-Data loads when a page opens, and again when you click **Refresh** or come back to the tab. There is no live stream: times such as "in step" are as of the "Updated" time in the top bar.
+Data loads when a page opens, again every `sitePollSeconds` while it is open (60 by default), and when you click **Refresh** or come back to the tab. There is no live stream: times such as "in step" are as of the "Updated" time in the top bar. Set `sitePollSeconds` in `.warden/warden.json`, from 5 to 3600.
 
-Each page asks the database only for what it shows: Home the latest 8 summaries, History the chosen date range, a run page one full record, an epic page the event logs of its tickets. Finished results are reused for about 30 seconds.
+Each page asks the database only for what it shows: Home the latest 8 summaries, History the chosen date range, a run page one full record, an epic page the event logs of its tickets. Database answers are reused for up to `sitePollSeconds`, so the site reads the database at most once in that time.
 
-If the database is down, History and finished run pages show an error. Home and live tickets keep working and say what is missing.
+If the database is down, History and finished run pages show an error. Home and live tickets keep working and say what is missing. A run that finished on this machine shows from its files until its record has really reached the database, so it never vanishes while the database is down or blocked.
 
 ### Home
 
@@ -88,7 +102,7 @@ Click a run anywhere to open it. The header has the status, flow, branch, pull r
 
 Hover over the info icon beside a run's total cost, in the header or on the Tokens tab, to see the date of the prices the estimate uses and how much of the review cost the reviewer reported. See [`warden prices`](../reference/cli.md#warden-prices).
 
-A finished run read from the database has no logs and no step outputs, which stay on the machine that ran it; the page says so.
+A finished run that has only its record in the database, and no files there (for example one loaded from an old `.warden/history/`), shows no logs and no step outputs; the page says so.
 
 ### Tickets
 
@@ -146,7 +160,7 @@ Set any of these in `.warden/warden.json`; the rest keep their defaults:
 - **Duration** of a task is the wall-clock time from its start to when it shipped (or to now while it runs), so time spent waiting for a person counts.
 - **Step time** (the timeline) is the time of each attempt of each step.
 - **Tokens** come from the Claude Code transcripts of the sessions and subagents that worked on the task. Each message is counted in the step attempt that was open at that moment. The reviewer's tokens come from its review records and are added to the review step. For a step that is still running, it is what is recorded so far.
-- When this machine has no transcripts of a run (it ran elsewhere), tokens show as "n/a". Finished runs read from the database use the totals saved with them.
+- When this machine has no transcripts of a run (it ran elsewhere), it shows the counts that run's machine sent to the team database, or "n/a" until it has sent some. Finished runs read from the database use the totals saved with them.
 - **Cost** is an estimate from a built-in price table per model family (Opus, Sonnet, Haiku). It is not a bill. With a model that has no price, the cost is shown as "at least".
 - A record imported from an older version was taken when the ship step started, so the ship step's own tokens are not in it.
 - **Pull request**: from the run's ship step, saved with its record. A finished run's page also looks for the merge commit on the main branch that names the task (for example `Merge pull request #12 from acme/pg-302`).
@@ -163,7 +177,7 @@ The site is built on a small read-only JSON API on the same address, handy for s
 | `/api/runs?status=&flow=&from=&to=&source=` | one row per run, with totals. `status` is a comma list, `from` and `to` are ISO times, `source` is `live` or `history` (finished runs, from the database). Finished runs cover the last 30 days unless you pass `from` or `to`. 503 when the database cannot be read |
 | `/api/runs/<task>` | timeline, gates, review, plan, changes, tokens per step |
 | `/api/runs/<task>/events` | the event log |
-| `/api/runs/<task>/log?path=<log>&lines=<n>` | the end of one log of a live run |
+| `/api/runs/<task>/log?path=<log>&lines=<n>` | the end of one log of a run; for a run not on this disk, read from the team database |
 | `/api/tickets` | the board, the DAG and epic progress (runs the ticket tool) |
 | `/api/docs` | `{ docs: [{ path, title }] }` |
 | `/api/doc?path=<path>` | the Markdown text of one doc (add `&format=html` for HTML) |

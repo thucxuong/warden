@@ -1,7 +1,9 @@
 // Finished runs leave the machine as one record per ticket (#33). A run is marked unsaved when it finishes; the marker
 // stays in the git-ignored state folder until the store has the record, so an outage never blocks shipping.
 import { join } from "node:path";
-import { clearUnsaved, isUnsaved, listTasks } from "../state/store.ts";
+import { clearUnsaved, isUnsaved, listTasks, readRun } from "../state/store.ts";
+
+const FINAL = ["shipped", "done"];
 import { lazyAuthor, loadTask, readText, type LoadedTask } from "../site/data.ts";
 import { samplesOf, type Sample } from "../site/signals.ts";
 import { stepRef, titleFromText } from "../site/text.ts";
@@ -92,6 +94,9 @@ export async function flushRecords(main: string): Promise<string[]> {
   const failed: string[] = [];
   for (const task of listTasks(main).filter((t) => isUnsaved(main, t))) {
     try {
+      // The marker is written with the run's last event, a moment before run.json says it finished. A flush that
+      // lands in between leaves it for the run's own flush, so a record never holds a status that is not final.
+      if (!FINAL.includes(readRun(main, task).status)) continue;
       await (await recordStore(main)).save(buildRecord(main, task));
       clearUnsaved(main, task);
     } catch (err) {

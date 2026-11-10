@@ -8,6 +8,7 @@ import { newerVersionNotice, upgradeNotice } from "../commands/upgrade.ts";
 import { ensureGate } from "../engine/machine.ts";
 import { reportSyncLine } from "../lib/reports.ts";
 import { orchestrateLines } from "../engine/tickets.ts";
+import { dbUrl } from "../central/url.ts";
 import type { Ctx, RunJson } from "../types.ts";
 import {
   type HookCall, linkSession, liveRuns, logHookError, machineCtx, recordSession, runFlow, runForSession,
@@ -107,6 +108,12 @@ export async function sessionStart(call: HookCall): Promise<string | null> {
   const leftovers = guarded(call, "leftover worktrees", () => leftoverLine(call.main));
   if (leftovers) lines.push(leftovers);
   lines.push(...(guarded(call, "orchestrate lines", () => orchestrateLines(call.main)) ?? []));
+  if (dbUrl(call.ctx.env) !== null) {
+    // #33: reads the sync process's last outcome from a file; session start never waits for the database.
+    const { syncStatusLine } = await import("../central/sync.ts");
+    const line = guarded(call, "database sync", () => syncStatusLine(call.main));
+    if (line) lines.push(line);
+  }
   // "sent" again means this project answered a question: no news for it.
   const changes = reportStatusChanges(machineCtx(call));
   for (const change of changes.filter((c) => c.status !== "sent")) {

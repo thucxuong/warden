@@ -18,7 +18,7 @@ The short form ships with the plugin as the [`/warden:guide`](reference/skills.m
 | Run the checks to prove a step | The engine runs them on the exact commit (its git SHA). Your run proves nothing. |
 | Write under `.warden/state/` | Only the engine writes there. Hooks refuse it. |
 | Push, open a pull request or merge outside the ship step | Hooks refuse it until all gates pass for HEAD. |
-| Run `warden approve`, `warden retry` or `warden reset` | They are for a person. The hook refuses them and they need a terminal anyway (exit 6). |
+| Run `warden approve`, `warden retry`, `warden reset`, `warden handoff` or `warden db release` | They are for a person. The hook refuses them and they need a terminal anyway (exit 6). |
 | Set `PROJECT_AGENT`, any `WARDEN_*` or `CLAUDE_PLUGIN_*` variable on a command, or start `claude -p` | That changes how warden itself runs. Hooks refuse warden's own variables (the list is in [Hooks](reference/hooks.md), rule B2) and nested `claude -p`. |
 | Edit the locked config files while a run is live: `.warden/steps.json`, `.warden/flows/`, `.warden/warden.json`, `.warden/triage-rules.json`, `.warden/tools/roles.json` | The live run's checks depend on them. The hook message calls them gate files. |
 | Run a raw command that a project tool covers (the `project-tools` skill lists them), or write a script around a tool | Use the tool. If it cannot do the job, tell the user, so the tool can grow. The retro counts raw commands a tool covers. |
@@ -188,7 +188,7 @@ Each hook refusal starts with `warden:`.
 
 | Message | Fix |
 |---|---|
-| `approve, retry and reset are for a person. Ask the user to type "approve" / "retry".` | Do that. |
+| `approve, retry, reset, handoff and db release are for a person. Ask the user to type "approve" / "retry", or to run the command in a terminal.` | Do that. |
 | `this command changes how warden itself runs; ask the user to do it` | Remove the variable (`PROJECT_AGENT`, `WARDEN_ROLE`, `WARDEN_CLAUDE_BIN`, `WARDEN_DATA`, `WARDEN_ROOT`, `WARDEN_TEST_MODE`, `CLAUDE_PLUGIN_ROOT`, `CLAUDE_PLUGIN_DATA`) or `claude -p` from the command. |
 | `state and gate files are written by the engine only` (Bash) / `state is written by the engine only` (Edit, Write) | Leave those files alone. |
 | `<type> step does not change code (<task> at <step>)` | This step allows no such edit. Hand in what the step asks for. |
@@ -208,6 +208,7 @@ Each hook refusal starts with `warden:`.
 | `task is busy: another warden command holds the lock` (exit 4) | Run the command again in a moment. |
 | `a run for <task> exists (status <s>); a person can run warden reset <task>` | Use the existing run (`warden next <task>`). |
 | `on <main>: start on a ticket branch, or pass --worktree` | Add `--worktree`. |
+| `<ticket> has a live run by <user@host> since <time>. Ask them to run warden handoff <ticket>; ...` | Someone else works on this ticket. Tell the user. Only a person runs `warden handoff` or `warden db release`; once they have, run the same `warden start <ticket>` again. |
 
 More in [Troubleshooting](troubleshooting.md). Exit codes are in [Exit codes](reference/exit-codes.md).
 
@@ -235,6 +236,7 @@ At the start of a session, warden adds lines that begin with `warden:`. Act on t
 | `report <id> "<title>" is now <status>. ...` | Tell the user. For `needs-info`, answer it (below). |
 | `when the user's current request is done, run warden report --status --write. ...` | Do that, then commit `.warden/reports.md` as the line says. |
 | `not set up here. Run /warden:init.` | Tell the user. Only a person can start `/warden:init`. |
+| `runs are not sent to the database: ...` / `the database did not answer at ...` | Tell the user in one short line. Work goes on: runs stay in local files and go up later. Details: `warden db status`. |
 
 ## Reporting a warden problem
 

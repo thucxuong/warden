@@ -1,8 +1,8 @@
 // End-to-end test (spec section 11, "E2E"): the happy path of the feature template.
 // Runs bin/warden as a subprocess in its own temp repo; see helpers.ts.
-import { RECORDS_FILE } from "../helpers/tools-fixture.ts";
+import { recordRows } from "../helpers/records-fixture.ts";
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import {
   bashHook, cleanupAll, commitFiles, createCp, done, eventTypes, git, headOf, implement, implementOutput, PLACEHOLDER_PLAN, PLAN_OUTPUT, readRun, reviewCalls, sessionStart, setReview, start, stateDir, stopHook, warden, wtOf,
@@ -83,11 +83,11 @@ describe("happy path (feature template)", () => {
     expect(shipped.json.accepted).toBe(true);
     expect(shipped.json.next.status).toBe("shipped");
     expect(readRun(cp, "T-001").status).toBe("shipped");
-    // Nothing about the run is in the repo; the record is in the project's database, with the merge in it.
+    // Nothing about the run is in the repo; the record is in the git-ignored local store, with the merge in it.
     expect(existsSync(join(cp.main, ".warden", "history"))).toBe(false);
     expect(existsSync(join(wt, ".warden", "history"))).toBe(false);
     expect(git(cp.main, "log", "--format=%s")).not.toContain("run record");
-    const rows = JSON.parse(readFileSync(join(cp.main, RECORDS_FILE), "utf8"));
+    const rows = recordRows(cp.main) as any[];
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ ticket: "T-001", status: "shipped", flow: "feature", summary: { merged: true, mergeCommit, rounds: { review: 1, fixer: 0 } } });
     expect(rows[0].summary.events).toBeUndefined();

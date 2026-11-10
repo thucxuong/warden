@@ -1,12 +1,11 @@
 // /api/home (design 2.4): what needs a person, what is running, what shipped. Files only, so it stays fast.
-import { processAlive } from "../lib/proc.ts";
 import { readPluginVersion } from "../lib/version.ts";
 import type { HomeResponse, NeedsYouItem, ProjectInfo, RunningItem, ShippedItem } from "./api-types.ts";
 import { readProjectId } from "./data.ts";
 import { readReports } from "./reports.ts";
 import { allRows } from "./runs.ts";
 import { bounceCount, runSignals } from "./signals.ts";
-import { isLiveOpen, stepRef, taskTitle, usageOf, waitingView, type SiteCtx } from "./text.ts";
+import { gateAlive, isLiveOpen, stepRef, taskTitle, usageOf, waitingView, type SiteCtx } from "./text.ts";
 
 export function projectInfo(ctx: SiteCtx): ProjectInfo {
   let pluginVersion = "";
@@ -15,7 +14,7 @@ export function projectInfo(ctx: SiteCtx): ProjectInfo {
   } catch {
     pluginVersion = "";
   }
-  return { id: readProjectId(ctx.main), root: ctx.main, mainBranch: ctx.mainBranch, pluginVersion };
+  return { id: readProjectId(ctx.main), root: ctx.main, mainBranch: ctx.mainBranch, pluginVersion, pollSeconds: ctx.pollSeconds, teamDb: ctx.teamDb };
 }
 
 export function buildHome(ctx: SiteCtx): HomeResponse {
@@ -46,7 +45,7 @@ export function buildHome(ctx: SiteCtx): HomeResponse {
         task: run.task, title, flow: run.flowName, step: stepRef(run, flow),
         stepStartedAt: run.current.startedAt,
         inStepMs: Math.max(0, ctx.now - Date.parse(run.current.startedAt)),
-        gate: gate ? { job: gate.job, startedAt: gate.startedAt, alive: processAlive(gate.pid, gate.pidStart), reruns: gate.reruns } : null,
+        gate: gate ? { job: gate.job, startedAt: gate.startedAt, alive: gateAlive(loaded, gate), reruns: gate.reruns } : null,
         fixer,
         usage: usageOf(loaded),
         bounces: bounceCount(loaded.events),

@@ -54,6 +54,8 @@ function rowOf(e: EventLine): { kind: EpicRowKind; label: string } | null {
     case "run.shipped": return { kind: "done", label: "Shipped" };
     case "run.done": return { kind: "done", label: "Finished" };
     case "run.archived": return { kind: "done", label: "Archived" };
+    case "run.handed-off": return { kind: "wait", label: "Handed over" };
+    case "run.continued": return { kind: "start", label: `Continued by ${String(d.by ?? "someone")}` };
     default: return null;
   }
 }
@@ -65,7 +67,9 @@ function rowsOf(ticket: string, events: EventLine[], finishedAt: ISO | null): Ep
     const row = rowOf(e);
     if (row) rows.push({ at: e.ts, ticket, ...row });
   }
-  if (finishedAt !== null && !events.some((e) => e.type === "run.shipped")) rows.push({ at: finishedAt, ticket, kind: "done", label: "Shipped" });
+  // A log that has its own end (run.shipped, run.done or run.archived) needs no extra row.
+  const ended = events.some((e) => e.type === "run.shipped" || e.type === "run.done" || e.type === "run.archived");
+  if (finishedAt !== null && !ended) rows.push({ at: finishedAt, ticket, kind: "done", label: "Shipped" });
   return rows;
 }
 

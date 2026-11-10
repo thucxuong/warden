@@ -27,31 +27,3 @@ export interface SetStatusResult { id: string; status: TicketStatus; changed: st
 // So report any other problem with create or link as exit 1; create with missing flags exits 1 and writes nothing.
 export interface CreateResult { ticket: TicketDetail; changed: string[] }   // create --title --type --body-file [--epic] [--blocked-by]
 export interface LinkResult { id: string }                                   // optional: link <id> <pr url>, for a tracker outside the repo
-
-// The `records` role contract (#33): where finished run records live. The project implements it for its own database.
-// Set `records` on the tool named by the `records` role. The site keeps one store open, so hold one connection in it.
-// Read the login from an environment variable, never from a committed file.
-export interface RunRecord {
-  ticket: string;                     // the key: one row per ticket
-  status: string;
-  flow: string;
-  finishedAt: string;                 // ISO time, indexed
-  summary: Record<string, unknown>;   // small: only what the lists show
-  detail: Record<string, unknown>;    // large: events, plan, reviews
-}
-export type RecordSummary = Omit<RunRecord, "detail">;
-export interface RecordFilters {
-  status?: string[];
-  flow?: string;
-  from?: string;                      // finishedAt >= from
-  to?: string;                        // finishedAt < to
-  tickets?: string[];
-}
-export interface RecordPage { records: RecordSummary[]; cursor: string | null } // cursor: null on the last page
-export interface TicketEvents { ticket: string; events: unknown[] }             // detail.events of one ticket
-export interface RecordStore {
-  save(record: RunRecord): Promise<void>;                                       // insert, or replace the row of that ticket
-  list(filters: RecordFilters, limit: number, cursor: string | null): Promise<RecordPage>; // newest finishedAt first; never reads detail
-  get(ticket: string): Promise<RunRecord | null>;
-  events(tickets: string[]): Promise<TicketEvents[]>;                           // leaves out tickets with no record
-}

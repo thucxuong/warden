@@ -40,10 +40,24 @@ git push
 | `scripts/warden-setup.sh` | yes | runs in every new task worktree, for example to install packages |
 | `.claude/settings.json` | yes | the team install block, and any shared permission rules |
 | `.claude/settings.local.json` | no | personal. Warden does not write it. |
+| `.env` with `WARDEN_DB_URL` | no | the database login. Keep `.env` in `.gitignore`. |
 
 `warden start` reads `.warden/` from your main branch on the remote (`origin/<main>` after a fetch), not from your working copy. Until it is pushed, `warden start` stops with `commit and push .warden/ to main first`. The same goes for later config changes: they count once they are on the main branch.
 
-Run records do not go in git. Without a database, each machine keeps its own in `.warden/state/_records/`. To share them across the team, set up a database once with `/warden:tools records`. See [State and history](../concepts/state-and-history.md#the-records-database).
+Run records do not go in git. Without a database, each machine keeps its own in `.warden/state/_records/`, and sees only its own runs.
+
+### One database for the team (optional)
+
+To see every run of the team, live and finished, in one place, point warden at a shared Postgres database. Warden talks to it itself; there is nothing to install.
+
+1. Make an empty Postgres database for this project. One database holds one project.
+2. Set `WARDEN_DB_URL=postgres://user:password@host/db` in your shell or in the project's `.env`. Make sure git ignores `.env`. Never commit the URL.
+3. In `.warden/warden.json`, list the env vars whose values must never leave a machine, for example `"secrets": ["DATABASE_URL", "STRIPE_KEY"]`. Their values are replaced with `***` before anything is sent. Commit this.
+4. Run `warden db migrate --yes` once, then `warden db status`. It should say `remote, shared by the team` and `may write`.
+
+From then on, a background process on each machine sends its runs within about a second. `warden start` claims the ticket, so two people never run the same ticket. To move a run to another machine, its owner runs `warden handoff <ticket>`; the next `warden start <ticket>` continues it there. When the database is down, runs go on in local files and are sent later. See [State and history](../concepts/state-and-history.md#the-team-database).
+
+A `sqlite:` file outside the repo (for example `sqlite:~/.warden/<project>.db`) or a Postgres on your own machine works too, but it is local: one person, no claims and no teammates' live runs.
 
 ## 3. Protect the main branch
 
@@ -66,7 +80,7 @@ During a run, warden's hooks only allow push, pull request and merge commands in
 
    The `root` file is written the first time a Claude Code session starts with warden.
 
-5. Set the environment variable your `records` tool reads for its database login. Without it, a finished run stays unsaved on that machine and the site cannot show finished runs.
+5. With a team database: set `WARDEN_DB_URL` in their shell or in the project's `.env`. Without it, their runs stay on their machine and they see only their own. With it, their runs from before go up on the first sync.
 
 ## 5. Permissions
 

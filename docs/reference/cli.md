@@ -28,12 +28,14 @@ Every `warden` command, its flags, what it prints, and who runs it.
 | [`approve`](#warden-approve) | person, in a terminal | Approve a waiting approve step |
 | [`retry`](#warden-retry) | person, in a terminal | Go on after a block, a fix merge or a question |
 | [`reset`](#warden-reset) | person, in a terminal | Delete a run's live state |
+| [`handoff`](#warden-handoff) | person, in a terminal | Hand a live run over to whoever starts the ticket next (team database) |
 | [`flow`](#warden-flow) | agent | Check or save a flow file |
 | [`report`](#warden-report) | agent | Send a report about warden, see its status, answer questions |
 | [`retro`](#warden-retro) | anyone (legacy alias) | Mark the retro done; same as `warden checks done retro` |
 | [`upgrade`](#warden-upgrade) | the `/warden:upgrade` skill | Show upgrade notes, record the upgrade |
 | [`tools`](#warden-tools) | anyone | List, check or run the project's own tools |
-| [`records`](#warden-records) | the `/warden:upgrade` skill | Load old run records into the project's database |
+| [`records`](#warden-records) | the `/warden:upgrade` skill, the retro | Load old run records; list finished runs |
+| [`db`](#warden-db) | person; the `/warden:upgrade` skill | Show the team database's state, migrate it, free a ticket whose machine is gone |
 | [`site`](#warden-site) | person | Start the local web view |
 | [`orchestrate`](#warden-orchestrate) | the `/warden:orchestrate` skill | Plan and track the tickets of an epic |
 | [`checks`](#warden-checks) | agent | List, run and record periodic checks |
@@ -118,6 +120,7 @@ It prints `{"written": [<repo paths>]}` and, when the team install was skipped, 
 ```
 warden start <ticket> --template do|feature|bugfix|chore [--worktree] [--branch <b>]
 warden start <ticket> --flow <name|path>             [--worktree] [--branch <b>]
+warden start <ticket>                                 (continues a run handed over, with a team database)
 ```
 
 Starts a run for a ticket. Every run starts from a ticket (0.9): the task text is the ticket, read from the project's `tickets` tool with `show <ticket>`, and once the ship step reports the task merged, warden sets the ticket to `done` (0.9.3). `--text`, `--text-file` and `--ticket` are gone; for a request without a ticket, create one first (`warden orchestrate create`, as `/warden:compose` does). Run it with a long Bash timeout (the skills use 600000 ms): it runs the project's setup commands.
@@ -137,7 +140,9 @@ Rules, all reported in one go (exit 2):
 - `--branch` needs `--worktree`.
 - Without `--worktree`, you must be on a branch other than the main branch.
 
-What it does, in order:
+With a team database, when this machine has no run of the ticket and the database has one that was handed over (`warden handoff`) or freed (`warden db release`), start continues that run instead, at the same step, on its own flow and branch; no `--template` or `--flow` is needed. It claims the ticket, creates the worktree from the pushed branch, undoes the handover's temporary commit (so the work is uncommitted again, as it was left), pushes the branch back without it, and restores the run's state. It prints `{"continued": "<ticket>", "from", "worktree", "branch", "step", "status", "note"}`; then run `warden next`. It stops when the branch is not on `origin`, when the worktree has changes of its own, or when the local branch has commits that are not on `origin`.
+
+What a new start does, in order:
 
 1. Checks the task id against `taskIdPattern` (from the main checkout's `.warden/warden.json`). The id `_sessions` is reserved.
    Then reads the ticket with the `tickets` tool's `show <ticket>`. The task text is `# <id>: <title>`, a blank line and the body. Without a `tickets` role it stops (exit 3): `no tickets tool: set "tickets" in .warden/tools/roles.json. Warden runs start from a ticket: add a ticket tool with /warden:tools ...`. An unknown ticket stops it too (`ticket tool failed (exit 3): ...`).
@@ -145,7 +150,7 @@ What it does, in order:
 3. Takes the run's `steps.json` **from the base** (`origin/<base>` when there is a remote), not from your working tree, and sets its `mainBranch` to the base. If `.warden/warden.json` or `.warden/steps.json` is not committed there, it stops: `commit and push .warden/ to <base> first`. A base other than `mainBranch` that is not on `origin` stops it too, with the `git push -u` line to run.
 4. Lints the flow against the check sets of that `steps.json`. A bad flow stops the start.
 5. Refuses if a run for this task already exists: `a run for <task> exists (status <s>); a person can run warden reset <task>`.
-6. When `roles.json` has a `records` role, refuses if that tool or its four methods are missing (exit 1). It does not connect, so a database outage does not stop new work. Without the role, finished runs go to `.warden/state/_records/`.
+6. With a team (remote) database, claims the ticket. When another checkout has a live run on it, it stops (exit 1): `<ticket> has a live run by <user@host> since <time>. Ask them to run warden handoff <ticket>; if their machine is gone, a person can run warden db release <ticket>. Then warden start <ticket> continues it here.` When the database does not answer, or this warden may not write to it, it prints a warning and goes on. A start that fails after this lets the claim go. Without `WARDEN_DB_URL`, or with a local database, there are no claims. See [State and history](../concepts/state-and-history.md#claims).
 7. With `--worktree`: uses `<repo>/.worktrees/<task>` on the branch, creating the branch from the base when it does not exist. A branch checked out in another worktree is refused. When git does not ignore `.worktrees/`, it stops: `.worktrees/ is not ignored by git: add the line .worktrees/ to .gitignore and commit it, then run start again`.
 8. Saves the flow, the `steps.json` snapshot and the task text in `.warden/state/<task>/`.
 9. Runs `setup.commands` in the worktree. If one fails, the state folder is deleted and the log is kept in the temp folder: `setup failed: <cmd> (exit <n>); log: <path>`.
@@ -335,6 +340,24 @@ Output: `{"reset":"PG-012"}`. Exit 3 when there is no such run.
 
 ---
 
+## warden handoff
+
+```
+warden handoff <ticket>
+```
+
+For a person, in a terminal (exit 6 without a TTY), with a team database (a remote Postgres). Moves a live run to whoever runs `warden start <ticket>` next, on any machine. It:
+
+1. commits the unfinished work in the worktree as one temporary commit, and pushes the branch;
+2. sends the run's state to the database, and lets the ticket go;
+3. moves this machine's `.warden/state/<ticket>/` to `.warden/state/_sync/handed-off/`, so this machine no longer lists or sends it.
+
+It refuses (exit 1) without a team database, when the run is shipped, done or archived, while a check or review gate runs (`warden wait <ticket>` first), during a fix step, when the worktree is gone, when a file to be committed looks like a secret (`.env` and `.env.*` other than `.example`, `.sample`, `.template` and `.dist`; `.npmrc`, `.pypirc`, `.netrc`; SSH keys; `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.keystore`, `*.jks`; or any file holding the value of an env var named in `warden.json` `secrets`: git-ignore or move them first), when the push fails, when the run did not reach the database, and when this machine has no run of the ticket.
+
+Output: `{"handedOff": "<ticket>", "branch", "commit", "parent", "copy"}`. `commit` is the temporary commit, or `null` when there was nothing to commit; `copy` is where the state folder went. See [State and history](../concepts/state-and-history.md#moving-a-run-to-another-machine).
+
+---
+
 ## warden flow
 
 ```
@@ -448,7 +471,6 @@ warden tools --init
 warden tools --skill
 warden tools --usage [--since YYYY-MM-DD]
 warden tools --verify tickets [--write]
-warden tools --verify records
 warden tools <name|role> [args...]
 ```
 
@@ -461,7 +483,6 @@ Runs the project's own tools from `.warden/tools/`. See [tools and roles](../con
 | `--init` | Writes the missing files of `.warden/tools/` (`index.ts`, `tool.ts`, `roles.json`, `replaces.json`). Never overwrites | `{"written":[...]}` |
 | `--skill` | Writes `.claude/skills/project-tools/SKILL.md` from the tools (0.10): each tool's name, first-level `commands`, summary, usage and the raw commands it covers, so the agent knows they exist. `--check` warns when it is missing or out of date | `{"written":[".claude/skills/project-tools/SKILL.md"]}` |
 | `--verify tickets [--write]` | Checks the `tickets` tool against its contract (0.10), in a throwaway copy that is its own repo, removed afterwards: the checkout's last commit (if any) plus its uncommitted files and the ids of the project's runs, with its `node_modules` linked. Inside it, `WARDEN_MAIN_ROOT` is the copy, so the project never changes. A problem with the copy or with `warden.json` is a `FAIL` row. It checks `dag`, `dag <epic>`, `show`, exit 3 for an unknown id, exit 2 for bad usage, exit 1 and no writes for `create` without flags. `--write`, for tickets kept as repo files only, also creates a ticket, sets it to `doing` twice and to `archived`, and checks `changed` against the files that changed. Exit 1 when any row is `FAIL` | `{"checks":[{status, label, detail}]}` |
-| `--verify records` | Proves the `records` tool keeps its contract, against the real database: save, get, list with filters and pages, and events. It uses a few fixed rows with status `verify`, dated 2000; no page shows them and the next run overwrites them. Exit 1 when any row is `FAIL` | `{"checks":[{status, label, detail}]}` |
 | `--usage [--since YYYY-MM-DD]` | Counts what the agent ran (0.10), from Claude Code's session transcripts that warden linked to this project, all of them or since a local date: `warden tools` calls and failures per tool, raw commands a tool covers that the agent ran anyway, and commands run at least twice, costliest first. Refused commands are left out; secrets in the examples are hidden. Writes nothing. See [usage statistics](../concepts/tools-and-roles.md#usage-statistics). Exit 2 for bad flags or a date that does not exist | `{"since", "sessions":{read, missing}, "tools":[{tool, calls, failed}], "raw":[{tool, prefix, count}], "commands":[{shape, count, avgChars, example}]}` |
 | `<name> [args]` | Runs the tool. A word is a tool name first, then a role | The tool's own output. warden prints nothing on stdout |
 | `<name> -h` | Prints the tool's `usage`, or its `summary` | Text |
@@ -479,11 +500,34 @@ warden records import
 warden records list [--since YYYY-MM-DD]
 ```
 
-Loads an old `.warden/history/` folder in the main checkout into the run records: the project's records database, or `.warden/state/_records/` without one. `/warden:upgrade` uses it for a project that used to commit its run records. It is safe to run twice: a save replaces the ticket's row. It does not remove the folder.
+Loads an old `.warden/history/` folder in the main checkout into the run records in `.warden/state/_records/`. It also saves every finished run in `.warden/state/` that has no record yet (runs finished before 0.16). With a database, the sync process then copies them up. `/warden:upgrade` uses it for a project that used to commit its run records. It is safe to run twice: a save replaces the ticket's record. It does not remove the folder.
 
-Output: `{"imported":[tickets],"failed":[{ticket, error}]}`. Exit 1 when a ticket could not be saved or the `records` tool does not load, exit 2 for anything else.
+Output: `{"imported":[tickets],"failed":[{ticket, error}]}`. Exit 1 when a ticket could not be saved, exit 2 for anything else.
 
-`list` prints the summaries of finished runs, newest first, as `{"records":[...]}`. The retro uses it. See [State and history](../concepts/state-and-history.md#the-records-database).
+`list` prints the summaries of finished runs, newest first, as `{"records":[...]}`: from the database when `WARDEN_DB_URL` is set, so the whole team's, otherwise this machine's. The retro uses it. See [State and history](../concepts/state-and-history.md#the-team-database).
+
+---
+
+## warden db
+
+```
+warden db status
+warden db migrate [--yes]
+warden db release <ticket>
+```
+
+Only does something when `WARDEN_DB_URL` is set. Without it, each says that warden keeps everything in local files and there is nothing to do (exit 0). `status` and `migrate` print plain text, not JSON. See [State and history](../concepts/state-and-history.md#the-team-database).
+
+| Form | What it does |
+|---|---|
+| `status` | Prints the database (its URL without the password), whether it is local or remote, its layout and the oldest warden that may write, whether this warden may write and why not, and how the last sync went |
+| `migrate` | Lists the steps the database needs and exits 1. Changes nothing. For a remote database it also says to back it up first |
+| `migrate --yes` | Runs those steps. For a SQLite file, it first copies the file to `<file>.layout-<n>.bak`. Exit 0 |
+| `release <ticket>` | For a person, in a terminal (exit 6 without a TTY), with a team database. Frees a ticket whose machine is gone. The next `warden start <ticket>` continues the run from the last pushed branch and the last state in the database; work on the lost machine that was not pushed is lost. If that machine comes back, it never writes over the run. Prints JSON: `{"released", "from", "branch", "step"}`. When the database has no live run of the ticket, it only lets the claim go and prints `{"released", "run", "claim"}` |
+
+When the database is up to date, `migrate` says so and exits 0. When the database does not answer, both exit 1. `/warden:upgrade` runs `migrate`, and `migrate --yes` after you agree. A local database also migrates by itself, so you only need it for a team database.
+
+`warden db sync` is the background process that sends `.warden/state/` to the database. Warden starts it; do not run it by hand.
 
 ---
 
@@ -493,7 +537,7 @@ Output: `{"imported":[tickets],"failed":[{ticket, error}]}`. Exit 1 when a ticke
 warden site [--port <n>] [--no-open]
 ```
 
-Starts the read-only control plane of the project (what needs you, running runs, epics, tickets, history, docs) at `http://127.0.0.1:<port>`. The port is `--port` (1 to 65535), else `sitePort` in `.warden/warden.json` (default 4400). It prints `warden site: http://127.0.0.1:<port>`, opens that address in the browser, and runs until you stop it. Finished runs come from the project's records database; when it starts, it saves any finished run that is still unsaved.
+Starts the read-only control plane of the project (what needs you, running runs, epics, tickets, history, docs) at `http://127.0.0.1:<port>`. The port is `--port` (1 to 65535), else `sitePort` in `.warden/warden.json` (default 4400). It prints `warden site: http://127.0.0.1:<port>`, opens that address in the browser, and runs until you stop it. Finished runs come from `.warden/state/_records/`, or from the database when `WARDEN_DB_URL` is set; with a team database, teammates' live runs show too. Open pages refresh every `sitePollSeconds` (default 60), and the site reads the database at most once in that time. When it starts, it saves any finished run that is still unsaved.
 
 The browser opens only when stdout is a terminal. `--no-open`, a `CI` variable set to anything but `0` or `false`, and `WARDEN_NO_OPEN=1` keep it closed. A failure to open is silent.
 
@@ -516,7 +560,7 @@ Used by the `/warden:orchestrate` skill. Works on the main checkout. Needs a `ti
 |---|---|---|
 | `plan <epic>` | Runs the tickets tool (`dag <epic>`), builds waves, adds each ticket's run state, saves the plan in `.warden/state/_orchestrate/<epic>.json` and prints it | 1 when `errors` is not empty |
 | `status <epic>` | Prints the saved plan with run state read again. Does not ask the tickets tool | 3 when there is no saved plan |
-| `set-status <id> <status>` | Runs the tickets tool (`set-status`). Status is `backlog`, `todo`, `doing`, `review`, `done` or `archived`. Prints `{"id","status","changed":[paths]}`. For an epic with a saved plan set `done`, it also saves the orchestrator's cost as a row with status `epic` in the records database; a failed save only prints a warning on stderr | 2 for a bad status |
+| `set-status <id> <status>` | Runs the tickets tool (`set-status`). Status is `backlog`, `todo`, `doing`, `review`, `done` or `archived`. Prints `{"id","status","changed":[paths]}`. For an epic with a saved plan set `done`, it also saves the orchestrator's cost as a record with status `epic` (in `.warden/state/_records/`, and from there in the database when there is one); a failed save only prints a warning on stderr | 2 for a bad status |
 | `create ...` | 0.8. Runs the tickets tool's `create` (required since 0.9) in the main checkout; the tool picks the id. Passes the body file as an absolute path. Checks the new id (`^[A-Za-z0-9][A-Za-z0-9._-]*$`, and `taskIdPattern` unless `--type epic`). Prints `{"ticket":{...,"body"},"changed":[paths],"base":"<branch>"}`; the caller adds and commits `changed` on `base`, the branch a run of the ticket starts from. Used by `/warden:compose` for a request without an id and to plan an epic | 2 for bad usage or a missing body file; 3 with `the ticket tool has no create` when the tool answers exit 2; 1 for a bad id or result |
 
 Plan output:

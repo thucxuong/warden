@@ -6,7 +6,10 @@ import { buildSummary } from "../engine/summary.ts";
 import { head, identity } from "../lib/git.ts";
 import { mdFiles } from "../lib/md-files.ts";
 import { tokensByStep, type TokenTotals } from "../lib/tokens.ts";
-import { taskDir } from "../state/paths.ts";
+import { recordSentCheck } from "../central/sent.ts";
+import { dbUrl } from "../central/url.ts";
+import { LOCAL_RECORDS_DIR } from "../records/local.ts";
+import { stateRoot, taskDir } from "../state/paths.ts";
 import { isUnsaved, listTasks, readEvents, readRun, readSessionLinks, runExists } from "../state/store.ts";
 import type {
   EventLine, FlowJson, HistorySummary, ReviewRound, RunJson, SessionLink, StepsJson, TriageReport,
@@ -29,6 +32,18 @@ export interface LoadedTask {
   dir: string;                          // state/<task>; nothing is there for a record
   tokens: Record<string, TokenTotals>;  // live: tokensByStep; history: {}
   texts?: { task: string | null; plan: string | null };  // a record's texts; live runs read them from `dir`
+  db?: DbRun;                           // #33: a run read from the team database, not from this disk; nothing is in `dir`
+}
+
+// A run whose files come from the team database (central/team.ts).
+export interface DbRun {
+  files: Map<string, string>;  // every file but logs, whole; logs only on a run page: their ends, or one whole for the log view
+  logs: Set<string>;           // every log the database has
+  cut: Set<string>;            // logs in `files` that are only their last part
+  by: string;                  // who ran it
+  mine: boolean;               // this checkout sent it: its folder has left this disk
+  saved: boolean;              // a finished run: the summary, tokens and cost, are its saved record's
+  windowTokens?: Map<number, TokenTotals>; // a live run's tokens per step window, counted on its machine and sent
 }
 
 const DOC_ROOTS = ["docs", ".warden"]; // the only places /api/doc reads from
@@ -158,15 +173,20 @@ export function loadTask(main: string, task: string, withCommit: boolean, author
   return runExists(main, task) ? loadLive(main, task, withCommit, author) : null;
 }
 
-// Runs the lists read from files: those going, and finished ones the database does not have yet. A saved run is read
-// from the database, so the cost of this stays flat however many tickets this machine has shipped.
+// Runs the lists read from files: those going, and finished ones the record store does not have yet. A saved run is
+// read from the store, so the cost of this stays flat however many tickets this machine has shipped.
+// "Saved" is checked, not assumed: a run with no record file (finished before 0.16), or whose record has not reached
+// the database yet (it is down, or on a layout this warden cannot write), still shows from its files.
 export function loadAll(main: string, author: () => Author = lazyAuthor(main)): LoadedTask[] {
   const all: LoadedTask[] = [];
+  const sent = dbUrl() === null ? null : recordSentCheck(main);
+  const saved = (name: string) => !isUnsaved(main, name) && existsSync(join(stateRoot(main), LOCAL_RECORDS_DIR, `${encodeURIComponent(name)}.json`))
+    && (sent === null || sent(name));
   for (const name of listTasks(main)) {
     try {
       if (!runExists(main, name)) continue;
       const { status } = readRun(main, name);
-      if ((status === "shipped" || status === "done") && !isUnsaved(main, name)) continue;
+      if ((status === "shipped" || status === "done") && saved(name)) continue;
       const loaded = loadLive(main, name, false, author);
       all.push(loaded);
     } catch {
@@ -176,12 +196,17 @@ export function loadAll(main: string, author: () => Author = lazyAuthor(main)): 
   return all;
 }
 
+// A file of the run, by its path in state/<task>/: from this disk, or for a teammate's run from the team database.
+export function runText(loaded: Pick<LoadedTask, "dir" | "db">, path: string): string | null {
+  return loaded.db ? (loaded.db.files.get(path) ?? null) : readText(join(loaded.dir, path));
+}
+
 export function taskMdOf(loaded: LoadedTask): string | null {
-  return loaded.texts ? loaded.texts.task : readText(join(loaded.dir, "task.md"));
+  return loaded.texts ? loaded.texts.task : runText(loaded, "task.md");
 }
 
 export function planMdOf(loaded: LoadedTask): string | null {
-  return loaded.texts ? loaded.texts.plan : readText(join(loaded.dir, "plan.md"));
+  return loaded.texts ? loaded.texts.plan : runText(loaded, "plan.md");
 }
 
 // ---- docs ----

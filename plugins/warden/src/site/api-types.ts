@@ -57,6 +57,18 @@ export interface ProjectInfo {
   root: string;               // main checkout path
   mainBranch: string | null;  // steps.json mainBranch
   pluginVersion: string;
+  pollSeconds: number;        // warden.json sitePollSeconds: how often the pages refresh
+  teamDb: TeamDbState | null; // #33: null without WARDEN_DB_URL
+}
+
+// Whether the database answers, and whether this checkout's runs reach it (#33).
+export interface TeamDbState {
+  label: string;              // the url without its password
+  shared: boolean;            // a remote database the team shares; false: one on this machine
+  state: "connected" | "unreachable" | "blocked";  // blocked: it answers, but this warden may not write to it
+  message: string | null;     // why, when not connected
+  checkedAt: ISO;
+  sync: { state: "ok" | "offline" | "blocked"; at: ISO; message: string | null } | null;  // the sync process's last outcome
 }
 
 // ---- /api/home ----

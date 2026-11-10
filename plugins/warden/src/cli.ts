@@ -3,11 +3,12 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import type { CommandModule, Ctx } from "./types.ts";
 import { EXIT, WardenError } from "./lib/exit.ts";
+import { dbUrlFromMainEnv } from "./central/url.ts";
 
 // Only these names are ever imported (spec 3.1). `gate` is internal.
 export const COMMANDS = [
   "version", "init", "start", "next", "done", "wait", "ask", "status", "approve", "retry", "reset",
-  "flow", "report", "retro", "upgrade", "tools", "site", "hook", "gate", "checks", "orchestrate", "docs", "records", "clean", "archive", "prices",
+  "flow", "report", "retro", "upgrade", "tools", "site", "hook", "gate", "checks", "orchestrate", "docs", "records", "db", "handoff", "clean", "archive", "prices",
 ] as const;
 
 // One line per command for --help. hook and gate are internal and not listed.
@@ -33,6 +34,8 @@ export const HELP: Record<string, string> = {
   checks: "warden checks | warden checks run <name> [--background] | warden checks done <name> [--date YYYY-MM-DD] [--note <t>]",
   docs: "warden docs check",
   records: "warden records import | warden records list [--since YYYY-MM-DD]",
+  db: "warden db status | warden db migrate [--yes] | warden db release <ticket>   (only with WARDEN_DB_URL set; release: a person)",
+  handoff: "warden handoff <ticket>   (a person, in a terminal; needs a team database)",
   clean: "warden clean [--dry-run]   (removes the worktrees and branches of shipped, merged tasks and of archived tasks)",
   archive: 'warden archive <task> --reason "<why>"   (closes a live run without doing it; its ticket is set to archived)',
   prices: "warden prices [--update | --file <path> | --auto on|off]",
@@ -45,6 +48,7 @@ function isCommand(name: string): name is (typeof COMMANDS)[number] {
 }
 
 export function buildCtx(): Ctx {
+  dbUrlFromMainEnv(process.cwd(), process.env);
   const root = process.env.WARDEN_ROOT ?? resolve(import.meta.dir, "..");
   const data =
     process.env.WARDEN_DATA ?? join(homedir(), ".claude", "plugins", "data", "warden-warden-marketplace");
@@ -95,13 +99,32 @@ export async function main(argv: string[], ctx: Ctx): Promise<number> {
     const code = await mod.run(args, ctx);
     return typeof code === "number" ? code : EXIT.OK;
   } catch (err) {
-    if (err instanceof WardenError) {
-      console.error(`warden: ${err.message}`);
-      return err.code;
-    }
-    console.error(err instanceof Error ? (err.stack ?? err.message) : String(err));
-    return EXIT.REJECTED;
+    return reportError(err);
+  } finally {
+    if (name !== "db" && name !== "version") await keepSyncing(ctx);
   }
+}
+
+// #33: with a database, every command and hook makes sure this checkout's sync process runs. Without one, nothing loads.
+async function keepSyncing(ctx: Ctx): Promise<void> {
+  if (!ctx.env.WARDEN_DB_URL?.trim()) return;
+  try {
+    const { mainRoot } = await import("./state/paths.ts");
+    const main = mainRoot(ctx.cwd);
+    if (!existsSync(join(main, ".warden", "warden.json"))) return;
+    (await import("./central/sync.ts")).ensureSync(main);
+  } catch {
+    // not in a project, or the folder cannot be written: the next command tries again
+  }
+}
+
+function reportError(err: unknown): number {
+  if (err instanceof WardenError) {
+    console.error(`warden: ${err.message}`);
+    return err.code;
+  }
+  console.error(err instanceof Error ? (err.stack ?? err.message) : String(err));
+  return EXIT.REJECTED;
 }
 
 if (import.meta.main) {

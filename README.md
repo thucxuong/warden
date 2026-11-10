@@ -22,7 +22,7 @@ An AI agent that writes code will sometimes say "tests pass" when they do not, p
 - **Worktrees per task.** Each task gets its own git worktree and branch, so several tasks can run side by side.
 - **Epics.** `/warden:intent` turns an idea into a planned epic: it interviews you, breaks the work into tickets that each keep the main branch deployable, and adds a closure ticket. `/warden:orchestrate` works through the tickets in dependency order.
 - **Project-owned tools.** Your project keeps its own tools (ticket tracker, code graph, pull requests) in `.warden/tools/`. Warden ships recipes and checks for them, not tool code. A project tools skill tells the agent which tools exist, and the retro counts what the agent ran, from Claude Code's own session records, to suggest the next tool.
-- **A record of every task.** Steps, time and tokens are kept per task in your project's own database and shown on a local dashboard (`warden site`).
+- **A record of every task.** Steps, time and tokens are kept per task, on your machine or in one database for the whole team, and shown on a local dashboard (`warden site`).
 - **Periodic checks and retros.** Session start runs or offers the checks that are due.
 - **Questions mid-step.** The agent can pause a step with `warden ask`; your next message is the answer. See [Blocked and waiting runs](docs/guides/blocked-and-waiting-runs.md).
 - **Reports to the maintainers.** The agent can report a warden problem for you. Reports are kept on your machine; with write access to the warden repo they also reach the maintainers, and status changes and maintainer questions come back at session start. See [Reports](docs/concepts/reports.md).
@@ -50,10 +50,11 @@ You need [Claude Code](https://docs.anthropic.com/en/docs/claude-code), git, [Bu
 
    It scans your stack, drafts the docs you are missing and the check commands, asks you to confirm, then writes `.warden/`. It also sets up the ticket tool: every run starts from a ticket, and without a tracker your tickets are Markdown files in `backlog/`.
 
-   Finished runs are never committed. Without a database, warden keeps them in `.warden/state/_records/` on the machine that ran them. `/warden:init` asks whether your team wants to share them in a database. To connect one later:
+   Finished runs are never committed. Without a database, warden keeps them in `.warden/state/_records/` on the machine that ran them. `/warden:init` asks whether your team wants one place for all its runs, in a database. To connect one later, set `WARDEN_DB_URL` in each person's shell or in the project's git-ignored `.env`, then set it up once:
 
-   ```text
-   /warden:tools records
+   ```bash
+   export WARDEN_DB_URL=postgres://user:password@db.example.com/warden   # or sqlite:~/.warden/<project>.db, outside the repo
+   warden db migrate --yes
    ```
 
 3. Commit the result and get it onto your main branch. `warden start` reads `.warden/` from there.

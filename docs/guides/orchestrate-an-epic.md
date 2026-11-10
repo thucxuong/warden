@@ -82,9 +82,9 @@ flowchart LR
 
 `warden orchestrate status PG-100` prints the cached plan with each ticket's live phase. The site's Tickets page shows the tickets and their runs.
 
-The site's epic page (`/epics/PG-100`, linked from the Epics page in the menu, the epic card on Home and the Tickets page) shows how the tickets went: when each started, its steps, failed checks, fixes, review rounds, approvals, blocks and shipping, in order, and you can filter by ticket. This comes from each ticket's run log in `.warden`, so it needs no session and shows on any machine once the runs are committed.
+The site's epic page (`/epics/PG-100`, linked from the Epics page in the menu, the epic card on Home and the Tickets page) shows how the tickets went: when each started, its steps, failed checks, fixes, review rounds, approvals, blocks and shipping, in order, and you can filter by ticket. This comes from each ticket's run log, so it needs no session. Without a database it shows the runs of this machine; with one, the whole team's.
 
-The page also splits the epic's cost into the orchestrator's own session, the tickets, and the total. The orchestrator's cost is the one number read from the session's transcript, so it shows n/a when the transcript is not on this machine or has no token data, and planning before the first `warden orchestrate plan` is not counted. When the epic is done, the total is saved as a row with status `epic` in your project's records database. No text from the session is saved.
+The page also splits the epic's cost into the orchestrator's own session, the tickets, and the total. The orchestrator's cost is the one number read from the session's transcript, so it shows n/a when the transcript is not on this machine or has no token data, and planning before the first `warden orchestrate plan` is not counted. When the epic is done, the total is saved as a run record with status `epic`, and goes to the team database when there is one. No text from the session is saved.
 
 | Phase | Meaning | What happens |
 |---|---|---|

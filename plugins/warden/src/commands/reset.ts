@@ -1,5 +1,6 @@
 // warden reset <task> [--yes]: a person deletes a run's live state (spec 3.2). Needs a TTY.
 // The ticket worktree and branch stay, so a later start reuses them.
+import { dbUrl } from "../central/url.ts";
 import { reset } from "../engine/machine.ts";
 import { WardenError } from "../lib/exit.ts";
 import { mainRoot, taskDir } from "../state/paths.ts";
@@ -26,5 +27,8 @@ export async function run(args: string[], ctx: Ctx, ask: Ask = askLine): Promise
     const answer = (await ask(`Delete live state for ${task}? [y/N]`)).trim().toLowerCase();
     if (answer !== "y" && answer !== "yes") throw new WardenError(`reset of ${task} cancelled`);
   }
+  const main = mainRoot(ctx.cwd);
   printJson(await reset(ctx, task));
+  // #33: the ticket is free for the team again. The sync process takes the run's files back.
+  if (dbUrl(ctx.env) !== null) await (await import("../central/claims.ts")).releaseClaim(main, task);
 }

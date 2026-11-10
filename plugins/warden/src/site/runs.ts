@@ -1,20 +1,19 @@
 // /api/runs and /api/runs/:task (design 2.5, 2.6).
 import { existsSync, realpathSync } from "node:fs";
-import { join, resolve } from "node:path";
-import { processAlive } from "../lib/proc.ts";
+import { resolve } from "node:path";
 import type { PlanOutput } from "../types.ts";
 import type {
   EventsResponse, LogResponse, PlanView, RunDetailResponse, RunHeader, RunRow, RunsResponse, RunStatus, Source, StepUsage,
 } from "./api-types.ts";
 import { buildChanges } from "./changes.ts";
-import { isInside, loadTask, planMdOf, readLogTail, readText, taskMdOf, type LoadedTask } from "./data.ts";
+import { isInside, loadTask, planMdOf, readLogTail, runText, taskMdOf, type LoadedTask } from "./data.ts";
 import { finishedRow } from "./finished.ts";
 import { renderMarkdown } from "./markdown.ts";
 import { resolvePr } from "./pr.ts";
 import { buildReview } from "./review.ts";
 import { runSignals } from "./signals.ts";
 import {
-  durationOf, isGoing, person, shippedAtOf, stepKind, stepRef, sumUsage, taskTitle, toUsage, usageKnown, usageOf, waitingView, type SiteCtx, pricingNote,
+  durationOf, gateAlive, isGoing, person, shippedAtOf, stepKind, stepRef, sumUsage, taskTitle, toUsage, usageKnown, usageOf, waitingView, type SiteCtx, pricingNote,
 } from "./text.ts";
 import { buildGates, buildTimeline, windowsOf } from "./timeline.ts";
 
@@ -122,7 +121,7 @@ function notFound(task: string): HttpError {
 }
 
 function load(ctx: SiteCtx, task: string, withCommit = true): LoadedTask {
-  const loaded = loadTask(ctx.main, task, withCommit, ctx.author) ?? ctx.record;
+  const loaded = loadTask(ctx.main, task, withCommit, ctx.author) ?? ctx.team.find((t) => t.run.task === task) ?? ctx.record;
   if (loaded) return loaded;
   if (ctx.recordsError !== null) throw new HttpError(503, ctx.recordsError);
   throw notFound(task);
@@ -136,7 +135,7 @@ function planView(loaded: LoadedTask, waitingKind: string | null): PlanView {
   let output: PlanOutput | null = null;
   if (loaded.source === "live" && accepted && typeof accepted.data?.path === "string") {
     try {
-      output = JSON.parse(readText(join(dir, accepted.data.path)) ?? "null") as PlanOutput | null;
+      output = JSON.parse(runText(loaded, accepted.data.path) ?? "null") as PlanOutput | null;
     } catch {
       output = null;
     }
@@ -177,16 +176,16 @@ export function runDetail(ctx: SiteCtx, task: string): RunDetailResponse {
   const shippedAt = shippedAtOf(loaded, mergedAt);
   const known = usageKnown(loaded);
   const windows = windowsOf(events, flow);
-  const gates = buildGates({ events, windows, run, live, dir: loaded.dir, triage: loaded.triage, now: ctx.now });
+  const gates = buildGates({ events, windows, run, live, dir: loaded.dir, db: loaded.db, triage: loaded.triage, now: ctx.now });
   const timeline = buildTimeline({
-    events, flow, run, links: live ? loaded.links : null, reviewRounds: loaded.review, known, triage: loaded.triage, gates, now: ctx.now,
+    events, flow, run, links: live ? loaded.links : null, windowTokens: loaded.db?.windowTokens, reviewRounds: loaded.review, known, triage: loaded.triage, gates, now: ctx.now,
   });
   const waiting = waitingView(loaded, ctx.mainBranch);
   const going = live && isGoing(run);
   const header: RunHeader = {
     task: run.task, title: taskTitle(loaded), flow: run.flowName, status: run.status, source: loaded.source,
     branch: run.branch,
-    worktree: live && existsSync(run.worktree) ? run.worktree : null,
+    worktree: live && !loaded.db && existsSync(run.worktree) ? run.worktree : null,
     startedAt: run.startedAt, endedAt: going ? null : (shippedAt ?? summary.endedAt), shippedAt,
     durationMs: durationOf(loaded, shippedAt, ctx.now),
     step: stepRef(run, flow),
@@ -197,7 +196,7 @@ export function runDetail(ctx: SiteCtx, task: string): RunDetailResponse {
     pr, author: person(summary.author), ticket: run.ticket === true,
   };
   if (live && run.gate) {
-    header.gate = { job: run.gate.job, startedAt: run.gate.startedAt, alive: processAlive(run.gate.pid, run.gate.pidStart), reruns: run.gate.reruns };
+    header.gate = { job: run.gate.job, startedAt: run.gate.startedAt, alive: gateAlive(loaded, run.gate), reruns: run.gate.reruns };
   }
   const steps: StepUsage[] = summary.steps.map((s) => ({
     stepId: s.id, kind: stepKind(s.id, flow, s.type), attempts: s.attempts, durationMs: s.durationMs,
@@ -206,7 +205,9 @@ export function runDetail(ctx: SiteCtx, task: string): RunDetailResponse {
   const usage = usageOf(loaded);
   const limitations: string[] = [];
   if (!live) limitations.push("From the records database: no logs or step outputs.");
-  if (live && !known) limitations.push("No transcripts on this machine: tokens are n/a.");
+  if (loaded.db && !known) {
+    limitations.push(loaded.db.mine ? "This run's folder is no longer on this disk: its tokens are n/a." : "Its machine has not sent token counts yet.");
+  } else if (live && !known) limitations.push("No transcripts on this machine: tokens are n/a.");
   else if (going) limitations.push("Tokens of the running step are what is recorded so far.");
   const taskMd = taskMdOf(loaded);
   return {
@@ -234,20 +235,32 @@ export function runEvents(ctx: SiteCtx, task: string): EventsResponse {
 const LOG_PATH = /^(checks\/\d+\/[A-Za-z0-9:_.-]+\.log|triage\/\d+\/[A-Za-z0-9:_.-]+\.log|fix\/\d+-repair-\d+\.log|setup-\d+\.log|gate\.log)$/;
 const MAX_LOG_BYTES = 32 * 1024 * 1024;
 
+function checkLogPath(path: string | null): boolean {
+  return path !== null && LOG_PATH.test(path) && !path.split("/").includes("..");
+}
+
 export function runLog(ctx: SiteCtx, task: string, path: string | null, linesParam: string | null): LogResponse {
-  if (path === null || !LOG_PATH.test(path) || path.split("/").includes("..")) throw new HttpError(400, "bad path");
+  if (!checkLogPath(path)) throw new HttpError(400, "bad path");
   let lines = 400;
   if (linesParam !== null && linesParam !== "") {
     if (!/^\d+$/.test(linesParam) || Number(linesParam) < 1) throw new HttpError(400, "bad lines");
     lines = Math.min(5000, Number(linesParam));
   }
   const loaded = load(ctx, task, false);
+  if (loaded.db) { // a run from the team database (#33): the server fetched this log whole
+    const text = loaded.db.cut.has(path!) ? undefined : loaded.db.files.get(path!);
+    if (text === undefined) throw new HttpError(404, "not found");
+    const all = text.split("\n");
+    if (all[all.length - 1] === "") all.pop();
+    const shown = all.slice(-lines);
+    return { path: path!, text: shown.join("\n"), totalLines: all.length, shownLines: shown.length, truncated: shown.length < all.length };
+  }
   if (loaded.source !== "live") throw new HttpError(404, "logs are kept only on the machine that ran the task");
-  const file = resolve(loaded.dir, path);
+  const file = resolve(loaded.dir, path!);
   if (!existsSync(file)) throw new HttpError(404, "not found");
   const real = realpathSync(file);
   if (!isInside(realpathSync(loaded.dir), real)) throw new HttpError(400, "bad path");
   const tail = readLogTail(real, MAX_LOG_BYTES, true);
   const shown = tail.lines.slice(-lines);
-  return { path, text: shown.join("\n"), totalLines: tail.totalLines, shownLines: shown.length, truncated: shown.length < tail.totalLines };
+  return { path: path!, text: shown.join("\n"), totalLines: tail.totalLines, shownLines: shown.length, truncated: shown.length < tail.totalLines };
 }

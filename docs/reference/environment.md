@@ -8,8 +8,9 @@ The environment variables warden reads or sets, and the data folder where it kee
 |---|---|---|
 | `PROJECT_AGENT` | In the environment Claude Code starts with, for example `PROJECT_AGENT=1 claude` | `1` marks the session as the project's trusted agent. See below |
 | `WARDEN_DATA` | Your shell | Overrides the data folder for `warden` commands run in a terminal. Rarely needed |
+| `WARDEN_DB_URL` | Your shell, or the project's git-ignored `.env` (Bun loads it). Never commit it | 0.16. The team database: `sqlite:<path>` (outside the repo, for example `sqlite:~/.warden/<project>.db`; a relative path is from the main checkout and is refused if it lands inside it) or `postgres://...`. Unset: everything stays in local files. See [State and history](../concepts/state-and-history.md#the-team-database) |
 
-That is all. warden reads no config from other variables. The hooks deny any Bash command by the agent that mentions `PROJECT_AGENT`, `WARDEN_ROLE`, `WARDEN_CLAUDE_BIN`, `WARDEN_DATA`, `WARDEN_ROOT`, `WARDEN_TEST_MODE`, `CLAUDE_PLUGIN_ROOT` or `CLAUDE_PLUGIN_DATA` (see [hooks](hooks.md#bash)). Only a person changes these.
+That is all. warden reads no config from other variables, except the values of the env vars named in `secrets` in `.warden/warden.json`, which it hides before sending anything to the database. The hooks deny any Bash command by the agent that mentions `PROJECT_AGENT`, `WARDEN_ROLE`, `WARDEN_CLAUDE_BIN`, `WARDEN_DATA`, `WARDEN_ROOT`, `WARDEN_TEST_MODE`, `CLAUDE_PLUGIN_ROOT` or `CLAUDE_PLUGIN_DATA` (see [hooks](hooks.md#bash)). Only a person changes these.
 
 ### PROJECT_AGENT
 
@@ -51,7 +52,7 @@ You do not set these. They are listed so you know what they are when you see the
 | `WARDEN_DATA` | The data folder, set by the wrapper script (see below) |
 | `WARDEN_ROLE` | Set on the review gate's reviewer. While it is set, warden's hooks do nothing |
 | `WARDEN_TOOLS_MAIN` | Set when the engine runs the `tickets` tool, so the tool code comes from the main checkout |
-| `WARDEN_TEST_MODE`, `WARDEN_CLAUDE_BIN`, `WARDEN_POLL_MS`, `WARDEN_REPORTS_REPO` | For warden's own tests. `WARDEN_CLAUDE_BIN` and `WARDEN_POLL_MS` are ignored unless `WARDEN_TEST_MODE=1`. Leave them all unset |
+| `WARDEN_TEST_MODE`, `WARDEN_CLAUDE_BIN`, `WARDEN_POLL_MS`, `WARDEN_REPORTS_REPO`, `WARDEN_TEST_PG` | For warden's own tests. `WARDEN_CLAUDE_BIN` and `WARDEN_POLL_MS` are ignored unless `WARDEN_TEST_MODE=1`. Leave them all unset |
 | `HOME` | Used to find `~/.claude/plugins/` (installed marketplaces, the data folders) |
 
 The report transport turns off interactive git prompts for its own git calls (`GIT_TERMINAL_PROMPT=0`, `GCM_INTERACTIVE=never`, ssh in batch mode), so a sync never hangs on a password prompt.

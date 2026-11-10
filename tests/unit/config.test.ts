@@ -81,6 +81,13 @@ describe("warden.json", () => {
     ]);
   });
 
+  test("sitePollSeconds: 5 to 3600, left out when not set", () => {
+    expect(parseWardenJson(JSON.stringify({ ...validWarden, sitePollSeconds: 30 })).sitePollSeconds).toBe(30);
+    expect("sitePollSeconds" in parseWardenJson(JSON.stringify(validWarden))).toBe(false);
+    expect(problemsOf(() => parseWardenJson(JSON.stringify({ ...validWarden, sitePollSeconds: 1 }), "warden.json")))
+      .toEqual(["warden.json: $.sitePollSeconds: must be between 5 and 3600, got 1"]);
+  });
+
   test("taskIdPattern must be a valid regex", () => {
     const bad = withValue(validWarden, "taskIdPattern", "^(PG$");
     const [problem] = problemsOf(() => parseWardenJson(JSON.stringify(bad), "warden.json"));

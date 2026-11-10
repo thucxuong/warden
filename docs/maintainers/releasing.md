@@ -33,11 +33,13 @@ flowchart LR
    - One line per change, in plain words, as a project would read it.
    ```
 
-3. **Write the upgrade note** `plugins/warden/upgrades/v0.6.2.md`. Every version gets one. It starts with `No layout changes.` when the project's files need nothing, or with a numbered list of exact edits. The project's agent applies the note word for word, so write each edit so it needs no judgement.
+3. **Check the five questions** in the repo's `CLAUDE.md` for every change in the release: release, upgrade note, database tables, file and log layout, mixed versions. A change to the database or to a file's layout follows [Database and file layout](#database-and-file-layout) below.
+
+4. **Write the upgrade note** `plugins/warden/upgrades/v0.6.2.md`. Every version gets one. It starts with `No layout changes.` when the project's files need nothing, or with a numbered list of exact edits. The project's agent applies the note word for word, so write each edit so it needs no judgement.
 
    `warden upgrade --notes` prints the notes of every version above the project's `wardenVersion` and up to the installed one, oldest first. `warden upgrade --done` then sets `wardenVersion`.
 
-4. **Check everything:**
+5. **Check everything:**
 
    ```bash
    bun run check
@@ -48,16 +50,16 @@ flowchart LR
 
    `check` is the type check plus the full test suite. `ui:check` fails when the committed `plugins/warden/site-dist/` is not a fresh build of `site-ui/` (run `bun run ui:build` and commit it). `test:ui` runs the Playwright tests of the site. `validate` runs `claude plugin validate --strict` on the marketplace and on the plugin.
 
-5. **Commit** on `main`. The message starts with the version and a summary of the changes, for example `0.6.2: <what changed>`.
+6. **Commit** on `main`. The message starts with the version and a summary of the changes, for example `0.6.2: <what changed>`.
 
-6. **Tag and push:**
+7. **Tag and push:**
 
    ```bash
    git tag v0.6.2
    git push origin main v0.6.2
    ```
 
-7. **Fast-forward `stable`** to the tag once CI is green on the pushed commit. Never force it:
+8. **Fast-forward `stable`** to the tag once CI is green on the pushed commit. Never force it:
 
    ```bash
    git fetch origin
@@ -67,7 +69,32 @@ flowchart LR
 
    If `merge-base` exits 1, `stable` has commits that the tag does not. Stop and find out why.
 
-8. **Close the reports** that the release fixes: set each issue's milestone to the version (for example `0.6.2`) and close it as completed. Each project sees the new status after its next sync. See [Triage](triage.md).
+9. **Close the reports** that the release fixes: set each issue's milestone to the version (for example `0.6.2`) and close it as completed. Each project sees the new status after its next sync. See [Triage](triage.md).
+
+## Database and file layout
+
+Since 0.16 a team can share one database (`WARDEN_DB_URL`), and its members update warden at different times. For weeks, an older and a newer warden write to the same database and read each other's runs. Every release keeps both working.
+
+**What is stored.** The sync process copies every file of `.warden/state` as it is, one row per file (`warden_files`: path, content, and the `warden_version` that sent it). Finished runs are one row each (`warden_records`: a few columns and two JSON texts). The layout of those tables is in `plugins/warden/src/central/migrations.ts`.
+
+**Most changes need no migration:**
+
+| Change | What to do |
+|---|---|
+| A new file or log in `.warden/state` | Nothing: it is a new row. |
+| A new field in a state file or in a record's JSON | Readers treat it as optional: older runs and older wardens do not have it. |
+| A file's layout changes (a field renamed, a format changed) | Readers read the old and the new layout. Tell them apart by the file's own `schema` field or by the row's `warden_version`. Never reuse a path for a different layout: give the new one a new name. |
+| A table column or index | A migration step. Avoid it: put the data in a file or in the JSON instead. |
+
+**When a table must change:**
+
+1. Add a new step at the end of `STEPS`. Never edit a released step: `tests/unit/central.test.ts` holds each released step's fingerprint and fails when one changes. Pin the new step's fingerprint in the release commit.
+2. Only add: a new table, a new column with a default, a new index. Removing or renaming waits until no supported warden uses it, and is a step of its own.
+3. Set the step's `minWriter` to the oldest warden that still writes correctly after it. Most added steps keep the previous one. Raising it is a breaking release: older wardens stop sending (their runs wait in local files), so say so in the changelog and the upgrade note.
+4. Test the upgrade of a database that already holds rows from the previous release, on SQLite and on Postgres (`bun test tests/unit/central.test.ts` runs Postgres in Docker).
+5. In the upgrade note, add the step `/warden:upgrade` already runs: `warden db migrate`, after a backup, with the engineer's OK. A database on the engineer's own machine migrates by itself; a shared one never does.
+
+**A newer warden's runs on an older warden's site.** The site names a run it cannot read ("sent by warden X, update warden") instead of leaving it out. Keep it that way: never let one unreadable run hide the others.
 
 ## Verify in the playground
 

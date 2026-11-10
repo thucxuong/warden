@@ -104,7 +104,7 @@ Design notes and build specs from earlier versions are kept in [internal/](inter
 | Leftovers | Blocking findings still open after the last review round. The ship step lists them in the pull request description. | [Gates and self-healing](concepts/gates-and-self-healing.md#findings) |
 | Waiting | A run that needs a person's decision or answer. | [Blocked and waiting runs](guides/blocked-and-waiting-runs.md) |
 | Blocked | A run that hit something a person must fix, then `retry`. | [Blocked and waiting runs](guides/blocked-and-waiting-runs.md#blocked-runs) |
-| Run record | One row per finished ticket, saved when the run ships or finishes: in your project's records database, or in `.warden/state/_records/` without one. Never committed. | [State and history](concepts/state-and-history.md) |
+| Run record | One record per finished ticket, saved in `.warden/state/_records/` when the run ships or finishes, and copied to the team database when there is one. Never committed. | [State and history](concepts/state-and-history.md) |
 | Gate files | Files no step may change: `steps.json`, `flows/`, `warden.json`, `triage-rules.json`, `state/` under `.warden/`. | [Workflows](concepts/workflows.md#gate-files-and-locked-config) |
 | Locked config | Config files nobody may edit while any run is live: `steps.json`, `flows/`, `warden.json`, `triage-rules.json`, `tools/roles.json` under `.warden/`. | [Workflows](concepts/workflows.md#gate-files-and-locked-config) |
 | Tool, role | A tool is a command your project keeps in `.warden/tools/`. A role (`tickets`, `graph`, `pr`) tells warden which tool to use for a job. | [Tools and roles](concepts/tools-and-roles.md) |

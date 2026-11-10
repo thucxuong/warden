@@ -1,10 +1,10 @@
 // What the orchestrator of an epic cost, summed from its session transcripts (engine/epic.ts).
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { epicHistoryOf, liveOrchestratorTokens, saveEpicHistory } from "../../plugins/warden/src/engine/epic.ts";
-import { barrel, RECORDS_ENTRY, RECORDS_FILE, RECORDS_HEAD, writeTools } from "../helpers/tools-fixture.ts";
+import { recordRows, recordsText } from "../helpers/records-fixture.ts";
 
 const root = mkdtempSync(join(tmpdir(), "warden-epic-"));
 afterAll(() => rmSync(root, { recursive: true, force: true }));
@@ -113,23 +113,20 @@ describe("liveOrchestratorTokens", () => {
 });
 
 describe("epic history", () => {
-  const install = () => writeTools(main, barrel(RECORDS_ENTRY, RECORDS_HEAD), { records: "recordsdb" });
-  const rows = () => JSON.parse(readFileSync(join(main, RECORDS_FILE), "utf8")) as { ticket: string; status: string; summary: Record<string, unknown> }[];
+  const rows = () => recordRows(main);
 
   test("saves the total and no text of the session", async () => {
-    install();
     session("s1", transcript("one"));
     expect(await saveEpicHistory(main, "E-1")).toBe(true);
     expect(epicHistoryOf(rows()[0]!.summary)!.tokens.input).toBe(E1_INPUT);
     expect(rows()[0]!.status).toBe("epic");
-    const raw = readFileSync(join(main, RECORDS_FILE), "utf8");
+    const raw = recordsText(main);
     for (const said of ["retry T-2", "Go ahead", "waits for you"]) expect(raw).not.toContain(said);
   });
 
   test("nothing saved when there is no cost to save", async () => {
-    install();
     expect(await saveEpicHistory(main, "E-1")).toBe(false);
-    expect(existsSync(join(main, RECORDS_FILE))).toBe(false);
+    expect(rows()).toEqual([]);
     expect(epicHistoryOf(undefined)).toBeNull();
   });
 });

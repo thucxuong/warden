@@ -33,7 +33,7 @@ No run yet: if `warden next` lists your task among the live runs, run `cd <its w
 - Never run the checks to prove a step. The engine runs them on the exact commit.
 - Never write under `.warden/state/`.
 - Never push, open a pull request or merge outside the ship step.
-- Never run `warden approve`, `warden retry` or `warden reset`. They are for a person. Ask the user to type `approve` or `retry` in the chat.
+- Never run `warden approve`, `warden retry`, `warden reset`, `warden handoff` or `warden db release`. They are for a person. Ask the user to type `approve` or `retry` in the chat.
 - Never set `PROJECT_AGENT`, any `WARDEN_*` or any `CLAUDE_PLUGIN_*` variable on a command. Never start a nested `claude -p`.
 - Do not change the locked config files while a run is live: `.warden/steps.json`, `.warden/flows/`, `.warden/warden.json`, `.warden/triage-rules.json`, `.warden/tools/roles.json`. The hook message calls them gate files.
 - Use a project tool (the `project-tools` skill lists them) instead of the raw commands it covers. If it cannot do what you need, tell the user.
@@ -66,7 +66,7 @@ A hook refusal starts with `warden:`. Do not try another way around it.
 
 | Message | Fix |
 |---|---|
-| `approve, retry and reset are for a person` | Ask the user to type `approve` or `retry`. |
+| `approve, retry, reset, handoff and db release are for a person` | Ask the user to type `approve` or `retry`, or to run the command in a terminal. |
 | `this command changes how warden itself runs` | Drop the variable or `claude -p`. Ask the user if it is really needed. |
 | `state and gate files are written by the engine only` (Bash) / `state is written by the engine only` (Edit, Write) | Do not touch those files. |
 | `<type> step does not change code` | This step allows no code edits. Hand in, or finish the step it allows. |

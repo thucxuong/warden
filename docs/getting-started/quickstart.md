@@ -38,7 +38,7 @@ This page assumes warden is installed (see [Installation](installation.md)) and 
 
    Then, for Markdown tickets, the agent writes the ticket tool `.warden/tools/backlog.ts` and names it as the `tickets` role in `.warden/tools/roles.json`.
 
-   Finished runs are never committed. Without a database they stay in `.warden/state/_records/` on the machine that ran them. `/warden:init` asks whether your team wants to share them in a database. To add one later, type `/warden:tools records`: the agent writes the tool for your database and proves it with `warden tools --verify records`. See [State and history](../concepts/state-and-history.md#the-records-database).
+   Finished runs are never committed. Without a database they stay in `.warden/state/_records/` on the machine that ran them. `/warden:init` asks whether your team wants one place for all its runs, in a database. To add one later, set `WARDEN_DB_URL` (`sqlite:~/.warden/<project>.db`, a file outside the repo, or `postgres://...`) in your shell or in the project's git-ignored `.env`, and run `warden db migrate --yes`. See [State and history](../concepts/state-and-history.md#the-team-database).
 
    See [Project files](../reference/project-files.md) for the full list.
 
@@ -80,7 +80,6 @@ After the normal questions and the ticket tool, the agent goes through each comm
 | `pr` | Which Git host, pull request or direct merge, and which merge method |
 | `ci` | Which CI system, and how to read a run and its logs |
 | `doctor` | What in the setup has broken before, and what the project depends on that can break without a code change |
-| `records` | Only if you skipped the database step: which database, where it runs, which environment variable holds its login |
 
 It writes each tool you agree to, tests it, and gives each task worktree its own ports and database. A tracker tool is tested with saved tracker answers only, so no real ticket changes. At the end it shows a table of the tools and whether each check passed. You can add what you skip later with `/warden:tools <name>`, and you can add your own wishes after the command, for example `/warden:init set up the tools too. Tickets are in Jira project APP.`
 
@@ -145,7 +144,7 @@ The first run asks you to allow a few things, such as `warden` commands and edit
 
 5. **review**: a separate Claude session reviews the change. Blocking findings send the run back to implement. Findings on lines the change did not touch are dropped. Blocking findings still open after the last review round (3 by default) are kept as leftovers, and the ship step lists them in the pull request description.
 
-6. **ship**: the agent opens a pull request or merges, as your project says, and hands in. Warden saves the run's record to your project's database; nothing about the run is committed. Say how your project ships in `agent.ship.instructions` in `.warden/steps.json`, for example "Open a pull request with gh pr create". See [steps.json](../reference/steps-json.md).
+6. **ship**: the agent opens a pull request or merges, as your project says, and hands in. Warden saves the run's record in `.warden/state/_records/`, and in your team database when you have one; nothing about the run is committed. Say how your project ships in `agent.ship.instructions` in `.warden/steps.json`, for example "Open a pull request with gh pr create". See [steps.json](../reference/steps-json.md).
 
 7. The run is `shipped`. Review and merge the pull request as you normally do.
 

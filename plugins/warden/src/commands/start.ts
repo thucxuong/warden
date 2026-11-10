@@ -8,7 +8,7 @@ import { lintFlow } from "../engine/flow-lint.ts";
 import { start } from "../engine/machine.ts";
 import { showTicket } from "../engine/tickets.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
-import { recordStore } from "../records/store.ts";
+import { dbUrl } from "../central/url.ts";
 import { refreshPrices } from "../lib/prices.ts";
 import { branchExists, commitsAhead, currentBranch, fetchMain, isIgnored, showFile, worktreeAdd, worktreeList } from "../lib/git.ts";
 import { mainRoot, SESSIONS_DIR_NAME, taskDir, worktreeRoot, WORKTREES_DIR_NAME, worktreesDir } from "../state/paths.ts";
@@ -117,7 +117,7 @@ function addWorktree(main: string, path: string, ref: string, branch: string, ne
 export const NOT_IGNORED = `${WORKTREES_DIR_NAME}/ is not ignored by git: add the line ${WORKTREES_DIR_NAME}/ to .gitignore and commit it, then run start again`;
 
 // Step 5: reuse <worktreesDir>/<task> on the branch, or create it. Returns the worktree toplevel.
-function ensureWorktree(main: string, task: string, branch: string, ref: string): string {
+export function ensureWorktree(main: string, task: string, branch: string, ref: string): string {
   if (!isIgnored(main, `${WORKTREES_DIR_NAME}/`)) throw new WardenError(NOT_IGNORED);
   const path = join(worktreesDir(main), task);
   const worktrees = worktreeList(main);
@@ -135,8 +135,28 @@ function ensureWorktree(main: string, task: string, branch: string, ref: string)
   return worktreeRoot(path);
 }
 
+// With a team database and no run of the ticket here: the handed-over run in the database, continued, or null.
+async function continueHandedOver(ctx: Ctx, parsed: ParsedArgs): Promise<Record<string, unknown> | null> {
+  const task = parsed.positional[0];
+  if (parsed.positional.length !== 1 || task === undefined || dbUrl(ctx.env) === null) return null;
+  const main = mainRoot(ctx.cwd);
+  try {
+    taskDir(main, task);
+  } catch {
+    return null; // a bad id: the usage checks say so
+  }
+  if (existsSync(taskDir(main, task))) return null;
+  return (await import("../central/handoff.ts")).continueRun(main, task);
+}
+
 export async function run(args: string[], ctx: Ctx): Promise<number | void> {
   const parsed = parseArgs(args, ["--template", "--flow", "--branch"], ["--worktree"]);
+  // #33: a run handed over from another machine goes on where it was, with its own flow and branch.
+  const handed = await continueHandedOver(ctx, parsed);
+  if (handed !== null) {
+    printJson(handed);
+    return;
+  }
   const problems = usageProblems(parsed);
   const onMain = branchProblem(ctx, parsed);
   if (onMain) problems.push(onMain);
@@ -159,10 +179,19 @@ export async function run(args: string[], ctx: Ctx): Promise<number | void> {
   if (!useWorktree && (branch === mainBranch || branch === "")) throw new WardenError("start on a ticket branch, or pass --worktree");
   precheck(main, task, flow, ref, base);
   const taskText = ticketText(main, ctx.root, task); // after precheck: an existing run is reported as such
-  await recordStore(main); // a records tool that is set up must load (#33). It does not connect: an outage must not stop new work.
-  const worktree = useWorktree ? ensureWorktree(main, task, branch, ref) : worktreeRoot(ctx.cwd);
-
-  await refreshPrices(0); // a new ticket always checks for new prices
-  const response = await start(ctx, task, flow, { worktree, branch, mainRef: ref, base, taskText, ticket: true });
-  printJson(useWorktree ? { ...response, worktree, base } : response);
+  // #33: one live run per ticket across the team. Only loaded when the project has a database.
+  const claims = dbUrl(ctx.env) !== null ? await import("../central/claims.ts") : null;
+  if (claims) {
+    const warning = await claims.claimTicket(main, task);
+    if (warning !== null) console.error(warning);
+  }
+  try {
+    const worktree = useWorktree ? ensureWorktree(main, task, branch, ref) : worktreeRoot(ctx.cwd);
+    await refreshPrices(0); // a new ticket always checks for new prices
+    const response = await start(ctx, task, flow, { worktree, branch, mainRef: ref, base, taskText, ticket: true });
+    printJson(useWorktree ? { ...response, worktree, base } : response);
+  } catch (err) {
+    if (claims && !runExists(main, task)) await claims.releaseClaim(main, task); // no run came of it
+    throw err;
+  }
 }

@@ -15,7 +15,7 @@ import type {
 import { recordOf } from "../../plugins/warden/src/records/record.ts";
 import type { LoadedTask } from "../../plugins/warden/src/site/data.ts";
 import type { RunRecord } from "../../plugins/warden/src/types.ts";
-import { RECORDS_ENTRY, RECORDS_FILE, RECORDS_HEAD } from "./tools-fixture.ts";
+import { writeRecords } from "./records-fixture.ts";
 import { tmpBase } from "./repo.ts";
 
 export interface SiteFixture {
@@ -217,11 +217,9 @@ export function makeSiteFixture(): SiteFixture {
   mkdirP(join(w, "tools", "backlog"));
   copyFileSync(join(REPO, "tests/fixtures/tools/backlog-tickets.ts"), join(w, "tools", "backlog", "tickets.ts"));
   put(join(w, "tools", "index.ts"), `import { command, type Tool } from "./tool.ts";
-${RECORDS_HEAD}
 
 const tools: Tool[] = [
   { name: "backlog", summary: "tickets in backlog/*.md", run: command("bun .warden/tools/backlog/tickets.ts") },
-${RECORDS_ENTRY}
   {
     name: "keys", summary: "checks the API key",
     probe: () => [{ status: "FAIL", label: "api key", detail: "FX_KEY is not set" }],
@@ -230,7 +228,7 @@ ${RECORDS_ENTRY}
 ];
 export default tools;
 `);
-  put(join(w, "tools", "roles.json"), { tickets: "backlog", records: "recordsdb" });
+  put(join(w, "tools", "roles.json"), { tickets: "backlog" });
   for (const t of FX_TICKETS) put(join(main, "backlog", `${t.id}.md`), ticketFile(t));
   const initSha = commitAll(main, "init", now - 10 * DAY);
 
@@ -661,7 +659,7 @@ export default tools;
   put(join(data, "reports-sync.json"), { schema: 1, lastAttemptAt: iso(now - 30 * MIN), lastError: null, told: false });
 
   let stopped = false;
-  put(join(main, RECORDS_FILE), records);
+  writeRecords(main, records);
   // A finished run on this machine that the database does not have yet is read from its files.
   for (const name of readdirSync(join(w, "state"))) {
     const file = join(w, "state", name, "run.json");

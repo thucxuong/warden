@@ -97,7 +97,7 @@ Run `warden site` in the project and open the address it prints (`http://127.0.0
 
 ### What is committed to git?
 
-`.warden/` is committed, except `.warden/state/`, which holds the live runs and is in `.gitignore`. So is `.worktrees/`. Run records are not committed: when a run ships or finishes, warden saves its record to your project's own database. See [State and history](concepts/state-and-history.md) and [Project files](reference/project-files.md).
+`.warden/` is committed, except `.warden/state/`, which holds the live runs and is in `.gitignore`. So is `.worktrees/`. Run records are not committed: when a run ships or finishes, warden saves its record in `.warden/state/_records/`, and in the team database when the project has one. See [State and history](concepts/state-and-history.md) and [Project files](reference/project-files.md).
 
 ### How do I stop a run for good?
 

@@ -4,7 +4,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { sh as git } from "../helpers/repo.ts";
 import { base, cli, installCommandsFixture, main, wt } from "../helpers/commands-fixture.ts";
-import { barrel, writeRoles, writeTools, RECORDS_ENTRY, RECORDS_FILE, RECORDS_HEAD } from "../helpers/tools-fixture.ts";
+import { recordRows } from "../helpers/records-fixture.ts";
+import { barrel, writeRoles, writeTools } from "../helpers/tools-fixture.ts";
 
 installCommandsFixture();
 
@@ -35,7 +36,7 @@ case "$1" in
   create) cat '${fx}'/create.json 2>/dev/null || exit 2 ;;
 esac
 `);
-  writeTools(main, barrel(`  { name: "fake", summary: "fixture ticket tool", run: command(${JSON.stringify(`sh '${script}'`)}) },\n${RECORDS_ENTRY}`, `import { command } from "./tool";\n${RECORDS_HEAD}`));
+  writeTools(main, barrel(`  { name: "fake", summary: "fixture ticket tool", run: command(${JSON.stringify(`sh '${script}'`)}) },`));
   setTickets(true);
   put("dag-E-1.json", [row("T-1"), row("T-2", ["T-1"]), row("T-3", ["T-1"], "todo", { type: "bug" })]);
   put("all.json", [row("T-1"), row("T-2", ["T-1"]), row("T-3", ["T-1"]), row("T-50", [], "done"), row("T-60", [], "doing")]);
@@ -43,7 +44,7 @@ esac
 });
 
 function setTickets(on: boolean): void {
-  writeRoles(main, on ? { tickets: "fake", records: "recordsdb" } : {});
+  writeRoles(main, on ? { tickets: "fake" } : {});
 }
 
 describe("orchestrate plan", () => {
@@ -173,8 +174,7 @@ describe("orchestrate set-status", () => {
     const r = cli(["orchestrate", "set-status", "E-1", "done"]);
     expect(r.code).toBe(0);
     expect(r.json).toEqual({ id: "E-1", status: "done", changed: ["backlog/E-1.md"] });
-    const rows = JSON.parse(readFileSync(join(main, RECORDS_FILE), "utf8")) as { ticket: string; status: string; summary: { tokens: { input: number } } }[];
-    expect(rows.find((r) => r.ticket === "E-1")).toMatchObject({ status: "epic", summary: { tokens: { input: 10 } } });
+    expect(recordRows(main).find((r) => r.ticket === "E-1")).toMatchObject({ status: "epic", summary: { tokens: { input: 10 } } });
   });
 
   test("a result of the wrong shape is exit 1", () => {

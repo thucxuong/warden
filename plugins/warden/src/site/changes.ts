@@ -1,10 +1,9 @@
 // Files and commits of one run (design 2.6 Changes). Git runs in the main checkout, which shares objects with worktrees.
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync } from "node:fs";
 import { head, ownDiffNames } from "../lib/git.ts";
 import type { ImplementOutput } from "../types.ts";
 import type { ChangesView, PrInfo } from "./api-types.ts";
-import type { LoadedTask } from "./data.ts";
+import { runText, type LoadedTask } from "./data.ts";
 import { gitRead } from "./text.ts";
 
 function tryHead(cwd: string): string | null {
@@ -22,7 +21,7 @@ function rev(main: string, spec: string): string | null {
 // The end of the run's range, first match (2.6).
 function rangeEnd(main: string, loaded: LoadedTask, pr: PrInfo): string | null {
   const { run } = loaded;
-  if (loaded.source === "live") {
+  if (loaded.source === "live" && !loaded.db) {
     const h = tryHead(run.worktree);
     if (h) return h;
   }
@@ -43,7 +42,8 @@ function claimedFiles(loaded: LoadedTask): { claimed: string[]; tests: string[] 
   for (const e of loaded.events) {
     if (e.type !== "output.accepted" || !e.step || !implementIds.has(e.step) || typeof e.data?.path !== "string") continue;
     try {
-      const out = JSON.parse(readFileSync(join(loaded.dir, e.data.path), "utf8")) as Partial<ImplementOutput>;
+      const out = JSON.parse(runText(loaded, e.data.path) ?? "null") as Partial<ImplementOutput> | null;
+      if (out === null) continue;
       for (const f of out.filesChanged ?? []) if (typeof f === "string") claimed.add(f);
       for (const f of out.testsAdded ?? []) if (typeof f === "string") tests.add(f);
     } catch {

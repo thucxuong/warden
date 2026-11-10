@@ -1,11 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { WardenError } from "../../plugins/warden/src/lib/exit.ts";
 import type { TicketsOk } from "../../plugins/warden/src/site/api-types.ts";
 import { buildEpic } from "../../plugins/warden/src/site/epics.ts";
 import { clearFinishedCache, prepareBoard, prepareEpicEvents } from "../../plugins/warden/src/site/finished.ts";
-import { RECORDS_FILE } from "../helpers/tools-fixture.ts";
+import { removeRecord, writeRecords } from "../helpers/records-fixture.ts";
 import { siteCtx } from "../../plugins/warden/src/site/text.ts";
 import { buildTickets, singleFlight, type ToolRunner } from "../../plugins/warden/src/site/tickets.ts";
 import { FX_TICKETS, makeSiteFixture, PLUGIN_ROOT, type SiteFixture } from "../helpers/site-fixture.ts";
@@ -107,19 +107,17 @@ describe("epic page (/api/epics/:id)", () => {
     clearFinishedCache();
     expect(await epicOf("FX-300", [])).toMatchObject({ costSource: null, rows: [], usage: { known: false } });
     clearFinishedCache();
-    const file = join(fx.main, RECORDS_FILE);
-    const before = readFileSync(file, "utf8");
     const summary = {
       schema: 1, epic: "FX-300", savedAt: "2026-11-01T10:00:00.000Z", pricesDate: null,
       tokens: { input: 10, output: 1, cacheRead: 0, cacheWrite: 0, costUsd: 0.5, unpriced: false },
     };
-    writeFileSync(file, JSON.stringify([...JSON.parse(before), { ticket: "FX-300", status: "epic", flow: "epic", finishedAt: summary.savedAt, summary, detail: {} }]));
+    writeRecords(fx.main, [{ ticket: "FX-300", status: "epic", flow: "epic", finishedAt: summary.savedAt, summary, detail: {} }]);
     try {
       const epic = await epicOf("FX-300", []);
       expect(epic).toMatchObject({ costSource: "history", savedAt: "2026-11-01T10:00:00.000Z", usage: { costUsd: 0.5, known: true } });
       expect(epic.pricing).toContain("Estimate using the prices that came with warden.");
     } finally {
-      writeFileSync(file, before);
+      removeRecord(fx.main, "FX-300");
       clearFinishedCache();
     }
   });

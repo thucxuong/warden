@@ -7,7 +7,7 @@ import type {
   GateCommand, GateJob, GateRun, LogRef, MarkerKind, StepOutcome, Timeline, TimelineLoop, TimelineMarker, TimelineStep,
   TriageView, Usage,
 } from "./api-types.ts";
-import { readLogTail, type ReviewRoundFile } from "./data.ts";
+import { readLogTail, type DbRun, type ReviewRoundFile } from "./data.ts";
 import { fmtDuration, iso, stepKind, toUsage, ZERO_TOKENS } from "./text.ts";
 
 export const TAIL_LINES = 80;
@@ -130,7 +130,7 @@ const MARKERS: Partial<Record<string, MarkerKind>> = {
   "gate.discarded": "gate-discarded", "gate.restarted": "gate-restarted", "question.asked": "question",
   "question.answered": "answered", "approve.waiting": "approve-waiting", "approve.granted": "approved",
   "approve.rejected": "rejected", "output.rejected": "output-rejected", "run.shipped": "shipped", "run.done": "done",
-  "run.archived": "archived",
+  "run.archived": "archived", "run.handed-off": "retry", "run.continued": "retry",
 };
 
 function markerText(e: EventLine): { label: string; detail: string | null } {
@@ -154,6 +154,8 @@ function markerText(e: EventLine): { label: string; detail: string | null } {
     case "output.rejected": return { label: "Output rejected", detail: Array.isArray(d.errors) ? d.errors.map(str).join("; ") : null };
     case "run.shipped": return { label: "Shipped", detail: null };
     case "run.archived": return { label: "Archived", detail: str(d.reason) || null };
+    case "run.handed-off": return { label: d.released ? "Freed for someone else" : `Handed over by ${str(d.by) || "?"}`, detail: str(d.sha) || null };
+    case "run.continued": return { label: `Continued by ${str(d.by) || "?"}`, detail: str(d.from) ? `from ${str(d.from)}` : null };
     default: return { label: "Done", detail: null };
   }
 }
@@ -257,26 +259,41 @@ function tailOf(path: string, lines: number): string | null {
   }
 }
 
-export function logRef(dir: string, path: unknown, live: boolean, withTail: boolean): LogRef | null {
-  if (typeof path !== "string" || path === "") return null;
-  const available = live && existsSync(join(dir, path));
-  return { path, available, tail: available && withTail ? tailOf(join(dir, path), TAIL_LINES) : null };
+// Where a run's logs are: its folder on this disk, or for a run from the team database (#33) the files it sent.
+export interface LogSource { dir: string; db?: DbRun }
+
+function lastLines(text: string, lines: number): string {
+  const all = text.split("\n");
+  if (all[all.length - 1] === "") all.pop();
+  return all.slice(-lines).join("\n");
 }
 
-function triageView(report: TriageReport, dir: string, live: boolean): TriageView {
+export function logRef(from: LogSource, path: unknown, live: boolean, withTail: boolean): LogRef | null {
+  if (typeof path !== "string" || path === "") return null;
+  if (from.db) {
+    const available = live && from.db.logs.has(path);
+    const text = available && withTail ? from.db.files.get(path) : undefined;
+    return { path, available, tail: text === undefined ? null : lastLines(text, TAIL_LINES) };
+  }
+  const available = live && existsSync(join(from.dir, path));
+  return { path, available, tail: available && withTail ? tailOf(join(from.dir, path), TAIL_LINES) : null };
+}
+
+function triageView(report: TriageReport, from: LogSource, live: boolean): TriageView {
   return {
     n: report.n, check: report.check, command: report.command, verdict: report.verdict, flaky: report.flaky,
     rule: report.rule, reason: report.reason,
-    attempts: report.attempts.map((a) => ({ where: a.where, n: a.n, exit: a.exit, durationMs: a.durationMs, log: logRef(dir, a.log, live, false) })),
+    attempts: report.attempts.map((a) => ({ where: a.where, n: a.n, exit: a.exit, durationMs: a.durationMs, log: logRef(from, a.log, live, false) })),
   };
 }
 
 export interface GateInput {
-  events: EventLine[]; windows: Window[]; run: RunJson; live: boolean; dir: string; triage: TriageReport[]; now: number;
+  events: EventLine[]; windows: Window[]; run: RunJson; live: boolean; dir: string; db?: DbRun; triage: TriageReport[]; now: number;
 }
 
 export function buildGates(input: GateInput): GateRun[] {
-  const { events, windows, run, live, dir, triage, now } = input;
+  const { events, windows, run, live, triage, now } = input;
+  const from: LogSource = { dir: input.dir, db: input.db };
   const list = sorted(events);
   return gateSpans(events, windows, run, live).map((span): GateRun => {
     const endSeq = span.end?.seq ?? Infinity;
@@ -289,14 +306,14 @@ export function buildGates(input: GateInput): GateRun[] {
       const exit = Number(e.data?.exit ?? 0);
       return {
         name: str(e.data?.name), exit, passed: exit === 0, durationMs: Number(e.data?.durationMs ?? 0),
-        log: logRef(dir, e.data?.log, live, exit !== 0),
+        log: logRef(from, e.data?.log, live, exit !== 0),
       };
     });
     let triageOut: TriageView | null = null;
     if (span.end?.type === "gate.failed") {
       const n = /^triage\/(\d+)\.json$/.exec(str(span.end.data?.report))?.[1];
       const report = n === undefined ? undefined : triage.find((t) => t.n === Number(n));
-      if (report) triageOut = triageView(report, dir, live);
+      if (report) triageOut = triageView(report, from, live);
     }
     let review: GateRun["review"] = null;
     if (span.job === "review") {
@@ -319,6 +336,7 @@ export function buildGates(input: GateInput): GateRun[] {
 export interface TimelineInput {
   events: EventLine[]; flow: FlowJson; run: RunJson;
   links: SessionLink[] | null;     // null for history: no per-window tokens
+  windowTokens?: Map<number, TokenTotals>; // a run from the team database: counted on its machine and sent (#33)
   reviewRounds: ReviewRoundFile[];
   known: boolean;                  // the run's usage is known (2.3)
   triage: TriageReport[];
@@ -330,7 +348,7 @@ export function buildTimeline(input: TimelineInput): Timeline {
   const { events, flow, run, links, now } = input;
   const live = links !== null;
   const windows = windowsOf(events, flow);
-  const tokens: Map<number, TokenTotals> = live ? tokensByWindow(links, events) : new Map();
+  const tokens: Map<number, TokenTotals> = input.windowTokens ?? (live ? tokensByWindow(links, events) : new Map());
 
   // The reviewer cost of round r goes to the review window holding its review.round event.
   const reviewer = new Map<number, { cost: number; t: typeof ZERO_TOKENS }>();
