@@ -106,7 +106,7 @@ git -C <worktree> commit -m 'chore(<task>): run record'
 | `rounds` | Review rounds, fixer rounds, check runs, CODE verdicts. |
 | `verdicts`, `findings` | Each triage verdict with its rule, and counts of blocking, minor, dropped and leftover findings. |
 
-Sessions are linked to a task by the hooks, for example when a session runs `warden start`, `next`, `done`, `wait` or `ask` for it, and when a subagent (such as the fixer) stops. Transcripts exist only on the machine that ran the session, so tokens from another machine are not counted.
+Sessions are linked to a task by the hooks, for example when a session runs `warden start`, `next`, `done`, `wait` or `ask` for it, and when a subagent (such as the fixer, or a named agent whose prompt starts with `Task: <id>`) stops. Transcripts exist only on the machine that ran the session, so tokens from another machine are not counted.
 
 ## Removing a run
 

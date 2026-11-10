@@ -48,6 +48,7 @@ For a new idea, start with `/warden:intent <the idea>`. It interviews you, analy
    - starts a run: `warden start <id> --template <template> --worktree`. The ticket's text becomes the task text.
    - hands each ticket to a `warden:ticket` agent, at most 4 at a time, all in the foreground.
    - hands fix steps to the `warden:fixer` agent when a check fails for a reason outside the change.
+   - runs a named agent your project's rules require (for example a `database-engineer` review) when a ticket agent asks for one, since a ticket agent cannot start agents itself. The named agent's transcript is linked to the ticket's run, so a check can prove the review from the run's `sessions.jsonl`, and its answer goes back to the ticket agent.
    - when the wave's work is done, ships the tickets one at a time: each ticket branch first merges the latest main branch, the gates run again on the merged commit, then the pull request is opened or merged.
    - after a merge, pulls the main branch and marks the ticket `done` with `warden orchestrate set-status <id> done`, committing the ticket file when there is one.
 
@@ -67,6 +68,8 @@ flowchart LR
   W --> A["ticket agents work in parallel"]
   A -->|"a fix step"| F["fixer agent"]
   F --> A
+  A -->|"REVIEW"| R["named agent"]
+  R --> A
   A -->|"all ready"| S["ship one at a time, in order"]
   S -->|"merged"| D["set-status done"]
   D --> P

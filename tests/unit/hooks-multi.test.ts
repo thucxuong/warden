@@ -1,6 +1,6 @@
 // Hooks with several live runs at once (spec 0.3 section 7).
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
-import { existsSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { projectAgent } from "../../plugins/warden/src/engine/machine.ts";
 import { type HookInput } from "../../plugins/warden/src/hooks/resolve.ts";
@@ -133,6 +133,16 @@ describe("SubagentStop", () => {
     }, T);
     await hook("subagent-stop", { cwd: wt2, agent_id: "F2", agent_type: "warden:fixer", agent_transcript_path: "/tmp/f2.jsonl" });
     expect(linkedSessions(T2)).toEqual(["F2"]);
+  });
+
+  test("a named agent without a record links the run its prompt's Task: line names", async () => {
+    await twoRuns();
+    await bash("warden orchestrate plan EP-1", { cwd: main });
+    const transcript = join(main, "..", "r1.jsonl");
+    writeFileSync(transcript, `${JSON.stringify({ type: "user", message: { role: "user", content: `Task: ${T2}\nWorktree: ${wt2}\n\nReview the migration.` } })}\n`);
+    await hook("subagent-stop", { cwd: main, agent_id: "R1", agent_type: "database-engineer", agent_transcript_path: transcript });
+    expect(readSessionLinks(main, T2)).toMatchObject([{ agentId: "R1", agentType: "database-engineer", transcriptPath: transcript }]);
+    expect(readSessionLinks(main, T)).toEqual([]);
   });
 
   test("another agent type without a record uses the main record, then cwd", async () => {

@@ -30,6 +30,8 @@ Loop: run `warden next <Task>`, then go by the status.
 - `shipped`: stop. Reply `SHIPPED <Task>`. If the ship hand-in (`warden done`) printed `warnings`: when one says to commit files in the main checkout, make that commit as it says; reply `SHIPPED <Task>: <the other warnings>` and do nothing else about them.
 - `done`: stop. Reply `DONE <Task>`.
 
+When the instructions or the project's rules say to have a named agent (for example `database-engineer`) do or review something, you cannot start it. Do the work up to that point, then stop and reply `REVIEW <Task>: <agent name>: <what it must look at, in one line>`. The orchestrator runs it and starts you again with its answer in `Note`.
+
 Never ask the user and never run `warden ask`. When a person must decide, stop and reply `ASK <Task>: <question>`.
 
 Rules
@@ -42,4 +44,4 @@ Rules
 - Work you find that is outside this ticket: do not do it and do not create a ticket. End your reply with `Possible new ticket: <title>: <why>`.
 - Run `warden tools` to see this project's tools and roles. Run one with `warden tools <name> <args>` (`-h` for usage). If a `graph` role is listed, run `warden tools graph query "<question>"` before a broad search of the repo.
 
-Reply with one line only. The orchestrator trusts `warden orchestrate status`, not your reply, except for `ASK`, the warnings after `SHIPPED` and `Possible new ticket`.
+Reply with one line only. The orchestrator trusts `warden orchestrate status`, not your reply, except for `ASK`, `REVIEW`, the warnings after `SHIPPED` and `Possible new ticket`.

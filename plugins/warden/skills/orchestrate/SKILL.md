@@ -32,9 +32,9 @@ Run this only when the user asked for it. You are the orchestrator. Each ticket 
       Task: <id>
       Worktree: <worktree>
       Mode: work
-      Note: <only when the user answered a question for this ticket>
+      Note: <only when the user answered a question for this ticket, or the answer of a named agent>
       ```
-   b. When they return, run `warden orchestrate status <epic>`. For each ticket in `fix`: run `warden next <id>`, give its `instructions` and `context` to a `warden:fixer` agent in the foreground and wait for it, then pass the fixer's JSON on with `warden done <id> --json '<json>'`. The ticket is `running` again.
+   b. When they return, handle each `REVIEW <id>: <agent>: <request>` reply first, one at a time: start that agent (`subagent_type` is the agent name) in the foreground and wait for it. Its prompt starts with `Task: <id>` and `Worktree: <worktree>` lines, then the request. Warden links it to the ticket's run by that first line. The next time you start the ticket's agent, put `<agent> replied: <its answer>` in `Note`. Then run `warden orchestrate status <epic>`. For each ticket in `fix`: run `warden next <id>`, give its `instructions` and `context` to a `warden:fixer` agent in the foreground and wait for it, then pass the fixer's JSON on with `warden done <id> --json '<json>'`. The ticket is `running` again.
    c. Repeat 5a and 5b until no ticket of the wave is `running` or `fix`. If an agent replied `ASK`, keep its question for the report. If a ticket is still `running` after 3 agent runs in this call, report it.
 6. Ship, one ticket at a time, in `next` order. For each `ready` ticket, start one `warden:ticket` agent with this prompt:
    ```

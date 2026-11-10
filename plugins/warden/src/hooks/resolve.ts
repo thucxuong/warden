@@ -1,6 +1,6 @@
 // Shared hook plumbing (spec 7.1, 7.6): the hook input, finding the run a hook call is about,
 // session records and session-to-task links.
-import { appendFileSync, existsSync, mkdirSync, realpathSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readSync, realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { loadStepsJson, loadWardenJson } from "../config/config.ts";
 import { readJson } from "../lib/json.ts";
@@ -205,7 +205,28 @@ export function runForAgentRecord(call: HookCall): RunJson | null {
   return runOfTask(call.main, sessionTask(call)) ?? null;
 }
 
-// SubagentStop step 3: the main thread's record (even for an agent call), then cwd.
+// SubagentStop step 3: a subagent whose prompt starts with `Task: <id>` (a named agent, such as a reviewer the
+// project's rules require, that /warden:orchestrate starts for a ticket). Reads only the transcript's first bytes.
+const PROMPT_TASK = /"(?:content|text)":"Task: ([^\s"\\]+)/;
+export function runForAgentPrompt(call: HookCall): RunJson | null {
+  const file = call.input.agent_transcript_path;
+  if (typeof file !== "string" || file === "") return null;
+  let head = "";
+  try {
+    const fd = openSync(file, "r");
+    try {
+      const buf = Buffer.alloc(4096);
+      head = buf.toString("utf8", 0, readSync(fd, buf, 0, buf.length, 0));
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    return null;
+  }
+  return runOfTask(call.main, PROMPT_TASK.exec(head)?.[1] ?? null) ?? null;
+}
+
+// SubagentStop step 4: the main thread's record (even for an agent call), then cwd.
 export function runForMainRecord(call: HookCall): RunJson | null {
   return runOfTask(call.main, mainTask(call)) ?? runForCwd(call.main, call.ctx.cwd);
 }
