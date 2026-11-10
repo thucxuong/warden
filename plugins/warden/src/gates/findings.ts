@@ -24,12 +24,11 @@ const LINE_SLACK = 3;
 type Extracted = { findings: Finding[] } | { problem: string };
 
 export function parseReviewerStdout(stdout: string, exitCode: number): ParsedReview {
-  const outer = parseJson(stdout);
-  if (outer === undefined || typeof outer !== "object" || outer === null || Array.isArray(outer)) {
+  const envelope = resultEnvelope(parseJson(stdout));
+  if (!envelope) {
     const status: ReviewStatus = exitCode !== 0 ? "error" : "malformed";
     return result(status, [], null, null, "reviewer stdout is not a JSON object");
   }
-  const envelope = outer as Record<string, unknown>;
   const costUsd = typeof envelope.total_cost_usd === "number" ? envelope.total_cost_usd : null;
   const tokens = readTokens(envelope);
   const text = typeof envelope.result === "string" ? envelope.result : "";
@@ -138,6 +137,12 @@ function parseJson(text: string): unknown {
   } catch {
     return undefined;
   }
+}
+
+// Older claude -p prints one result object; newer versions can print the whole event list, ending in a "result" event.
+function resultEnvelope(outer: unknown): Record<string, unknown> | null {
+  if (!Array.isArray(outer)) return asObject(outer);
+  return outer.map(asObject).filter((event) => event?.type === "result").at(-1) ?? null;
 }
 
 function asObject(value: unknown): Record<string, unknown> | null {

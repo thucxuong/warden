@@ -47,6 +47,18 @@ describe("parseReviewerStdout", () => {
     expect(parsed.findings).toEqual([]);
   });
 
+  test("an event list is read from its last result event", () => {
+    const parsed = parseReviewerStdout(fixture("event-array-empty.json"), 0);
+    expect(parsed.status).toBe("ok");
+    expect(parsed.findings).toEqual([]);
+    expect(parsed.costUsd).toBe(0.02);
+  });
+
+  test("an event list with no result event is malformed", () => {
+    const parsed = parseReviewerStdout(JSON.stringify([{ type: "system", subtype: "init" }]), 0);
+    expect(parsed.status).toBe("malformed");
+  });
+
   test("falls back to the last json fence (object)", () => {
     const parsed = parseReviewerStdout(fixture("fenced-object.json"), 0);
     expect(parsed.status).toBe("ok");
