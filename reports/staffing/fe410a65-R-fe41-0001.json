@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "id": "R-fe41-0001",
+  "projectId": "staffing",
+  "kind": "enhancement",
+  "title": "Orchestrated tickets cannot run a required named-agent review (database-engineer)",
+  "body": "What happened: /warden:orchestrate started a ticket whose plan adds a migration. The project rules require a database-engineer subagent review at the end of planning and after the last database commit, and the check step (a project schema-check tool) proves it from sessions.jsonl. warden:ticket agents have no Agent tool, and a subagent cannot start another subagent, so the review cannot happen inside an orchestrated run. The ticket would fail at the check step after all the implementation work. The only workaround is to take the ticket out of orchestration and run /warden:work in a normal session, which breaks the epic's flow. Expected: orchestration can drive a ticket that needs a named-agent review. Options: (1) a flow step type that calls a named agent, e.g. { type: review, agent: database-engineer, when: <files glob> }, run by the orchestrator or warden itself and recorded in the run; or (2) warden:ticket returns a structured REVIEW request (agent name + prompt), the orchestrator runs the named agent, and warden records it in the ticket's sessions.jsonl as that run's review; or (3) warden orchestrate plan flags tickets that need such a review up front (template + rules), so the orchestrator says so before starting them instead of after. Steps: 1. Project rules require a named subagent review for tickets touching migrations, proven from sessions.jsonl in the check step. 2. Run /warden:orchestrate <epic> whose first ticket adds a migration. 3. warden start succeeds, the plan step instructions say to call database-engineer, but the ticket agent has no Agent tool. Evidence: warden:ticket agent tools are Bash, Read, Edit, Write, Glob, Grep, Skill (no Agent). The project's own rule text: 'Run such a ticket in a normal session: agents started by /warden:orchestrate cannot call database-engineer.' Warden 0.15.0.",
+  "createdAt": "2026-11-10T02:55:20.726Z",
+  "status": "sent",
+  "fixedIn": null,
+  "note": null,
+  "projectDir": "/Users/cluu/Documents/Work/StaffingDashboard",
+  "machineId": "fe410a65"
+}
