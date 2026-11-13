@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.15.3 — 2026-11-13
+
+- An agent that hands work to subagents can now end its turn to wait for them. Claude Code always runs subagents in the background, and their result wakes the agent again, but the Stop hook kept sending the agent back with `<task> is at <step> and needs you` (unless it was the fixer at a fix step). That forced filler turns, about 20 in one run. Warden now notes each subagent the agent starts (`Agent`, or `SendMessage` to wake one again) and each one that stops, and lets the turn end while one started in this step is still out. (#40)
+
 ## 0.15.2 — 2026-11-10
 
 - The review step no longer fails when Claude Code runs in verbose mode (`"verbose": true` in the user settings). The reviewer then prints all its events as one JSON list, and warden marked even a clean review as malformed, so the run was blocked with `reviewer unavailable: malformed`. Warden now reads the final result from that list. (#35)
