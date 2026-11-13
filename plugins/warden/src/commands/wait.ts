@@ -6,7 +6,7 @@ import { EXIT, WardenError } from "../lib/exit.ts";
 import { mainRoot } from "../state/paths.ts";
 import { readRun, runExists } from "../state/store.ts";
 import type { Ctx } from "../types.ts";
-import { optionalTask, parseArgs, printJson, resolveTask } from "./next.ts";
+import { optionalTask, parseArgs, printNext, resolveTask } from "./next.ts";
 
 const DEFAULT_MAX_SECONDS = 540;
 const MAX_SECONDS = 590;
@@ -26,8 +26,9 @@ function maxSeconds(value: string | undefined): number {
 }
 
 export async function run(args: string[], ctx: Ctx): Promise<void> {
-  const parsed = parseArgs(args, ["--max-seconds"]);
-  const task = resolveTask(ctx, optionalTask(parsed, "warden wait [<task>] [--max-seconds <n>]"), true, "wait");
+  const parsed = parseArgs(args, ["--max-seconds"], ["--brief"]);
+  const brief = parsed.switches.has("--brief");
+  const task = resolveTask(ctx, optionalTask(parsed, "warden wait [<task>] [--max-seconds <n>] [--brief]"), true, "wait");
   const deadline = Date.now() + maxSeconds(parsed.values["--max-seconds"]) * 1000;
   const main = mainRoot(ctx.cwd);
   const spawnWorker = defaultSpawnWorker(ctx);
@@ -45,10 +46,10 @@ export async function run(args: string[], ctx: Ctx): Promise<void> {
     if (readRun(main, task).gate === null) break;
     const left = deadline - Date.now();
     if (left <= 0) {
-      printJson({ ...describeRun(ctx, task), status: "running_gate", message: "gate still running; run: warden wait" });
+      printNext({ ...describeRun(ctx, task), status: "running_gate", message: "gate still running; run: warden wait" }, brief);
       return;
     }
     await Bun.sleep(Math.min(poll, left));
   }
-  printJson(describeRun(ctx, task));
+  printNext(describeRun(ctx, task), brief);
 }

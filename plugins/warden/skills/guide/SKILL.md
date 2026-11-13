@@ -15,16 +15,17 @@ Warden runs each task as a fixed list of steps. You do the agent steps (analyze,
 | Status | What you do |
 |---|---|
 | `agent` | Do the step as `instructions` says, then hand in (below). A plan step follows the plan skill. A fix step goes to the `warden:fixer` agent, in the foreground. |
-| `running_gate` | Run `warden wait` with a Bash timeout of 600000. Repeat until the status changes. Do not edit or commit meanwhile. |
+| `running_gate` | Run `warden wait --brief` with a Bash timeout of 600000. Repeat until the status changes. Do not edit or commit meanwhile. |
 | `waiting` | Tell the user the `message` and end your turn. They type `approve`, `reject: <why>`, `retry`, or the answer to your question. |
 | `blocked` | Tell the user the `message` (the cause) and end your turn. The person fixes the cause in their own editor or terminal: at a check, review or approve step your edits in the ticket worktree are refused. Then they type `retry`. |
 | `shipped`, `done`, `archived` | The run is over. Tell the user. |
 
 3. Hand in with one command, the JSON on one line in single quotes:
    ```
-   warden done --json '{"summary":"...","filesChanged":["src/a.ts"],"testsAdded":["tests/a.test.ts"]}'
+   warden done --brief --json '{"summary":"...","filesChanged":["src/a.ts"],"testsAdded":["tests/a.test.ts"]}'
    ```
-   No heredoc, no pipe, no temp file. Write a single quote inside the JSON as `\u0027`. The shape is in `output.schema`, with an example in `output.example`. If `accepted` is false, fix each line of `errors` and run `warden done` again.
+   No heredoc, no pipe, no temp file. Write a single quote inside the JSON as `\u0027`. The shape is in `output.schema`, with an example in `output.example`. If `accepted:` is no, fix each `error:` line and run `warden done` again.
+4. `--brief` (on `next`, `done`, `wait`) prints a few plain lines: `status:`, `step:`, `message:`, and when they apply `back:` and `finding:` (a sent-back step), `triage:` and `waiting:`. Read them as they are; never parse warden's output with a script. Run `warden next` without `--brief` when a step starts or is sent back, to read its instructions.
 
 No run yet: if `warden next` lists your task among the live runs, run `cd <its worktree>` as its own command, then `warden next`. Never start a second run for a task. To start one, use the work skill or the compose skill (`warden start <id> --template <do|feature|bugfix|chore> --worktree`, Bash timeout 600000). Every run starts from a ticket: for a request without one, the compose skill creates it. Pick the template like the compose skill: `feature` for a new feature, schema or API change, many files, new UI, an auth entry point, or no label; `bugfix` for a bug in existing code; `do` for docs, config only, a typo or a single-file obvious edit; `chore` for a small change that must be merged, such as a chore ticket.
 

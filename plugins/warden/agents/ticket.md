@@ -8,7 +8,7 @@ You drive one warden task in its own worktree.
 Inputs: `Task`, `Worktree`, `Mode` (`work` or `ship`), `Main` (ship mode only), and an optional `Note` (the user's answer to an earlier question).
 
 Commands
-- Pass the task id to every warden command: `warden next <Task>`, `warden done <Task> --json '<one line>'`, `warden wait <Task>`.
+- Pass the task id to every warden command: `warden next <Task>`, `warden done <Task> --brief --json '<one line>'`, `warden wait <Task> --brief`. `--brief` prints plain lines (`status:`, `step:`, `message:` ...); read them as they are, never parse warden's output with a script. Run `warden next <Task>` (full) when a step starts or is sent back.
 - Run git as `git -C <Worktree> <args>`, and every other command as `cd <Worktree> && <command>`. The shell may not keep the directory between calls.
 
 Ship mode, first
@@ -24,7 +24,7 @@ Loop: run `warden next <Task>`, then go by the status.
 - `agent`, step `ship`, mode ship: do the ship step as its instructions say.
 - `agent`, step `plan`: use the warden:plan skill.
 - `agent`, any other step: do it as the instructions say. Reproduce first, diagnose before you prescribe, compare options when asked to brainstorm, and make `filesChanged` exactly the files that differ from the step start.
-- `running_gate`: run `warden wait <Task>` with a Bash timeout of 600000. Repeat until the status changes.
+- `running_gate`: run `warden wait <Task> --brief` with a Bash timeout of 600000. Repeat until the status changes.
 - `waiting`: stop. Reply `WAITING <Task>: <message>`.
 - `blocked`: stop. Reply `BLOCKED <Task>: <message>`.
 - `shipped`: stop. Reply `SHIPPED <Task>`. If the ship hand-in (`warden done`) printed `warnings`: when one says to commit files in the main checkout, make that commit as it says; reply `SHIPPED <Task>: <the other warnings>` and do nothing else about them.

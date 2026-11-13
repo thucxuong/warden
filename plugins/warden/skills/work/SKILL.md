@@ -23,12 +23,13 @@ Warden chooses the task's worktree and branch (`warden start` prints them). Use 
    - implement: `filesChanged` is exactly the files that differ from the step start. Check with `git diff --name-only <step start> HEAD`.
 3. Hand back the output in one command, with the JSON on one line in single quotes:
    ```
-   warden done --json '{"summary":"...","filesChanged":["src/a.ts"]}'
+   warden done --brief --json '{"summary":"...","filesChanged":["src/a.ts"]}'
    ```
    Do not use a heredoc, a pipe or a temp file. Write a single quote inside the JSON as `\u0027`.
-   `warden done` returns at once. If `accepted` is false, fix each item in `errors`. Then call `warden done` again.
+   `warden done` returns at once. With `--brief` it prints plain lines (`accepted:`, `error:`, `warning:`, then `status:`, `step:`, `message:`), so never parse its output with a script. If `accepted` is no, fix each `error:` line. Then call `warden done` again.
+   When `status:` is `agent` at a new step, or a `back:` line says the step was sent back, run `warden next` (full JSON) to read that step's instructions.
    If it prints `warnings` (after the ship step: the ticket status and link), do what each one says or tell the user. They never undo the ship.
-4. If the status is `running_gate`, run `warden wait` with a Bash timeout of 600000. It blocks for up to 540 seconds. Repeat until the status is no longer `running_gate`.
+4. If the status is `running_gate`, run `warden wait --brief` with a Bash timeout of 600000. It blocks for up to 540 seconds. Repeat until the status is no longer `running_gate`.
    Do not edit files or commit while a gate runs. The engine throws the result away if HEAD or the tree moves.
 5. If the status is `done`, do what the `message` says (a run without a ship step: its ticket is set to done once the branch is merged), then tell the user the run is done.
    If the status is `waiting` or `blocked`, tell the user the `message`. Then end your turn. The user types `approve`, `reject: <why>` or `retry`.

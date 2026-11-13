@@ -156,7 +156,7 @@ Output: the same JSON as [`warden next`](#warden-next). With `--worktree` it als
 ## warden next
 
 ```
-warden next [<task>]
+warden next [<task>] [--brief]
 ```
 
 Prints what the run needs now. It changes the run only in three cases: it skips an approve step for a session started with `PROJECT_AGENT=1`, it sends the run back to the gates when the code changed after they passed at the ship step, and it starts or restarts the engine worker when engine work is pending (for example after the worker died, or `warden done` could not start one).
@@ -196,12 +196,28 @@ Output (`NextResponse`):
 
 The `message` also lists what the engine itself ran, for example `warden ran: lint (pass, 2.1 s), test (fail, exit 1, 30.4 s) on 1a2b3c4` and `warden review: round 1, 0 blocking, 2 minor`. These lines appear after a gate, not while the agent is working on its own step.
 
+### --brief
+
+`--brief` (also on `warden done` and `warden wait`) prints a few plain lines instead of the JSON, without the instructions and project rules:
+
+```
+status: agent
+step: implement (2/5)
+message: T-001: implement (2/5). Back from check: CODE.
+back: check (code): <reason>
+finding: src/a.ts:12 blocking: <summary>
+triage: triage/1.json
+waiting: question: <the question>
+```
+
+`step:` is left out when there is no step. `back:`, `finding:` and `triage:` appear only for a step that was sent back, `waiting:` only while the run waits. `warden done --brief` starts with `accepted: yes|no`, then one `error:` and `warning:` line each. The exit codes are the same as without it.
+
 ---
 
 ## warden done
 
 ```
-warden done [<task>] [--json <text> | --file <path>]
+warden done [<task>] [--json <text> | --file <path>] [--brief]
 ```
 
 Hands in the output of the current agent step. The output is JSON: as one argument with `--json` (the preferred way, so the hand-in is one simple command), from a file with `--file`, or from stdin. `--json` and `--file` together is exit 2.
@@ -243,7 +259,7 @@ Every hand-in, accepted or not, is saved as `.warden/state/<task>/outputs/<seq>-
 ## warden wait
 
 ```
-warden wait [<task>] [--max-seconds <n>]
+warden wait [<task>] [--max-seconds <n>] [--brief]
 ```
 
 The only command that blocks. It checks the run every 2 seconds until no engine work is running, then prints the same JSON as `warden next`. Run it with a Bash timeout of 600000 ms.
