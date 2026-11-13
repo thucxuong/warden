@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.15.4 — 2026-11-13
+
+- A subagent's report no longer counts as your answer to `warden ask`. Claude Code passes a background subagent's report through the same hook as a typed message, so when a subagent finished while the run waited for your answer, warden closed the question and the agent went on without you. Only a message you type answers the question now. (#36)
+
 ## 0.15.3 — 2026-11-13
 
 - An agent that hands work to subagents can now end its turn to wait for them. Claude Code always runs subagents in the background, and their result wakes the agent again, but the Stop hook kept sending the agent back with `<task> is at <step> and needs you` (unless it was the fixer at a fix step). That forced filler turns, about 20 in one run. Warden now notes each subagent the agent starts (`Agent`, or `SendMessage` to wake one again) and each one that stops, and lets the turn end while one started in this step is still out. (#40)
