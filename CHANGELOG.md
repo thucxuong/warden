@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.15.5 — 2026-11-13
+
+- `warden next`, `warden done` and `warden wait` take `--brief`: a few plain lines (`status:`, `step:`, `message:`, and when they apply the reason a step was sent back, its findings, the triage report and what the run waits for) instead of the full JSON. The full JSON stays the default. The work and guide skills and the ticket agent use it for `done` and `wait`, and read the full `warden next` when a step starts or is sent back, so agents no longer parse warden's output with a script. (#38)
+- `sessions.jsonl` now gets a line for every stop of a subagent, with the time of that stop. A subagent woken again with SendMessage keeps its transcript, so before only its first stop was recorded, and a project check that proves "the reviewer ran after the last commit" failed although the review happened. Token counts are unchanged: each transcript is still read once. (#39)
+
 ## 0.15.4 — 2026-11-13
 
 - A subagent's report no longer counts as your answer to `warden ask`. Claude Code passes a background subagent's report through the same hook as a typed message, so when a subagent finished while the run waited for your answer, warden closed the question and the agent went on without you. Only a message you type answers the question now. (#36)
