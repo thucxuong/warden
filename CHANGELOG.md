@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.15.7 — 2026-11-13
+
+- `/warden:upgrade` goes one step at a time. `warden upgrade --notes` now gives the notes only up to and including the next one that has something to apply, and `warden upgrade --done` moves the project to that version. The agent applies, shows and commits each step, then goes on, so a project several versions behind never gets all the instructions mixed into one change. A note with nothing to apply is exactly `No layout changes.`. (#41)
+- `/warden:upgrade` first asks to update the plugin (`claude plugin marketplace update`, then `claude plugin update`), and asks you to restart Claude Code when that installed a newer version. (#41)
+- Session start now says `version <v> is installed; this session still runs <old>. Restart Claude Code ...` when Claude Code already installed a newer warden but the session runs the old cached copy. Before, it told you to run `claude plugin update` again. (#41)
+- `warden upgrade` stops with a clear error, and changes nothing, when it runs an older copy than the installed one or a version older than the project's. Before, `--done` could move a project back to an older version. (#41)
+- The `root` file the terminal alias reads no longer moves back to an older cached copy when a session on an older version starts. (#41)
+
 ## 0.15.6 — 2026-11-13
 
 - The fix step, the work, guide and orchestrate skills and the docs no longer ask for the fixer and ticket agents "in the foreground". Claude Code always runs subagents in the background, so that could not be followed. The agent now starts them, ends its turn and waits for each one's completion message. The old reason ("a background agent cannot ask for permissions") is gone: a background subagent's permission prompt reaches you as usual. (#37)
