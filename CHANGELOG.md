@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.15.6 — 2026-11-13
+
+- The fix step, the work, guide and orchestrate skills and the docs no longer ask for the fixer and ticket agents "in the foreground". Claude Code always runs subagents in the background, so that could not be followed. The agent now starts them, ends its turn and waits for each one's completion message. The old reason ("a background agent cannot ask for permissions") is gone: a background subagent's permission prompt reaches you as usual. (#37)
+
 ## 0.15.5 — 2026-11-13
 
 - `warden next`, `warden done` and `warden wait` take `--brief`: a few plain lines (`status:`, `step:`, `message:`, and when they apply the reason a step was sent back, its findings, the triage report and what the run waits for) instead of the full JSON. The full JSON stays the default. The work and guide skills and the ticket agent use it for `done` and `wait`, and read the full `warden next` when a step starts or is sent back, so agents no longer parse warden's output with a script. (#38)
