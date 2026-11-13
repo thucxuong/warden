@@ -86,7 +86,6 @@ These come from the PreToolUse hook. They are tripwires, not a sandbox: they cat
 | `push/PR/merge is allowed only in the ship step after all gates pass for HEAD (...)` | A push, PR or merge before the gates proved the current commit. | Let the run reach ship. After a `do` run ends with all gates passed, a push is allowed. |
 | `only the warden:fixer subagent pushes the fix branch` | Someone other than the fixer tried to push during a fix step. | Hand the fix step to the `warden:fixer` agent. |
 | A command chained with `cd <dir> && ...` asks for permission or is denied | Claude Code permission rules match simple commands only. | Run `cd <dir>` on its own, or use `git -C <dir>`. |
-| A background agent cannot commit or hand in | Agents started with `run_in_background` cannot ask for permissions. | Start the fixer and ticket agents in the foreground. |
 
 ## Gates and blocked runs
 

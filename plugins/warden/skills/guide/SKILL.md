@@ -14,7 +14,7 @@ Warden runs each task as a fixed list of steps. You do the agent steps (analyze,
 
 | Status | What you do |
 |---|---|
-| `agent` | Do the step as `instructions` says, then hand in (below). A plan step follows the plan skill. A fix step goes to the `warden:fixer` agent, in the foreground. |
+| `agent` | Do the step as `instructions` says, then hand in (below). A plan step follows the plan skill. A fix step goes to the `warden:fixer` agent; wait for its completion message. |
 | `running_gate` | Run `warden wait --brief` with a Bash timeout of 600000. Repeat until the status changes. Do not edit or commit meanwhile. |
 | `waiting` | Tell the user the `message` and end your turn. They type `approve`, `reject: <why>`, `retry`, or the answer to your question. |
 | `blocked` | Tell the user the `message` (the cause) and end your turn. The person fixes the cause in their own editor or terminal: at a check, review or approve step your edits in the ticket worktree are refused. Then they type `retry`. |
@@ -40,7 +40,7 @@ No run yet: if `warden next` lists your task among the live runs, run `cd <its w
 - Use a project tool (the `project-tools` skill lists them) instead of the raw commands it covers. If it cannot do what you need, tell the user.
 - Use the worktree and branch that `warden start` printed, even if a project doc says otherwise.
 - One simple command per Bash call. Use `git -C <dir> ...` and absolute paths. A plain `cd <dir>` on its own is fine; never chain it as `cd <dir> && ...`.
-- Start the fixer and ticket agents in the foreground. Never use `run_in_background`.
+- Subagents (the fixer, ticket agents, reviewers) run in the background. To wait for one, end your turn; its completion message wakes you.
 
 ## Asking the user
 

@@ -73,7 +73,7 @@ See [compose a workflow](../guides/compose-a-workflow.md).
 The main loop. It repeats until the status is `shipped`, `done`, `waiting` or `blocked`:
 
 1. `warden next` (with the task id when it has one).
-2. At an agent step, do the step. A plan step uses `/warden:plan`. A fix step goes to the `warden:fixer` agent, in the foreground.
+2. At an agent step, do the step. A plan step uses `/warden:plan`. A fix step goes to the `warden:fixer` agent; the agent waits for its completion message.
 3. Hand in with `warden done --json '<one line of JSON>'`. If it is not accepted, fix each error and hand in again.
 4. While a gate runs, `warden wait`. No edits or commits meanwhile.
 5. When the run waits or is blocked, tell the user the message and end the turn.
@@ -193,7 +193,7 @@ The plugin also has two agents (subagents). The skills start them; you do not.
 | `warden:fixer` | `/warden:work` and `/warden:orchestrate` at a fix step | Finds the root cause of a check failure that triage says is not (only) the change. Fixes it at the source in its own worktree and branch, within `fix.scope`, adds a fix note and a narrow triage rule, and returns `FIXED`. Or returns `CODE` (the change is at fault), `GAVE_UP` (the run is blocked), or `WARDEN_BUG` (warden files a report and blocks the run). Runs on the `opus` model |
 | `warden:ticket` | `/warden:orchestrate` | Drives one ticket's run in its own worktree. In `work` mode it stops at the ship step, a fix step, or when a person must act. In `ship` mode it merges the main branch in, then ships It never creates a ticket: work it finds outside its ticket goes in its reply as `Possible new ticket`, and the orchestrator asks you. |
 
-Both run in the foreground, never in the background: a background agent cannot ask for permissions.
+Both run in the background, like every subagent. A permission prompt from either one reaches you as usual.
 
 ## See also
 

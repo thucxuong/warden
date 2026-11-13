@@ -16,7 +16,7 @@ Warden chooses the task's worktree and branch (`warden start` prints them). Use 
    Start a run only when no live run is listed, or your task is not among them. Every run starts from a ticket: `<id>` is its id, and it must match `taskIdPattern` in `.warden/warden.json`. If the user gave only text, create the ticket as the warden:compose "No task id" section says (the ticket tool picks the id). Pick the template as the warden:compose table says: `bugfix` for a bug in existing code, `do` for docs, config, a typo or an obvious one-file edit, `chore` for a small change that must be merged, and `feature` for everything else. Run `warden start <id> --template <do|feature|bugfix|chore> --worktree` with a Bash timeout of 600000 (it reads the ticket and runs the project setup). Then run `cd <worktree>` as its own command, and `warden next`.
 2. If the status is `agent`, do the step as the instructions say.
    - plan step: follow the plan skill.
-   - fix step: hand it to the `warden:fixer` agent in the foreground (never `run_in_background`) and wait for it to return.
+   - fix step: hand it to the `warden:fixer` agent. It runs in the background: end your turn and wait for its completion message, then hand in its JSON.
    - analyze, reproduce: write a failing test first. Record what you expected and what happened.
    - analyze, diagnose: find the root cause first. Diagnose before you prescribe.
    - feature plan with brainstorm: compare 2 or 3 options with their trade-offs. Pick one.

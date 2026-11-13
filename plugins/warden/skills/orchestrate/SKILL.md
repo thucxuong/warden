@@ -27,14 +27,14 @@ Run this only when the user asked for it. You are the orchestrator. Each ticket 
    - `backlog`, `archived`: never start them; list them in the table. A `backlog` ticket is never in `next`.
    - `blocked`, `waiting`, `pr-open`, `no-ship`: keep it for the report in step 8.
 5. Drive the work.
-   a. Start one `warden:ticket` agent for each `todo` or `running` ticket. Start them in the foreground, all in one message (parallel Agent calls), at most 4 at a time. Never use `run_in_background`: a background agent cannot ask for permissions, so its Bash calls are denied and it cannot commit or hand in. Wait for all of them to return before the next step. The prompt has exactly these keys:
+   a. Start one `warden:ticket` agent for each `todo` or `running` ticket. Start them all in one message (parallel Agent calls), at most 4 at a time. They run in the background, and each one's completion message wakes you; end your turn while you wait. Wait until all of them have returned before the next step. The prompt has exactly these keys:
       ```
       Task: <id>
       Worktree: <worktree>
       Mode: work
       Note: <only when the user answered a question for this ticket, or the answer of a named agent>
       ```
-   b. When they return, handle each `REVIEW <id>: <agent>: <request>` reply first, one at a time: start that agent (`subagent_type` is the agent name) in the foreground and wait for it. Its prompt starts with `Task: <id>` and `Worktree: <worktree>` lines, then the request. Warden links it to the ticket's run by that first line. The next time you start the ticket's agent, put `<agent> replied: <its answer>` in `Note`. Then run `warden orchestrate status <epic>`. For each ticket in `fix`: run `warden next <id>`, give its `instructions` and `context` to a `warden:fixer` agent in the foreground and wait for it, then pass the fixer's JSON on with `warden done <id> --json '<json>'`. The ticket is `running` again.
+   b. When they return, handle each `REVIEW <id>: <agent>: <request>` reply first, one at a time: start that agent (`subagent_type` is the agent name) and wait for its completion message. Its prompt starts with `Task: <id>` and `Worktree: <worktree>` lines, then the request. Warden links it to the ticket's run by that first line. The next time you start the ticket's agent, put `<agent> replied: <its answer>` in `Note`. Then run `warden orchestrate status <epic>`. For each ticket in `fix`: run `warden next <id>`, give its `instructions` and `context` to a `warden:fixer` agent and wait for its completion message, then pass the fixer's JSON on with `warden done <id> --json '<json>'`. The ticket is `running` again.
    c. Repeat 5a and 5b until no ticket of the wave is `running` or `fix`. If an agent replied `ASK`, keep its question for the report. If a ticket is still `running` after 3 agent runs in this call, report it.
 6. Ship, one ticket at a time, in `next` order. For each `ready` ticket, start one `warden:ticket` agent with this prompt:
    ```
@@ -44,7 +44,7 @@ Run this only when the user asked for it. You are the orchestrator. Each ticket 
    Main: <mainRef>
    Note: <only when the user answered a question for this ticket>
    ```
-   Start it in the foreground and wait for it. If it replied `SHIPPED <id>: <warnings>`, keep the warnings for the report. Then run `warden orchestrate status <epic>`. If the ticket did not end `merged`, ship no more tickets: go to step 7.
+   Start it and wait for its completion message. If it replied `SHIPPED <id>: <warnings>`, keep the warnings for the report. Then run `warden orchestrate status <epic>`. If the ticket did not end `merged`, ship no more tickets: go to step 7.
 7. If the project has a remote, run `git -C <main> pull --ff-only origin <branch>` first, so the merged PRs are in the main checkout. If it fails, tell the user and stop. For each `merged` ticket, run `warden orchestrate set-status <id> done`. If `changed` is not empty and the main checkout is on `<mainBranch>`, run `git -C <main> commit -m "chore(<id>): done" -- <changed paths>`. Otherwise tell the user which files to commit. Never push main in this step.
 8. Show the user any warnings kept in step 6. If any ticket of the wave is `blocked`, `waiting`, `pr-open`, `no-ship`, still `running`, or asked a question: stop. Show a table with the id, the phase, the reason or question, and what the user does (type `retry <id>`, type `approve <id>`, merge the PR, or answer). Then say `Run /warden:orchestrate <epic> again to go on.` and end your turn. Otherwise go back to step 1 for the next wave. When no wave is left but `backlog` is not empty, say which tickets are parked and that the user moves them to `todo` (in the ticket system) to have them worked; the epic is not complete until they are `done` or `archived`.
 9. When complete, run `warden orchestrate set-status <epic> done`. Its `changed` may list a new file (the epic's saved cost), so run `git -C <main> add -- <changed paths>` first, then commit `changed` as in step 7. Then run `warden clean` from the main checkout: it removes each shipped ticket's worktree and branch once merged, and prints why it kept any other. Show a final table: id, title, template, result, and the PR or merge commit.
@@ -52,7 +52,6 @@ Run this only when the user asked for it. You are the orchestrator. Each ticket 
 Rules
 - Git and paths: run `git -C <dir> ...` and use absolute paths, one simple command per call. A plain `cd <dir>` on its own is fine; never chain it as `cd <dir> && ...`, because a permission rule such as `Bash(git *)` does not match that.
 - Never do a ticket's steps yourself. You only start runs, hand fix steps to the fixer and set statuses.
-- Never start a ticket agent or the fixer with `run_in_background`. Foreground only.
 - Never edit files in a ticket worktree.
 - Never run checks to prove anything.
 - New work found during a run: keep every `Possible new ticket` a ticket agent names. Whenever you stop for a person (step 8) or reach step 9, ask the engineer about each one, one question at a time. Only on their OK, write the ticket with the content they give or agree to, in the form of section 4 of the warden:intent skill, and run `warden orchestrate create --title '<title>' --type <type> --body-file <file> --epic <epic> [--blocked-by <id,id>]`. Commit and push its `changed` paths as in section 7 of that skill, with the message `chore(<ticket id>): add ticket`. If you created one at step 9, go back to step 1.

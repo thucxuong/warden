@@ -24,7 +24,6 @@ The short form ships with the plugin as the [`/warden:guide`](reference/skills.m
 | Run a raw command that a project tool covers (the `project-tools` skill lists them), or write a script around a tool | Use the tool. If it cannot do the job, tell the user, so the tool can grow. The retro counts raw commands a tool covers. |
 | Edit or commit while a gate runs (`running_gate`) | The engine throws the result away when HEAD or the tree moves, and blocks after the third time. |
 | Start a second run for a task that has one | `warden start` refuses: a run for that task exists. |
-| Start the fixer or a ticket agent with `run_in_background` | A background agent cannot ask for permissions, so its Bash calls are denied. |
 
 | Always | How |
 |---|---|
@@ -96,7 +95,7 @@ Usually the user starts with `/warden:compose <what to do>` or `/warden:compose 
 | `plan` | Follow the plan skill. Hand in `PlanOutput`. No placeholders such as `TBD` or `TODO`. | `docs/knowledge/`, `docs/decisions/`, `docs/archived/`, `docs/INDEX.md` |
 | `implement` | Make the change with tests. Commit all of it. When back from a gate, fix exactly what it reports. | Anything but gate files |
 | `ship` | Commit the run record, open the PR or merge as the project says, hand in `ShipOutput`, then run `warden clean` from the main checkout. Never remove the worktree before the hand-in. | `.warden/history/<task>/` |
-| `fix` | Hand the step to the `warden:fixer` agent in the foreground, wait, and pass its JSON to `warden done`. | Nothing. The fixer works in its own fix worktree. |
+| `fix` | Hand the step to the `warden:fixer` agent, end your turn until its completion message arrives, and pass its JSON to `warden done`. | Nothing. The fixer works in its own fix worktree. |
 | `check`, `review` | Nothing. The engine runs them. `warden done` refuses. | Nothing |
 | `approve` | Nothing. A person types `approve` or `reject: <why>`. | Nothing |
 

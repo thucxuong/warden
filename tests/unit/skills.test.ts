@@ -217,11 +217,11 @@ describe("orchestrate skill", () => {
     for (const key of ["Task:", "Worktree:", "Mode: work", "Mode: ship", "Main:", "Note:"]) expect(text).toContain(key);
   });
 
-  test("starts agents in the foreground only", () => {
+  test("agents run in the background and are waited for by their completion message (#37)", () => {
     const text = read(join(skillsDir, "orchestrate", "SKILL.md"));
-    expect(text).toContain("in the foreground, all in one message");
-    expect(text).toContain("Never use `run_in_background`");
-    expect(read(join(skillsDir, "work", "SKILL.md"))).toContain("in the foreground");
+    expect(text).toContain("They run in the background, and each one's completion message wakes you");
+    expect(read(join(skillsDir, "work", "SKILL.md"))).toContain("wait for its completion message");
+    for (const name of ["orchestrate", "work", "guide"]) expect(read(join(skillsDir, name, "SKILL.md"))).not.toMatch(/foreground|run_in_background/);
   });
 });
 
