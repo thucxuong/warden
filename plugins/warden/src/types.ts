@@ -220,7 +220,7 @@ export type EventType =
   | "triage.verdict" | "fix.started" | "fix.result" | "review.round" | "route.back"
   | "approve.waiting" | "approve.granted" | "approve.rejected" | "approve.skipped"
   | "run.blocked" | "run.retry" | "history.written" | "run.shipped" | "run.done" | "run.archived"
-  | "session.linked" | "stop.blocked" | "hook.denied"
+  | "session.linked" | "stop.blocked" | "hook.denied" | "agent.started" | "agent.stopped"
   | "gate.discarded" | "fix.landed" | "git.fetch-failed" | "proof.stale"
   | "ticket.status" | "ticket.linked" | "question.asked" | "question.answered" | "retry.merged-main";
 

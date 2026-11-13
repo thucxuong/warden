@@ -1321,7 +1321,7 @@ Final answer: only the FixOutput JSON (result FIXED | CODE | GAVE_UP | WARDEN_BU
       { "hooks": [ { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/warden\" hook user-prompt", "timeout": 10 } ] }
     ],
     "PreToolUse": [
-      { "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
+      { "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|Agent|Task|SendMessage",
         "hooks": [ { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/warden\" hook pre-tool-use", "timeout": 10 } ] }
     ],
     "Stop": [

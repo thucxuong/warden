@@ -8,7 +8,7 @@ import { readSessionLinks, readSessionRecord } from "../../plugins/warden/src/st
 import type { FlowStep } from "../../plugins/warden/src/types.ts";
 import { commit, sh } from "../helpers/repo.ts";
 import {
-  APPROVE, CHECK, FEATURE, IMPL, SHIP, T, addWorktree, atFix, bash, ctx, editAt, eventTypes, hook, installHooksFixture, main, patchRun, reason, run, startFlow, wt,
+  APPROVE, CHECK, FEATURE, IMPL, SHIP, T, addWorktree, atFix, bash, ctx, donePlan, editAt, eventTypes, hook, installHooksFixture, main, patchRun, reason, run, startFlow, wt,
 } from "../helpers/hooks-fixture.ts";
 
 setDefaultTimeout(60_000);
@@ -214,14 +214,70 @@ describe("orchestrating session", () => {
     expect(eventTypes()).not.toContain("stop.blocked");
   });
 
-  test("Stop does not block at a fix step until a warden:fixer transcript is linked", async () => {
+  const startHelper = (tool: string, input: HookInput = {}) =>
+    hook("pre-tool-use", { cwd: main, tool_name: tool, tool_input: { subagent_type: "reviewer", prompt: "review" }, ...input });
+  const helperStops = (id: string, type = "reviewer") =>
+    hook("subagent-stop", { cwd: main, agent_id: id, agent_type: type, agent_transcript_path: `/tmp/${id}.jsonl` });
+
+  test("Stop does not block at a fix step while the warden:fixer is out", async () => {
     await startFlow(FEATURE);
     atFix();
     await bash(`warden next ${T}`, { cwd: main }); // links the main thread to the run
+    expect(await startHelper("Agent", { tool_input: { subagent_type: "warden:fixer" } })).toBeNull();
     expect(await hook("stop", { cwd: main })).toBeNull(); // the fixer is still working
     expect(eventTypes()).not.toContain("stop.blocked");
-    await hook("subagent-stop", { cwd: main, agent_id: "F1", agent_type: "warden:fixer", agent_transcript_path: "/tmp/f1.jsonl" });
+    await helperStops("F1", "warden:fixer");
     expect(await hook("stop", { cwd: main })).not.toBeNull(); // the fixer returned: the turn must go on
+  });
+
+  test("Stop lets the turn end at an agent step while a helper is out, and blocks again once it stopped (#40)", async () => {
+    await startFlow(FEATURE);
+    await bash(`warden next ${T}`, { cwd: main });
+    await startHelper("Agent");
+    await startHelper("Task"); // the older name of the Agent tool
+    expect(await hook("stop", { cwd: main })).toBeNull();
+    await helperStops("R1");
+    expect(await hook("stop", { cwd: main })).toBeNull(); // one is still out
+    await helperStops("R2");
+    expect(await hook("stop", { cwd: main })).not.toBeNull();
+    expect(eventTypes().filter((t) => t === "agent.started" || t === "agent.stopped")).toEqual(["agent.started", "agent.started", "agent.stopped", "agent.stopped"]);
+  });
+
+  test("a helper woken again with SendMessage counts as out until it stops again", async () => {
+    await startFlow(FEATURE);
+    await bash(`warden next ${T}`, { cwd: main });
+    await startHelper("Agent");
+    await helperStops("R1");
+    await startHelper("SendMessage", { tool_input: { to: "R1", message: "review again" } });
+    expect(await hook("stop", { cwd: main })).toBeNull();
+    await helperStops("R1"); // same agent, same transcript
+    expect(await hook("stop", { cwd: main })).not.toBeNull();
+  });
+
+  test("a stop without an agent type (Claude Code's own helper) does not count as a helper back", async () => {
+    await startFlow(FEATURE);
+    await bash(`warden next ${T}`, { cwd: main });
+    await startHelper("Agent");
+    await hook("subagent-stop", { cwd: main, agent_id: "X1", agent_type: "", agent_transcript_path: "/tmp/X1.jsonl" });
+    expect(eventTypes()).not.toContain("agent.stopped");
+    expect(await hook("stop", { cwd: main })).toBeNull();
+  });
+
+  test("an Agent call inside a subagent is not a helper of the main thread", async () => {
+    await startFlow(FEATURE);
+    await bash(`warden next ${T}`, { cwd: main });
+    await startHelper("Agent", { agent_id: "A1", agent_type: "warden:ticket" });
+    expect(eventTypes()).not.toContain("agent.started");
+    expect(await hook("stop", { cwd: main })).not.toBeNull();
+  });
+
+  test("a helper started in an earlier step does not keep the next step's turn open", async () => {
+    await startFlow(FEATURE);
+    await bash(`warden next ${T}`, { cwd: main });
+    await startHelper("Agent");
+    await donePlan();
+    expect(run().current.id).toBe("implement");
+    expect(await hook("stop", { cwd: main })).not.toBeNull();
   });
 });
 

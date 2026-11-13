@@ -11,7 +11,7 @@ import { taskDir } from "../state/paths.ts";
 import { runExists, readRun } from "../state/store.ts";
 import type { RunJson } from "../types.ts";
 import {
-  type HookCall, agentIdOf, isFixer, linkSession, liveRuns, logHookError, orchestrating, pathForms, recordSession, relInside, runEvent, runFlow, runForCwd, runForPath,
+  type HookCall, agentIdOf, isFixer, isLive, linkSession, liveRuns, logHookError, orchestrating, pathForms, recordSession, relInside, runEvent, runFlow, runForCwd, runForPath,
   runForSession, runSteps, wardenJson,
 } from "./resolve.ts";
 
@@ -29,7 +29,23 @@ export async function preToolUse(call: HookCall): Promise<string | null> {
   if (tool === "Bash") return bash(call);
   recordSession(call);
   if (EDIT_TOOLS.includes(tool)) return edit(call, tool);
+  if (HELPER_TOOLS.includes(tool)) await helperStarted(call, tool);
   return null;
+}
+
+// Agent (Task in older Claude Code) starts a subagent, SendMessage wakes one again. Both run in the background; the
+// Stop hook counts these starts against SubagentStop's agent.stopped (#40). Only the main thread starts helpers.
+const HELPER_TOOLS = ["Agent", "Task", "SendMessage"];
+
+async function helperStarted(call: HookCall, tool: string): Promise<void> {
+  if (agentIdOf(call) !== undefined) return;
+  const run = runForSession(call);
+  if (!run || !isLive(run)) return;
+  try {
+    await runEvent(call.main, run, "agent.started", { tool });
+  } catch (err) {
+    logHookError(call.ctx.data, "hook pre-tool-use: agent.started", err);
+  }
 }
 
 function denyJson(reason: string): string {

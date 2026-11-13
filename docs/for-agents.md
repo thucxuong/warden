@@ -69,7 +69,7 @@ flowchart TD
    | `blocked` | Tell the user the `message` and end your turn. |
    | `shipped`, `done`, `archived` | Tell the user the run is over. |
 
-The Stop hook keeps your turn going while the run needs you. If it says `<task> is at <step> and needs you`, run `warden next` (or `warden wait` while a gate runs).
+The Stop hook keeps your turn going while the run needs you. If it says `<task> is at <step> and needs you`, run `warden next` (or `warden wait` while a gate runs). While a subagent you started in this step is still working, you may end your turn to wait for it; its result wakes you.
 
 ### Starting a run
 

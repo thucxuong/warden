@@ -10,7 +10,7 @@ A hook is a small program Claude Code runs at fixed moments, for example before 
 |---|---|---|---|
 | `SessionStart` | `startup`, `resume`, `clear`, `compact` | 15 s | [session start](#sessionstart) |
 | `UserPromptSubmit` | every prompt | 10 s | [user prompt](#userpromptsubmit) |
-| `PreToolUse` | `Edit`, `Write`, `MultiEdit`, `NotebookEdit`, `Bash` | 10 s | [pre tool use](#pretooluse) |
+| `PreToolUse` | `Edit`, `Write`, `MultiEdit`, `NotebookEdit`, `Bash`, `Agent`, `Task`, `SendMessage` | 10 s | [pre tool use](#pretooluse) |
 | `Stop` | every stop | 10 s | [stop](#stop) |
 | `SubagentStop` | every subagent stop | 10 s | [subagent stop](#subagentstop) |
 
@@ -95,7 +95,7 @@ With several live runs, start the answer with the task id: `PG-012: yes, keep th
 
 ## PreToolUse
 
-Runs before `Edit`, `Write`, `MultiEdit`, `NotebookEdit` and `Bash`. A denied call shows the agent a reason that starts with `warden:`, and is logged as a `hook.denied` event on the run.
+Runs before `Edit`, `Write`, `MultiEdit`, `NotebookEdit`, `Bash`, `Agent` (`Task` in older Claude Code) and `SendMessage`. A denied call shows the agent a reason that starts with `warden:`, and is logged as a `hook.denied` event on the run.
 
 ### Edit, Write, MultiEdit, NotebookEdit
 
@@ -140,6 +140,10 @@ What counts as push, PR or merge:
 - `warden tools <name> create|merge`, where `<name>` is `pr`, the tool the `pr` role names, or another role that names that tool
 - `git merge` into the main branch or the run's base branch: the command switches to it, or runs in a checkout that is on it
 
+### Helpers
+
+When the main thread starts a subagent (`Agent`) or wakes one again (`SendMessage`), the hook writes an `agent.started` event on the session's run. It never denies these calls. The Stop hook uses the count.
+
 ### Session links
 
 The pre-tool-use hook also notes which task a session works on. A `warden start|next|done|wait|ask` command links the session to the task it names (or the run of the folder it `cd`s into). A `warden orchestrate plan|status <epic>` command marks the session as the orchestrator of that epic.
@@ -155,14 +159,14 @@ It lets the turn end when:
 - the run is not `active` (it waits, is blocked, shipped or done),
 - the session is orchestrating an epic,
 - at an agent step with no engine work pending, the agent's last message ends with a question mark,
-- at a fix step, the `warden:fixer` agent has not returned yet,
+- a subagent the agent started in this step (with `Agent` or `SendMessage`) has not stopped yet. Subagents run in the background, and their result wakes the agent again. This includes the `warden:fixer` at a fix step,
 - it already blocked 3 times in a row. It then lets the turn end with: `warden: stopping although <task> is active; type "continue" to resume.`
 
 Before it blocks, it restarts a dead engine worker, so `warden wait` has something to wait for.
 
 ## SubagentStop
 
-Runs when a subagent ends. It links the subagent's own transcript to the task, so its tokens count for that task in `summary.json` and on the site. It never blocks.
+Runs when a subagent ends. It links the subagent's own transcript to the task, so its tokens count for that task in `summary.json` and on the site, and writes an `agent.stopped` event for the Stop hook's count. It never blocks.
 
 ## See also
 
