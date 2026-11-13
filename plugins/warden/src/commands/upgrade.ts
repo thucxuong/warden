@@ -1,25 +1,35 @@
-// warden upgrade --notes | --done: apply upgrade notes to .warden/ (spec 3.2, 10.5).
+// warden upgrade --notes | --done: apply upgrade notes to .warden/, one step at a time (spec 3.2, 10.5, #41).
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadWardenJson } from "../config/config.ts";
 import { EXIT, WardenError } from "../lib/exit.ts";
 import { readJson, writeJsonAtomic } from "../lib/json.ts";
-import { marketplaceClone } from "../lib/marketplace.ts";
+import { installedVersion, marketplaceClone } from "../lib/marketplace.ts";
 import { compareSemver, readPluginVersion } from "../lib/version.ts";
-import { worktreeRoot } from "../state/paths.ts";
+import { mainRoot, worktreeRoot } from "../state/paths.ts";
 import type { Ctx } from "../types.ts";
 
-// Notes for versions above `from` and up to `to`, oldest first.
-function collectNotes(pluginRoot: string, from: string, to: string): string {
+// A note with nothing to apply is exactly this line.
+const NOTHING_TO_DO = "No layout changes.";
+
+// The next upgrade step from `from` towards `plugin`: the notes above `from`, oldest first, up to and including the
+// first one with something to apply (#41). Without one, the step goes all the way to `plugin`.
+function nextStep(pluginRoot: string, from: string, plugin: string): { to: string; notes: string } {
   const dir = join(pluginRoot, "upgrades");
-  if (!existsSync(dir)) return "";
-  return readdirSync(dir)
-    .map((file) => /^v(\d+\.\d+\.\d+)\.md$/.exec(file)?.[1])
-    .filter((version): version is string => version !== undefined)
-    .filter((version) => compareSemver(version, from) > 0 && compareSemver(version, to) <= 0)
-    .sort(compareSemver)
-    .map((version) => `# Upgrade to ${version}\n\n${readFileSync(join(dir, `v${version}.md`), "utf8").trim()}\n`)
-    .join("\n");
+  const versions = existsSync(dir)
+    ? readdirSync(dir)
+      .map((file) => /^v(\d+\.\d+\.\d+)\.md$/.exec(file)?.[1])
+      .filter((version): version is string => version !== undefined)
+      .filter((version) => compareSemver(version, from) > 0 && compareSemver(version, plugin) <= 0)
+      .sort(compareSemver)
+    : [];
+  const notes: string[] = [];
+  for (const version of versions) {
+    const text = readFileSync(join(dir, `v${version}.md`), "utf8").trim();
+    notes.push(`# Upgrade to ${version}\n\n${text}\n`);
+    if (text !== NOTHING_TO_DO) return { to: version, notes: notes.join("\n") };
+  }
+  return { to: plugin, notes: notes.join("\n") };
 }
 
 export async function run(args: string[], ctx: Ctx): Promise<void> {
@@ -29,15 +39,25 @@ export async function run(args: string[], ctx: Ctx): Promise<void> {
 
   const wardenPath = join(worktreeRoot(ctx.cwd), ".warden", "warden.json");
   const warden = loadWardenJson(wardenPath);
-  const to = readPluginVersion(ctx.root);
+  const plugin = readPluginVersion(ctx.root);
+  // Never apply an old cached copy's notes, nor move the project back to an older version (#41).
+  const installed = installedVersion(ctx.root, mainRoot(ctx.cwd));
+  if (installed && compareSemver(installed, plugin) > 0) {
+    throw new WardenError(`this warden command is an older copy (${plugin}); ${installed} is installed. Restart Claude Code (or run /reload-plugins), then try again.`);
+  }
+  if (compareSemver(plugin, warden.wardenVersion) < 0) {
+    throw new WardenError(`this session runs warden ${plugin}, older than this project's ${warden.wardenVersion}. Update the warden plugin (/plugin), restart Claude Code, then try again.`);
+  }
 
+  const step = nextStep(ctx.root, warden.wardenVersion, plugin);
+  const last = step.to === plugin;
   if (wantNotes) {
-    console.log(JSON.stringify({ from: warden.wardenVersion, to, notes: collectNotes(ctx.root, warden.wardenVersion, to) }));
+    console.log(JSON.stringify({ from: warden.wardenVersion, to: step.to, last, notes: step.notes }));
     return;
   }
   const { lastRetro: _dropped, ...rest } = warden; // 0.2 never writes lastRetro (spec-0.2 5.2)
-  writeJsonAtomic(wardenPath, { ...rest, wardenVersion: to });
-  console.log(JSON.stringify({ wardenVersion: to }));
+  writeJsonAtomic(wardenPath, { ...rest, wardenVersion: step.to });
+  console.log(JSON.stringify({ wardenVersion: step.to, last }));
 }
 
 // The session-start line (spec 7.2 step 2), or null. Never throws: a broken project must not break a session start.
@@ -71,15 +91,19 @@ export function availableVersion(pluginRoot: string): { version: string; marketp
   }
 }
 
-// The session-start line when the marketplace clone holds a newer warden than this session runs (spec 0.2 section 6).
-// No network. Never throws: null on any problem, and for any plugin not loaded from the cache.
-export function newerVersionNotice(pluginRoot: string): string | null {
+// The session-start line when a newer warden than this session runs is already installed for `project` (restart), or
+// is in the marketplace clone (update) (spec 0.2 section 6, #41). No network. Never throws: null on any problem, and for
+// any plugin not loaded from the cache.
+export function newerVersionNotice(pluginRoot: string, project: string): string | null {
   try {
+    const running = readPluginVersion(pluginRoot);
+    const installed = installedVersion(pluginRoot, project);
+    if (installed && compareSemver(installed, running) > 0) {
+      return `warden: version ${installed} is installed; this session still runs ${running}. Restart Claude Code (or run /reload-plugins) to use it.`;
+    }
     const available = availableVersion(pluginRoot);
-    if (!available) return null;
-    const installed = readPluginVersion(pluginRoot);
-    if (compareSemver(available.version, installed) <= 0) return null;
-    return `warden: version ${available.version} is available; this session runs ${installed}. To update, run "claude plugin update warden@${available.marketplace}" in a terminal (or use /plugin), then /reload-plugins.`;
+    if (!available || compareSemver(available.version, running) <= 0) return null;
+    return `warden: version ${available.version} is available; this session runs ${running}. To update, run "claude plugin update warden@${available.marketplace}" in a terminal (or use /plugin), then /reload-plugins.`;
   } catch {
     return null;
   }

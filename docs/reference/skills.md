@@ -18,7 +18,7 @@ A skill is a set of instructions the plugin gives Claude Code. You start one by 
 | [`/warden:retro`](#wardenretro) | none | Look back at recent work and route what you learned |
 | [`/warden:tools`](#wardentools) | `[<name>]` | Write or change one of the project's tools |
 | [`/warden:docs`](#wardendocs) | none | Record a fact or a decision, find what the project knows, archive what is out of date, tidy `docs/` |
-| [`/warden:upgrade`](#wardenupgrade) | none | Apply upgrade notes after warden was updated |
+| [`/warden:upgrade`](#wardenupgrade) | none | Update the plugin, then apply the upgrade notes one step at a time |
 | [`/warden:guide`](#wardenguide) | none | Load the short rules and the loop for the agent: when unsure, after a `warden:` refusal, or when a run is blocked or waiting |
 
 ---
@@ -163,12 +163,13 @@ See [write a tool](../guides/write-a-tool.md) and [write a ticket tool](../guide
 
 ## /warden:upgrade
 
-Applies the upgrade notes after warden was updated. Session start offers it when the installed warden is newer than `wardenVersion` in `.warden/warden.json`.
+Updates the plugin, then applies the upgrade notes one step at a time. Session start offers it when the installed warden is newer than `wardenVersion` in `.warden/warden.json`.
 
-1. `warden upgrade --notes` prints the notes for every version in between.
-2. The agent applies each note exactly and shows you the diff.
-3. After you confirm: `warden upgrade --done`, then `warden report --status --write`.
-4. It commits with `chore: warden upgrade to <version>`.
+1. With your OK, it runs `claude plugin marketplace update` and `claude plugin update warden@<marketplace>`. When a newer version was installed, it asks you to restart Claude Code and run it again.
+2. `warden upgrade --notes` prints one step: the notes up to and including the next one with something to apply.
+3. The agent applies the step's notes exactly and shows you the diff.
+4. After you confirm: `warden upgrade --done` (and `warden report --status --write` on the last step), then a commit `chore: warden upgrade to <version>`.
+5. It repeats 2 to 4 until the last step.
 
 See [upgrading](../getting-started/upgrading.md).
 

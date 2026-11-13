@@ -83,7 +83,7 @@ Each team member still needs Bun, as above. See [Team setup](../guides/team-setu
    alias warden='"$(cat ~/.claude/plugins/data/warden-warden-marketplace/root)/bin/warden"'
    ```
 
-   The `root` file is written at the start of each Claude Code session, so start one session first. Then:
+   The `root` file is written at the start of each Claude Code session, so start one session first. It names the newest warden copy a session has started with; a session on an older cached copy leaves it alone. Then:
 
    ```bash
    warden version

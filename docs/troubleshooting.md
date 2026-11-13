@@ -22,6 +22,9 @@ When something is off and no message explains it:
 | `warden: not set up here. Run /warden:init.` | The repo has no `.warden/warden.json`. | Type `/warden:init` yourself. The agent cannot start it. |
 | No `warden:` lines at all at session start | Not a git repo, or an unsupported git layout (the common git dir does not end in `/.git`). Warden stays quiet there. | Open the project at its git checkout. |
 | `warden: updated to <v>; this project is on <old>. ...` every session | The project files are still on the old version. | Let the agent run `/warden:upgrade`, then commit. See [Upgrading](getting-started/upgrading.md). |
+| `warden: version <v> is installed; this session still runs <old>. ...` | The plugin was updated, but this session started on the old cached copy. | Restart Claude Code (or run `/reload-plugins`). |
+| `this warden command is an older copy (<old>); <v> is installed. ...` from `warden upgrade` | The `warden` command still runs an old cached copy. | Restart Claude Code, then `/warden:upgrade` again. |
+| `this session runs warden <old>, older than this project's <v>. ...` from `warden upgrade` | A teammate already upgraded the project to a newer warden than yours. | Update the plugin (`/plugin`) and restart Claude Code. The project itself needs no upgrade. |
 | `warden: version <v> is available; this session runs <old>. ...` | A newer warden is in your local marketplace copy. | In a terminal: `claude plugin update warden@<marketplace>` (or `/plugin`), then `/reload-plugins`. |
 | `warden: <n> report(s) wait to reach the warden maintainers: ...` | The GitHub CLI (`gh`) is not installed or not logged in, so the reports could not be sent. They wait in the outbox. | Install `gh` and run `gh auth login`. Warden sends them at a later session start. See [Reports](concepts/reports.md). |
 

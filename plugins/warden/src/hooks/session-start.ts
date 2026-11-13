@@ -8,6 +8,7 @@ import { newerVersionNotice, upgradeNotice } from "../commands/upgrade.ts";
 import { ensureGate } from "../engine/machine.ts";
 import { reportSyncLine } from "../lib/reports.ts";
 import { orchestrateLines } from "../engine/tickets.ts";
+import { compareSemver, readPluginVersion } from "../lib/version.ts";
 import type { Ctx, RunJson } from "../types.ts";
 import {
   type HookCall, linkSession, liveRuns, logHookError, machineCtx, recordSession, runFlow, runForSession,
@@ -19,15 +20,25 @@ function writeIfDifferent(path: string, text: string): void {
   writeFileSync(path, text);
 }
 
+// True when the root pointer names a plugin copy that still exists and is newer than `root` (#41).
+function pointsAtNewer(pointer: string, root: string): boolean {
+  try {
+    return compareSemver(readPluginVersion(readFileSync(pointer, "utf8").trim()), readPluginVersion(root)) > 0;
+  } catch {
+    return false;
+  }
+}
+
 // $CLAUDE_PLUGIN_ROOT/.data-dir holds the data dir and $CLAUDE_PLUGIN_DATA/root the plugin root (2.3, 3.1).
-// Written in every session, set up or not, so Bash calls and the human alias find both.
+// Written in every session, set up or not, so Bash calls and the human alias find both. All versions share the data
+// dir, so a session on an older cached copy leaves a newer root pointer alone.
 export function writePointers(ctx: Ctx): void {
   const root = ctx.env.CLAUDE_PLUGIN_ROOT;
   const data = ctx.env.CLAUDE_PLUGIN_DATA;
   if (!root || !data) return;
   try {
     writeIfDifferent(join(root, ".data-dir"), data);
-    writeIfDifferent(join(data, "root"), root);
+    if (!pointsAtNewer(join(data, "root"), root)) writeIfDifferent(join(data, "root"), root);
   } catch (err) {
     logHookError(ctx.data, "hook session-start: pointer files", err);
   }
@@ -101,7 +112,7 @@ export async function sessionStart(call: HookCall): Promise<string | null> {
   // warden.json and reports.md are read from the main checkout (5.1), wherever the session started.
   const upgrade = upgradeNotice(machineCtx(call));
   if (upgrade) lines.push(upgrade);
-  const newer = guarded(call, "newer version", () => newerVersionNotice(call.ctx.root));
+  const newer = guarded(call, "newer version", () => newerVersionNotice(call.ctx.root, call.main));
   if (newer) lines.push(newer);
   lines.push(...checkLines(call));
   const leftovers = guarded(call, "leftover worktrees", () => leftoverLine(call.main));

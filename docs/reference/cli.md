@@ -446,8 +446,10 @@ Used by the `/warden:upgrade` skill. Pass exactly one flag. Both read `.warden/w
 
 | Flag | Output |
 |---|---|
-| `--notes` | `{"from":"<project version>","to":"<installed version>","notes":"<markdown>"}`. The notes of every version above `from` up to `to`, oldest first |
-| `--done` | Sets `wardenVersion` in `.warden/warden.json` to the installed version (and drops the old `lastRetro` key). Prints `{"wardenVersion":"0.6.1"}` |
+| `--notes` | One upgrade step: `{"from":"<project version>","to":"<step version>","last":<bool>,"notes":"<markdown>"}`. The notes of the versions above `from`, oldest first, up to and including the first one with something to apply (any note that is not exactly `No layout changes.`); without one, up to the installed version. `last` is true when `to` is the installed version |
+| `--done` | Sets `wardenVersion` in `.warden/warden.json` to the `to` of the current step (and drops the old `lastRetro` key). Prints `{"wardenVersion":"0.6.0","last":false}`. Run `--notes` again for the next step until `last` is true |
+
+Both exit 1 and change nothing when this copy of warden is older than the version Claude Code has installed for this project (`this warden command is an older copy (<v>); <newer> is installed. ...`), or older than the project's `wardenVersion` (`this session runs warden <v>, older than this project's <newer>. ...`).
 
 See [upgrading](../getting-started/upgrading.md).
 

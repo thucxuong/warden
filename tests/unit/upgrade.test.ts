@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { newerVersionNotice, run, upgradeNotice } from "../../plugins/warden/src/commands/upgrade.ts";
 import { WardenError } from "../../plugins/warden/src/lib/exit.ts";
-import { marketplaceClone, marketplaceRepo } from "../../plugins/warden/src/lib/marketplace.ts";
+import { installedVersion, marketplaceClone, marketplaceRepo } from "../../plugins/warden/src/lib/marketplace.ts";
 import type { Ctx } from "../../plugins/warden/src/types.ts";
 
 const temps: string[] = [];
@@ -61,24 +61,33 @@ afterAll(() => {
 });
 
 describe("upgrade --notes", () => {
-  test("concatenates notes above the project version up to the plugin version, oldest first", async () => {
-    setPluginVersion("0.3.0");
+  test("goes one step at a time: up to and including the next note with something to apply (#41)", async () => {
+    setPluginVersion("0.5.0");
     setProjectVersion("0.1.0");
-    note("0.1.0", "No layout changes.");
+    note("0.1.0", "Old.");
+    note("0.2.0", "No layout changes.\n");
     note("0.3.0", "1. Rename a to b.");
-    note("0.2.0", "1. Add c.");
+    note("0.4.0", "No layout changes. Run prettier once.");
+    note("0.4.1", "No layout changes.");
+    note("0.5.0", "No layout changes.");
     note("0.10.0", "Future note.");
-    const { out } = await call(["--notes"]);
-    expect(out.from).toBe("0.1.0");
-    expect(out.to).toBe("0.3.0");
-    expect(out.notes).toBe("# Upgrade to 0.2.0\n\n1. Add c.\n\n# Upgrade to 0.3.0\n\n1. Rename a to b.\n");
+    const step1 = (await call(["--notes"])).out;
+    expect(step1).toEqual({ from: "0.1.0", to: "0.3.0", last: false, notes: "# Upgrade to 0.2.0\n\nNo layout changes.\n\n# Upgrade to 0.3.0\n\n1. Rename a to b.\n" });
+    expect((await call(["--done"])).out).toEqual({ wardenVersion: "0.3.0", last: false });
+    const step2 = (await call(["--notes"])).out;
+    expect(step2).toMatchObject({ from: "0.3.0", to: "0.4.0", last: false });
+    expect(step2.notes).toBe("# Upgrade to 0.4.0\n\nNo layout changes. Run prettier once.\n"); // text after the line counts as work
+    expect((await call(["--done"])).out).toEqual({ wardenVersion: "0.4.0", last: false });
+    expect((await call(["--notes"])).out).toEqual({ from: "0.4.0", to: "0.5.0", last: true, notes: "# Upgrade to 0.4.1\n\nNo layout changes.\n\n# Upgrade to 0.5.0\n\nNo layout changes.\n" });
+    expect((await call(["--done"])).out).toEqual({ wardenVersion: "0.5.0", last: true });
+    expect((await call(["--notes"])).out).toEqual({ from: "0.5.0", to: "0.5.0", last: true, notes: "" });
   });
 
   test("an up-to-date project gets empty notes", async () => {
     setPluginVersion("0.1.0");
     setProjectVersion("0.1.0");
     note("0.1.0", "No layout changes.");
-    expect((await call(["--notes"])).out).toEqual({ from: "0.1.0", to: "0.1.0", notes: "" });
+    expect((await call(["--notes"])).out).toEqual({ from: "0.1.0", to: "0.1.0", last: true, notes: "" });
   });
 
   test("the real v0.1.0 notes are picked up for a project on an older version", async () => {
@@ -93,6 +102,7 @@ describe("upgrade --notes", () => {
     setProjectVersion("0.5.2");
     const { out } = await call(["--notes"]);
     expect(out.from).toBe("0.5.2");
+    expect(out.to).toBe("0.6.0");
     expect(out.notes).toContain("# Upgrade to 0.6.0");
     expect(out.notes).toContain("warden tools --init");
     expect(out.notes).not.toContain("# Upgrade to 0.5.2");
@@ -111,7 +121,7 @@ describe("upgrade --done", () => {
   test("sets wardenVersion to the plugin version and keeps the other keys", async () => {
     setPluginVersion("0.2.0");
     setProjectVersion("0.1.0");
-    expect((await call(["--done"])).out).toEqual({ wardenVersion: "0.2.0" });
+    expect((await call(["--done"])).out).toEqual({ wardenVersion: "0.2.0", last: true });
     expect(JSON.parse(readFileSync(join(repo, ".warden/warden.json"), "utf8"))).toEqual({ schema: 1, wardenVersion: "0.2.0", projectId: "demo", taskIdPattern: "^DM-\\d+$", sitePort: 4400 });
   });
 
@@ -139,6 +149,16 @@ describe("upgrade --done", () => {
     writeFileSync(path, JSON.stringify({ ...before, lastRetro: "2026-01-01" }));
     await call(["--done"]);
     expect("lastRetro" in JSON.parse(readFileSync(path, "utf8"))).toBe(false);
+  });
+});
+
+describe("upgrade with a plugin older than the project (#41)", () => {
+  test("--notes and --done refuse and leave wardenVersion alone", async () => {
+    setPluginVersion("0.15.2");
+    setProjectVersion("0.15.6");
+    expect((await call(["--notes"])).code).toBe(1);
+    expect((await call(["--done"])).code).toBe(1);
+    expect(JSON.parse(readFileSync(join(repo, ".warden/warden.json"), "utf8")).wardenVersion).toBe("0.15.6");
   });
 });
 
@@ -186,52 +206,91 @@ describe("newerVersionNotice", () => {
 
   test("names both versions when the clone is newer", () => {
     makeClone(join(base, "plugins/marketplaces/wm"), "0.3.0");
-    expect(newerVersionNotice(installed)).toBe(line);
+    expect(newerVersionNotice(installed, repo)).toBe(line);
   });
 
   test("null when the clone is equal or older", () => {
     makeClone(join(base, "plugins/marketplaces/wm"), "0.2.0");
-    expect(newerVersionNotice(installed)).toBeNull();
+    expect(newerVersionNotice(installed, repo)).toBeNull();
     makeClone(join(base, "plugins/marketplaces/wm"), "0.1.1");
-    expect(newerVersionNotice(installed)).toBeNull();
+    expect(newerVersionNotice(installed, repo)).toBeNull();
   });
 
   test("uses installLocation from known_marketplaces.json when it is a string", () => {
     const elsewhere = tempDir("warden-clone-");
     makeClone(elsewhere, "0.3.0");
     writeJson(join(base, "plugins/known_marketplaces.json"), { wm: { installLocation: elsewhere } });
-    expect(newerVersionNotice(installed)).toBe(line);
+    expect(newerVersionNotice(installed, repo)).toBe(line);
   });
 
   test("falls back to the default clone dir when installLocation is not a string", () => {
     makeClone(join(base, "plugins/marketplaces/wm"), "0.3.0");
     writeJson(join(base, "plugins/known_marketplaces.json"), { wm: { installLocation: 7 } });
-    expect(newerVersionNotice(installed)).toBe(line);
+    expect(newerVersionNotice(installed, repo)).toBe(line);
   });
 
   test("null when the plugin is not in the cache layout", () => {
     makeClone(join(base, "plugins/marketplaces/wm"), "0.3.0");
-    expect(newerVersionNotice(pluginRoot)).toBeNull();
+    expect(newerVersionNotice(pluginRoot, repo)).toBeNull();
     const other = join(base, "plugins/cache/wm/other/0.2.0");
     mkdirSync(join(other, ".claude-plugin"), { recursive: true });
     writeFileSync(join(other, ".claude-plugin/plugin.json"), JSON.stringify({ version: "0.2.0" }));
-    expect(newerVersionNotice(other)).toBeNull();
-    expect(newerVersionNotice(join(base, "missing"))).toBeNull();
+    expect(newerVersionNotice(other, repo)).toBeNull();
+    expect(newerVersionNotice(join(base, "missing"), repo)).toBeNull();
   });
 
   test("null for broken or unusable files", () => {
     const clone = join(base, "plugins/marketplaces/wm");
-    expect(newerVersionNotice(installed)).toBeNull(); // no clone
+    expect(newerVersionNotice(installed, repo)).toBeNull(); // no clone
     makeClone(clone, "0.3.0", "plugins/warden"); // source without ./
-    expect(newerVersionNotice(installed)).toBeNull();
+    expect(newerVersionNotice(installed, repo)).toBeNull();
     makeClone(clone, "0.3.0", { source: "github" }); // non-string source
-    expect(newerVersionNotice(installed)).toBeNull();
+    expect(newerVersionNotice(installed, repo)).toBeNull();
     makeClone(clone, "not-a-version");
-    expect(newerVersionNotice(installed)).toBeNull();
+    expect(newerVersionNotice(installed, repo)).toBeNull();
     writeFileSync(join(clone, ".claude-plugin/marketplace.json"), "{ broken");
-    expect(newerVersionNotice(installed)).toBeNull();
+    expect(newerVersionNotice(installed, repo)).toBeNull();
     writeJson(join(base, "plugins/known_marketplaces.json"), "nope");
-    expect(newerVersionNotice(installed)).toBeNull();
+    expect(newerVersionNotice(installed, repo)).toBeNull();
+  });
+
+  // installed_plugins.json with warden entries for marketplace wm.
+  function installs(entries: unknown[]): void {
+    writeJson(join(base, "plugins/installed_plugins.json"), { version: 2, plugins: { "other@wm": [{ scope: "user", version: "9.9.9" }], "warden@wm": entries } });
+  }
+
+  test("installedVersion: local beats project beats user; other projects and bad files give null", () => {
+    expect(installedVersion(installed, repo)).toBeNull(); // no file
+    installs([{ scope: "user", version: "0.2.1" }]);
+    expect(installedVersion(installed, repo)).toBe("0.2.1");
+    installs([{ scope: "user", version: "0.2.1" }, { scope: "project", projectPath: repo, version: "0.2.2" }]);
+    expect(installedVersion(installed, repo)).toBe("0.2.2");
+    installs([{ scope: "project", projectPath: repo, version: "0.2.2" }, { scope: "local", projectPath: repo, version: "0.2.3" }, { scope: "user", version: "0.2.1" }]);
+    expect(installedVersion(installed, repo)).toBe("0.2.3");
+    installs([{ scope: "local", projectPath: "/elsewhere", version: "0.9.0" }]);
+    expect(installedVersion(installed, repo)).toBeNull();
+    installs([{ scope: "user", version: "f75f5b25ae94" }]);
+    expect(installedVersion(installed, repo)).toBeNull();
+    expect(installedVersion(pluginRoot, repo)).toBeNull(); // not in the cache layout
+  });
+
+  test("a newer installed copy than the one running says restart, not update (#41)", () => {
+    makeClone(join(base, "plugins/marketplaces/wm"), "0.3.0");
+    installs([{ scope: "local", projectPath: repo, version: "0.3.0" }]);
+    expect(newerVersionNotice(installed, repo)).toBe("warden: version 0.3.0 is installed; this session still runs 0.2.0. Restart Claude Code (or run /reload-plugins) to use it.");
+    makeClone(join(base, "plugins/marketplaces/wm"), "0.2.0"); // a stale clone does not hide it
+    expect(newerVersionNotice(installed, repo)).toBe("warden: version 0.3.0 is installed; this session still runs 0.2.0. Restart Claude Code (or run /reload-plugins) to use it.");
+  });
+
+  test("upgrade from an older cached copy than the installed one refuses (#41)", async () => {
+    pluginRoot = installed;
+    setProjectVersion("0.1.0");
+    installs([{ scope: "local", projectPath: repo, version: "0.3.0" }]);
+    expect((await call(["--notes"])).code).toBe(1);
+    expect((await call(["--done"])).code).toBe(1);
+    expect(JSON.parse(readFileSync(join(repo, ".warden/warden.json"), "utf8")).wardenVersion).toBe("0.1.0");
+    installs([{ scope: "local", projectPath: repo, version: "0.2.0" }]);
+    expect((await call(["--done"])).out).toEqual({ wardenVersion: "0.2.0", last: true });
   });
 
   test("marketplaceRepo reads a github source or a github.com url, else null", () => {

@@ -41,6 +41,16 @@ warden: version 0.6.2 is available; this session runs 0.6.1. To update, run "cla
 
 Run that command, then reload.
 
+When the newer version is already installed for this project but the session still runs the old copy (Claude Code keeps several versions side by side in `~/.claude/plugins/cache/<marketplace>/warden/<version>/`), the agent sees this instead:
+
+```text
+warden: version 0.6.2 is installed; this session still runs 0.6.1. Restart Claude Code (or run /reload-plugins) to use it.
+```
+
+warden reads the installed version from Claude Code's `~/.claude/plugins/installed_plugins.json`: the entry for this project (local scope, then project scope), else the user-scope one.
+
+The marketplace copy is only as fresh as Claude Code's last marketplace refresh, so a version released after that shows up at a later session start.
+
 ## The upgrade notice
 
 When the installed plugin is newer than the `wardenVersion` of your project, session start says:
@@ -59,26 +69,34 @@ The agent offers the upgrade once your current request is done. It runs `/warden
    /warden:upgrade
    ```
 
-2. The agent runs `warden upgrade --notes`. It prints the upgrade notes for every version after your project's version, up to the installed one, oldest first:
-
-   ```json
-   {"from":"0.5.2","to":"0.6.1","notes":"# Upgrade to 0.6.0\n\n...\n# Upgrade to 0.6.1\n\n..."}
-   ```
-
-3. The agent applies each note exactly as written, and nothing else. A note may change files outside `.warden/`, for example scripts in `package.json`. Many notes only say "No layout changes".
-
-4. The agent shows you the diff. Check it.
-
-5. After you confirm, the agent runs:
+2. The agent asks to check for a newer warden first. With your OK it runs:
 
    ```bash
-   warden upgrade --done
-   warden report --status --write
+   claude plugin marketplace update warden-marketplace
+   claude plugin update warden@warden-marketplace
    ```
 
-   The first sets `wardenVersion` in `.warden/warden.json` to the installed version. The second refreshes `.warden/reports.md`.
+   This updates warden for every project on your machine. When it installed a newer version, the agent asks you to restart Claude Code (or run `/reload-plugins`) and run `/warden:upgrade` again, because the running session still uses the old copy.
 
-6. The agent commits the change, including `.warden/reports.md`, with the message `chore: warden upgrade to <version>`. Push it and merge it like any other change (with branch protection, through a pull request).
+3. The agent runs `warden upgrade --notes`. It prints **one step**: the notes after your project's version, oldest first, up to and including the next note that has something to apply:
+
+   ```json
+   {"from":"0.12.0","to":"0.15.1","last":false,"notes":"# Upgrade to 0.13.0\n\nNo layout changes.\n\n...# Upgrade to 0.15.1\n\n..."}
+   ```
+
+   A note that is exactly `No layout changes.` has nothing to apply, so the step runs past it. Any other note ends the step.
+
+4. The agent applies each note of the step exactly as written, and nothing else. A note may change files outside `.warden/`, for example scripts in `package.json`.
+
+5. The agent shows you the diff. Check it.
+
+6. After you confirm, the agent runs `warden upgrade --done`. It sets `wardenVersion` in `.warden/warden.json` to the step's `to` version. On the last step (`"last": true`) the agent also runs `warden report --status --write` to refresh `.warden/reports.md`.
+
+7. The agent commits the step with the message `chore: warden upgrade to <to>`, then goes back to step 3 until the last step is done. Push the commits and merge them like any other change (with branch protection, through a pull request).
+
+Each step is its own commit, so a project several versions behind gets one commit per version that changes something, never one big change.
+
+Both `--notes` and `--done` stop with an error, and change nothing, when the `warden` command runs an older copy than the one installed for this project, or a version older than the project's `wardenVersion`. Restart Claude Code (after updating the plugin, in the second case) and run `/warden:upgrade` again.
 
 One person upgrades the project. Teammates get the new files when they pull the main branch, and the new plugin through their own update.
 
@@ -86,7 +104,7 @@ One person upgrades the project. Teammates get the new files when they pull the 
 
 Each version that ships has a note in the plugin's `upgrades/` folder, named `v<version>.md`, for example `upgrades/v0.6.0.md`. A note says exactly what to change in a project set up with the previous version. Changes for people (new commands, fixed bugs) are listed in [CHANGELOG.md](../../CHANGELOG.md).
 
-Skipping versions is fine: `warden upgrade --notes` joins the notes of every version in between, in order.
+Skipping versions is fine: `/warden:upgrade` goes through the notes of every version in between, in order, one step per note that has something to apply. A note with nothing to apply is exactly `No layout changes.`; anything more, even one line, makes it a step.
 
 ## Every run starts from a ticket in 0.9.0
 

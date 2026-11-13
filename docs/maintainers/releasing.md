@@ -9,6 +9,7 @@ Projects add the marketplace as `thucxuong/warden#stable`, so they track the `st
 At the project's next session start, warden prints:
 
 - `warden: version <v> is available; this session runs <old>. ...` when the local marketplace copy is newer than the running plugin (no network is used for this);
+- `warden: version <v> is installed; this session still runs <old>. ...` when Claude Code already installed a newer version for the project but the session started on the old cached copy;
 - `warden: updated to <v>; this project is on <old>. ...` once the new plugin runs and the project's `.warden/warden.json` still names the old version. The project's agent then offers `/warden:upgrade`, which applies the upgrade notes.
 
 ```mermaid
@@ -33,9 +34,9 @@ flowchart LR
    - One line per change, in plain words, as a project would read it.
    ```
 
-3. **Write the upgrade note** `plugins/warden/upgrades/v0.6.2.md`. Every version gets one. It starts with `No layout changes.` when the project's files need nothing, or with a numbered list of exact edits. The project's agent applies the note word for word, so write each edit so it needs no judgement.
+3. **Write the upgrade note** `plugins/warden/upgrades/v0.6.2.md`. Every version gets one. It is exactly `No layout changes.` when the project's files need nothing, or a numbered list of exact edits. `/warden:upgrade` stops at every note that is not exactly `No layout changes.` (one step and one commit per such note), so add nothing after that line unless the agent must act. The project's agent applies the note word for word, so write each edit so it needs no judgement.
 
-   `warden upgrade --notes` prints the notes of every version above the project's `wardenVersion` and up to the installed one, oldest first. `warden upgrade --done` then sets `wardenVersion`.
+   `warden upgrade --notes` prints one step: the notes above the project's `wardenVersion`, oldest first, up to and including the next one with something to apply. `warden upgrade --done` then sets `wardenVersion` to that step's version.
 
 4. **Check everything:**
 

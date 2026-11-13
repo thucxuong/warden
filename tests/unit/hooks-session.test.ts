@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { existsSync, mkdirSync, readFileSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parsePrompt } from "../../plugins/warden/src/hooks/user-prompt.ts";
 import { done, start } from "../../plugins/warden/src/engine/machine.ts";
@@ -139,6 +139,23 @@ describe("SessionStart", () => {
     expect(statSync(join(root, ".data-dir")).mtimeMs).toBe(old.getTime());
     await hook("session-start", {}, { ...env, CLAUDE_PLUGIN_DATA: join(base, "other-data") });
     expect(readFileSync(join(root, ".data-dir"), "utf8")).toBe(join(base, "other-data"));
+  });
+
+  test("an older plugin copy never moves the root pointer off a newer one (#41)", async () => {
+    const copy = (version: string) => {
+      const root = join(base, "cache-copies", version);
+      write(root, ".claude-plugin/plugin.json", JSON.stringify({ name: "warden", version }));
+      return root;
+    };
+    const data = join(base, "shared-data");
+    const [older, newer] = [copy("0.15.2"), copy("0.15.6")];
+    await hook("session-start", {}, { CLAUDE_PLUGIN_ROOT: newer, CLAUDE_PLUGIN_DATA: data });
+    await hook("session-start", {}, { CLAUDE_PLUGIN_ROOT: older, CLAUDE_PLUGIN_DATA: data });
+    expect(readFileSync(join(data, "root"), "utf8")).toBe(newer);
+    expect(readFileSync(join(older, ".data-dir"), "utf8")).toBe(data);
+    rmSync(newer, { recursive: true }); // the newer copy was removed: the pointer moves on
+    await hook("session-start", {}, { CLAUDE_PLUGIN_ROOT: older, CLAUDE_PLUGIN_DATA: data });
+    expect(readFileSync(join(data, "root"), "utf8")).toBe(older);
   });
 
   test("lines come in the order of spec 0.2 section 7; a dead worker is restarted", async () => {
