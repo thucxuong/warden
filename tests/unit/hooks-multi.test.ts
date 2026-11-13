@@ -254,6 +254,17 @@ describe("orchestrating session", () => {
     expect(await hook("stop", { cwd: main })).not.toBeNull();
   });
 
+  test("sessions.jsonl gets a line for every stop of a subagent woken again, with its own time (#39)", async () => {
+    await startFlow(FEATURE);
+    await bash(`warden next ${T}`, { cwd: main });
+    await helperStops("R1");
+    await Bun.sleep(5);
+    await helperStops("R1"); // same agent, same transcript
+    const r1 = readSessionLinks(main, T).filter((l) => l.agentId === "R1");
+    expect(r1.map((l) => l.transcriptPath)).toEqual(["/tmp/R1.jsonl", "/tmp/R1.jsonl"]);
+    expect(r1[1]!.ts > r1[0]!.ts).toBe(true);
+  });
+
   test("a stop without an agent type (Claude Code's own helper) does not count as a helper back", async () => {
     await startFlow(FEATURE);
     await bash(`warden next ${T}`, { cwd: main });

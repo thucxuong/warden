@@ -51,14 +51,14 @@ describe("session links and records", () => {
     expect(run().status).toBe("waiting");
   });
 
-  test("SubagentStop links the subagent transcript once", async () => {
+  test("SubagentStop links the subagent transcript on every stop (#39)", async () => {
     await startFlow(FEATURE);
     const input = { cwd: wt, agent_id: "a1", agent_type: "warden:fixer", agent_transcript_path: "/tmp/a1.jsonl" };
     expect(await hook("subagent-stop", input)).toBeNull();
     await hook("subagent-stop", input);
     const links = readSessionLinks(main, T);
-    expect(links.length).toBe(1);
-    expect(links[0]).toMatchObject({ sessionId: "S1", transcriptPath: "/tmp/a1.jsonl", agentId: "a1", agentType: "warden:fixer" });
+    expect(links.length).toBe(2);
+    for (const link of links) expect(link).toMatchObject({ sessionId: "S1", transcriptPath: "/tmp/a1.jsonl", agentId: "a1", agentType: "warden:fixer" });
   });
 });
 

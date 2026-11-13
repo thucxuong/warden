@@ -47,7 +47,7 @@ One folder per task, plus a few shared folders that start with `_`.
 | `<task>/triage/<n>.json` and `triage/<n>/` | Triage reports and the logs of their attempts. |
 | `<task>/review/<round>-<try>.json`, `.raw.txt` | Each review round and the reviewer's raw output. `review/leftover.md` when findings were left over. |
 | `<task>/fix/<n>.json` | Each fixer result. |
-| `<task>/sessions.jsonl` | The Claude Code sessions and subagents linked to the task, for token counts. |
+| `<task>/sessions.jsonl` | The Claude Code sessions and subagents linked to the task, for token counts: one line per session, and one per subagent stop (a subagent woken again with SendMessage gets a new line, with the time of that stop). |
 | `<task>/gate.log`, `setup-<i>.log` | The engine worker's log and the setup logs. |
 | `<task>/.lock` | Held while a warden command changes the run. |
 | `_sessions/` | One record per Claude Code session (and subagent), written by the hooks. |

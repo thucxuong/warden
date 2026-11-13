@@ -310,7 +310,8 @@ export async function linkSession(call: HookCall, task: string): Promise<void> {
   await appendLinkOnce(call.main, task, link, (old) => old.sessionId === id && old.agentId === undefined);
 }
 
-// A subagent: its own transcript file, once per transcript.
+// A subagent: its own transcript file, one line per stop (#39). A subagent woken again with SendMessage keeps its
+// transcript, and a project proof may need the time of its later stop. Token counts read each transcript once.
 export async function linkSubagent(call: HookCall, task: string): Promise<void> {
   const id = sessionId(call);
   const transcript = call.input.agent_transcript_path;
@@ -320,7 +321,7 @@ export async function linkSubagent(call: HookCall, task: string): Promise<void> 
     ...(typeof call.input.agent_id === "string" && { agentId: call.input.agent_id }),
     ...(typeof call.input.agent_type === "string" && { agentType: call.input.agent_type }),
   };
-  await appendLinkOnce(call.main, task, link, (old) => old.transcriptPath === transcript);
+  await appendLinkOnce(call.main, task, link, () => false);
 }
 
 // Writes an event for a run that exists, under the task lock.

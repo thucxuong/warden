@@ -166,7 +166,7 @@ Before it blocks, it restarts a dead engine worker, so `warden wait` has somethi
 
 ## SubagentStop
 
-Runs when a subagent ends. It links the subagent's own transcript to the task, so its tokens count for that task in `summary.json` and on the site, and writes an `agent.stopped` event for the Stop hook's count. It never blocks.
+Runs when a subagent ends. It links the subagent's own transcript to the task, one `sessions.jsonl` line per stop (so a subagent woken again gets a line with its later stop time), so its tokens count for that task in `summary.json` and on the site, and writes an `agent.stopped` event for the Stop hook's count. It never blocks.
 
 ## See also
 
