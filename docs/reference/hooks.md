@@ -60,7 +60,7 @@ Session start never writes a tracked file.
 
 ## UserPromptSubmit
 
-Runs on every prompt you type. It never blocks a prompt. It links the session to its run, and it acts on a few words.
+Runs on every prompt you type. It never blocks a prompt. It links the session to its run, and it acts on a few words. Claude Code also passes a background subagent's report (`<agent-message ...>`) and a task notice (`<task-notification>`) through this hook; warden ignores those, since they are not from you.
 
 ### Approve, reject, retry
 
@@ -89,7 +89,7 @@ The agent then gets one of these lines in its context:
 
 ### Answers to `warden ask`
 
-When a run waits for the answer to `warden ask`, any prompt that is not a slash command is the answer. The run is active again, and the agent gets: `warden: <task> continues at <step>. The user's answer is in this message.`
+When a run waits for the answer to `warden ask`, any prompt you type that is not a slash command is the answer. A subagent's report arriving in the meantime is not. The run is active again, and the agent gets: `warden: <task> continues at <step>. The user's answer is in this message.`
 
 With several live runs, start the answer with the task id: `PG-012: yes, keep the old route` or `answer PG-012 yes`.
 

@@ -55,7 +55,7 @@ export async function userPrompt(call: HookCall): Promise<string | null> {
   if (resolved) await linkSession(call, resolved.task);
 
   const prompt = call.input.prompt;
-  if (typeof prompt !== "string") return null;
+  if (typeof prompt !== "string" || fromHarness(prompt)) return null;
   const { taskIdPattern } = wardenJson(call.main);
   const action = parsePrompt(prompt, taskIdPattern);
   const asked = await answerQuestion(call, resolved, prompt, taskIdPattern, action);
@@ -89,6 +89,12 @@ export async function userPrompt(call: HookCall): Promise<string | null> {
     if (err instanceof WardenError) return contextJson(`warden: ${err.message}`);
     throw err;
   }
+}
+
+// Claude Code also sends a background subagent's hand-back (`<agent-message from=...>`) and a task notice
+// (`<task-notification>`) through UserPromptSubmit. Neither is the user: they never answer, approve or reject (#36).
+export function fromHarness(prompt: string): boolean {
+  return /^\s*<(?:agent-message[\s>]|task-notification>)/.test(prompt);
 }
 
 // The task id a prompt starts with (`T-1: ...`, `answer T-1 ...`), or null.

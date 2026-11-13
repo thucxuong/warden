@@ -143,6 +143,20 @@ describe("ask through the hooks", () => {
     expect(run().status).toBe("waiting");
   });
 
+  test("a subagent's hand-back or a task notification is not taken as the answer (#36)", async () => {
+    await startFlow(FEATURE);
+    await ask({ ...ctx, cwd: main }, T, Q);
+    const handBack = '<agent-message from="a967fb2b4a47ceed3">\n[Subagent hand-back] The text below is the final report of a subagent.\n  pong\n</agent-message>';
+    const notice = "<task-notification>\n<task-id>afaff38852c1dba97</task-id>\n<status>completed</status>\n</task-notification>";
+    for (const prompt of [handBack, notice, `  ${handBack}`]) {
+      expect(await hook("user-prompt", { prompt, cwd: wt })).toBeNull();
+      expect(run().status).toBe("waiting");
+    }
+    expect(eventTypes()).not.toContain("question.answered");
+    expect(context(await hook("user-prompt", { prompt: "Wait for the design review.", cwd: wt }))).toContain("The user's answer is in this message");
+    expect(run().status).toBe("active");
+  });
+
   test("warden retry in a terminal answers a question wait", async () => {
     await startFlow(FEATURE);
     await ask({ ...ctx, cwd: main }, T, Q);

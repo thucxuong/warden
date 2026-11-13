@@ -143,7 +143,7 @@ Every denial is written to the run's events as `hook.denied`. See [Hooks referen
 
 ## When the agent needs the user
 
-At an agent step the agent can run `warden ask "<question>"`. The run then waits with the question, the Stop hook lets the turn end, and the user's next message is the answer. The run goes on at the same step. When several runs are live, the user starts the answer with the task id. A subagent cannot use `warden ask`.
+At an agent step the agent can run `warden ask "<question>"`. The run then waits with the question, the Stop hook lets the turn end, and the user's next message is the answer (a subagent's report arriving meanwhile is not). The run goes on at the same step. When several runs are live, the user starts the answer with the task id. A subagent cannot use `warden ask`.
 
 ## See also
 
